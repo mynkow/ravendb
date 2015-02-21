@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
+using System.Linq;
 using Raven.Abstractions.Data;
 using Raven.Abstractions.Extensions;
 using Raven.Imports.Newtonsoft.Json;
@@ -232,10 +233,79 @@ namespace Raven.Json.Linq
 			}
 		}
 
+        public new static RavenJValue Load(RavenBinaryReader reader)
+        {
+            return (RavenJValue)RavenJToken.Load(reader);
+        }
+
+        public new static IEnumerable<RavenJValue> LoadMany(RavenBinaryReader reader)
+        {
+            return RavenJToken.LoadMany(reader)
+                              .Select(x => (RavenJValue)x);
+        }
+
+        internal new static RavenJValue Load(RavenBinaryReader reader, RavenBinaryHeader header)
+        {
+            if (reader.Current != RavenBinaryToken.ValueStart)
+                throw new Exception("Error reading RavenJValue from RavenBinaryReader.");
+
+            RavenJValue v;
+            switch (reader.Current)
+            {
+                case RavenBinaryToken.String:
+                    {
+                        v = new RavenJValue(reader.ReadString());
+                        break;
+                    }
+                case RavenBinaryToken.Integer:
+                    {
+                        v = new RavenJValue(reader.ReadInteger());
+                        break;
+                    }
+                case RavenBinaryToken.Float:
+                    {
+                        v = new RavenJValue(reader.ReadSingle());
+                        break;
+                    }
+                case RavenBinaryToken.Date:
+                    {
+                        v = new RavenJValue(reader.ReadDateTimeOffset());
+                        break;
+                    }
+                case RavenBinaryToken.Boolean:
+                    {
+                        v = new RavenJValue(reader.ReadBoolean());
+                        break;
+                    }
+                case RavenBinaryToken.Bytes:
+                    {
+                        v = new RavenJValue(reader.ReadBytes());
+                        break;
+                    }
+                case RavenBinaryToken.Null:
+                    v = new RavenJValue(null, JTokenType.Null);
+                    break;
+                case RavenBinaryToken.Undefined:
+                    v = new RavenJValue(null, JTokenType.Undefined);
+                    break;
+                default:
+                    throw new InvalidOperationException(StringUtils.FormatWith("The RavenJValue should not be on a token of type {0}.", CultureInfo.InvariantCulture, reader.Current));
+            }
+
+            if (reader.Current != RavenBinaryToken.ValueEnd)
+                throw new Exception("Error reading RavenJValue from RavenBinaryReader.");
+
+            // Prime the token for the next one reading.
+            if (!reader.ReadToken())
+                throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+            return v;
+        }
+
 		public new static RavenJValue Load(JsonReader reader)
 		{
-			RavenJValue v;
-			switch (reader.TokenType)
+            RavenJValue v;
+            switch (reader.TokenType)
 			{
 				case JsonToken.String:
 				case JsonToken.Integer:
@@ -280,6 +350,19 @@ namespace Raven.Json.Linq
 		}
 
         private static ConcurrentDictionary<Type, JsonConverter> defaultConvertersCache = new ConcurrentDictionary<Type, JsonConverter>();
+
+        public override void WriteTo(RavenBinaryWriter writer, params JsonConverter[] converters)
+        {
+            if (converters != null && converters.Any())
+                throw new NotSupportedException("Not supported yet.");
+
+            writer.WriteStartBody();
+  
+            writer.WriteValue(this);
+
+            writer.WriteEndBody();
+            writer.Flush();
+        }
 
 		/// <summary>
 		/// Writes this token to a <see cref="JsonWriter"/>.

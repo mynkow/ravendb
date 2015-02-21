@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
@@ -11,6 +12,7 @@ using Raven.Imports.Newtonsoft.Json.Linq;
 using Raven.Json.Utilities;
 using Raven.Abstractions.Data;
 using System.Runtime.CompilerServices;
+using Raven.Json.Linq;
 
 namespace Raven.Json.Linq
 {
@@ -175,6 +177,116 @@ namespace Raven.Json.Linq
 			return (RavenJObject)token;
 		}
 
+        public new static RavenJObject Load(RavenBinaryReader reader)
+        {
+            return (RavenJObject)RavenJToken.Load(reader);
+        }
+
+        public new static IEnumerable<RavenJObject> LoadMany(RavenBinaryReader reader)
+        {
+            foreach (var item in RavenJToken.LoadMany(reader))
+            {
+                RavenJObject array = (RavenJObject)item;
+                yield return array;
+            }
+        }
+
+        internal new static RavenJObject Load(RavenBinaryReader reader, RavenBinaryHeader header)
+        {
+            if (reader.Current != RavenBinaryToken.ObjectStart)
+                throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+            int propertyCount = (int) reader.ReadUInt16();
+
+            string propName = null;
+            var o = new RavenJObject();
+
+            bool advanced = false;
+
+            for (int i = 0; i < propertyCount; i++)
+            {                
+                byte index = reader.ReadByte();
+                if (!header.TryGetPropertyName(index, out propName))
+                    throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+                if (!reader.ReadToken())
+                    throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+                advanced = false;
+                switch (reader.Current)
+                {
+                    case RavenBinaryToken.ObjectStart:
+                        {
+                            o.Add(propName, RavenJObject.Load(reader, header));
+                            advanced = true;
+                            break;
+                        }
+                    case RavenBinaryToken.ArrayStart:
+                        {
+                            o.Add(propName, RavenJArray.Load(reader, header));
+                            break;
+                        }
+                    case RavenBinaryToken.String:
+                        {
+                            o.Add(propName, reader.ReadString());
+                            break;
+                        }
+                    case RavenBinaryToken.Integer:
+                        {
+                            o.Add(propName, reader.ReadInteger());
+                            break;
+                        }
+                    case RavenBinaryToken.Float:
+                        {
+                            o.Add(propName, reader.ReadSingle());
+                            break;
+                        }
+                    case RavenBinaryToken.Date:
+                        {
+                            o.Add(propName, reader.ReadDateTimeOffset());
+                            break;
+                        }
+                    case RavenBinaryToken.Boolean:
+                        {
+                            o.Add(propName, reader.ReadBoolean());
+                            break;
+                        }
+                    case RavenBinaryToken.Bytes:
+                        {
+                            o.Add(propName, reader.ReadBytes());
+                            break;
+                        }
+                    case RavenBinaryToken.Null:
+                        {
+                            o.Add(propName, new RavenJValue(null, JTokenType.Null));
+                            break;
+                        }
+                    case RavenBinaryToken.Undefined:
+                        {
+                            o.Add(propName, new RavenJValue(null, JTokenType.Undefined));
+                            break;
+                        }
+                    default:
+                        throw new InvalidOperationException(StringUtils.FormatWith("The RavenJObject should not be on a token of type {0}.", CultureInfo.InvariantCulture, reader.Current));
+                }   
+            }
+
+            if (!advanced)
+            {
+                if (!reader.ReadToken())
+                    throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+            }
+
+            if (reader.Current != RavenBinaryToken.ObjectEnd)
+                throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+            // Prime the token for the next one reading.
+            if (!reader.ReadToken())
+                throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+            return o;
+        }
+
 		/// <summary>
 		/// Loads an <see cref="RavenJObject"/> from a <see cref="JsonReader"/>. 
 		/// </summary>
@@ -185,15 +297,15 @@ namespace Raven.Json.Linq
 			if (reader.TokenType == JsonToken.None)
 			{
 				if (!reader.Read())
-					throw new Exception("Error reading RavenJObject from JsonReader.");
+                    throw new Exception("Error reading RavenJObject from JsonReader.");
 			}
 
 			if (reader.TokenType != JsonToken.StartObject)
 				throw new Exception(
 					"Error reading RavenJObject from JsonReader. Current JsonReader item is not an object: {0}".FormatWith(CultureInfo.InvariantCulture, reader.TokenType));
 
-			if (reader.Read() == false)
-				throw new Exception("Unexpected end of json object");
+            if (reader.Read() == false)
+                throw new Exception("Unexpected end of json object");
 
 			string propName = null;
 			var o = new RavenJObject();
@@ -252,9 +364,9 @@ namespace Raven.Json.Linq
 						}
 						break;
 				}
-			} while (reader.Read());
+            } while (reader.Read());
 
-			throw new Exception("Error reading RavenJObject from JsonReader.");
+            throw new Exception("Error reading RavenJObject from JsonReader.");
 		}
 
 		/// <summary>
@@ -274,6 +386,19 @@ namespace Raven.Json.Linq
 				throw new InvalidOperationException("Could not parse json:" + Environment.NewLine + json, e);
 			}
 		}
+
+        public override void WriteTo(RavenBinaryWriter writer, params JsonConverter[] converters )
+        {
+            if (converters != null && converters.Any())
+                throw new NotSupportedException("Not supported yet.");
+
+            writer.WriteStartBody();
+
+            writer.Write(this);
+
+            writer.WriteEndBody();
+            writer.Flush();
+        }
 
 		/// <summary>
 		/// Writes this token to a <see cref="JsonWriter"/>.

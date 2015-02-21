@@ -110,13 +110,40 @@ namespace Raven.Json.Linq
 
 		private List<RavenJToken> Items { get; set; }
 
-		public new static RavenJArray Load(JsonReader reader)
+        public new static RavenJArray Load(RavenBinaryReader reader)
+        {
+            return (RavenJArray)RavenJToken.Load(reader);
+        }
+
+        public new static IEnumerable<RavenJArray> LoadMany(RavenBinaryReader reader)
+        {
+            foreach (var item in RavenJToken.LoadMany(reader))
+            {
+                RavenJArray array = (RavenJArray)item;
+                yield return array;
+            }
+        }
+
+        internal new static RavenJArray Load(RavenBinaryReader reader, RavenBinaryHeader header)
+        {
+            if (reader.Current != RavenBinaryToken.ArrayStart)
+                throw new Exception("Error reading RavenJArray from RavenBinaryReader.");
+
+            if (!reader.ReadToken())
+                throw new Exception("Error reading RavenJArray from RavenBinaryReader.");
+
+            var array = new RavenJArray(RavenJToken.LoadMany(reader, header));
+
+            return array;
+        }
+
+        public new static RavenJArray Load(JsonReader reader)
 		{
-			if (reader.TokenType == JsonToken.None)
-			{
-				if (!reader.Read())
-					throw new Exception("Error reading RavenJArray from JsonReader.");
-			}
+            if (reader.TokenType == JsonToken.None)
+            {
+                if (!reader.Read())
+                    throw new Exception("Error reading RavenJArray from JsonReader.");
+            }
 
 			if (reader.TokenType != JsonToken.StartArray)
 				throw new Exception("Error reading RavenJArray from JsonReader. Current JsonReader item is not an array: {0}".FormatWith(CultureInfo.InvariantCulture, reader.TokenType));
@@ -172,25 +199,39 @@ namespace Raven.Json.Linq
 			}
 		}
 
-		/// <summary>
-		/// Writes this token to a <see cref="JsonWriter"/>.
-		/// </summary>
-		/// <param name="writer">A <see cref="JsonWriter"/> into which this method will write.</param>
-		/// <param name="converters">A collection of <see cref="JsonConverter"/> which will be used when writing the token.</param>
-		public override void WriteTo(JsonWriter writer, params JsonConverter[] converters)
-		{
-			writer.WriteStartArray();
 
-			if (Items != null)
-			{
-				foreach (var token in Items)
-				{
-					token.WriteTo(writer, converters);
-				}
-			}
+        public override void WriteTo(RavenBinaryWriter writer, params JsonConverter[] converters )
+        {
+            if (converters.Any())
+                throw new NotSupportedException("Not supported yet.");
 
-			writer.WriteEndArray();
-		}
+            writer.WriteStartBody();
+
+            writer.Write(this);
+
+            writer.WriteEndBody();
+            writer.Flush();
+        }
+
+        /// <summary>
+        /// Writes this token to a <see cref="JsonWriter"/>.
+        /// </summary>
+        /// <param name="writer">A <see cref="JsonWriter"/> into which this method will write.</param>
+        /// <param name="converters">A collection of <see cref="JsonConverter"/> which will be used when writing the token.</param>
+        public override void WriteTo(JsonWriter writer, params JsonConverter[] converters)
+        {
+            writer.WriteStartArray();
+
+            if (Items != null)
+            {
+                foreach (var token in Items)
+                {
+                    token.WriteTo(writer, converters);
+                }
+            }
+
+            writer.WriteEndArray();
+        }
 
 		#region IEnumerable<RavenJToken> Members
 
@@ -283,7 +324,7 @@ namespace Raven.Json.Linq
 			return new RavenJArray(Items);
 		}
 
-		public static async Task<RavenJToken> LoadAsync(JsonTextReaderAsync reader)
+        public static async Task<RavenJToken> LoadAsync(JsonTextReaderAsync reader)
 		{
 			if (reader.TokenType == JsonToken.None)
 			{
