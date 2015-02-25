@@ -127,14 +127,84 @@ namespace Raven.Json.Linq
         internal new static RavenJArray Load(RavenBinaryReader reader, RavenBinaryHeader header)
         {
             if (reader.Current != RavenBinaryToken.ArrayStart)
-                throw new Exception("Error reading RavenJArray from RavenBinaryReader.");
+                throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
 
-            if (!reader.ReadToken())
-                throw new Exception("Error reading RavenJArray from RavenBinaryReader.");
+            int objects = (int)reader.ReadInteger();
 
-            var array = new RavenJArray(RavenJToken.LoadMany(reader, header));
+            var o = new RavenJArray();
 
-            return array;
+            for (int i = 0; i < objects; i++)
+            {
+                if (!reader.ReadToken())
+                    throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+                switch (reader.Current)
+                {
+                    case RavenBinaryToken.ObjectStart:
+                        {
+                            o.Add(RavenJObject.Load(reader, header));
+                            if (reader.Current != RavenBinaryToken.ObjectEnd)
+                                throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+                            break;
+                        }
+                    case RavenBinaryToken.ArrayStart:
+                        {
+                            o.Add(RavenJArray.Load(reader, header));
+                            if (reader.Current != RavenBinaryToken.ArrayEnd)
+                                throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+                            break;
+                        }
+                    case RavenBinaryToken.String:
+                        {
+                            o.Add(reader.ReadString());
+                            break;
+                        }
+                    case RavenBinaryToken.Integer:
+                        {
+                            o.Add(reader.ReadInteger());
+                            break;
+                        }
+                    case RavenBinaryToken.Float:
+                        {
+                            o.Add(reader.ReadSingle());
+                            break;
+                        }
+                    case RavenBinaryToken.Date:
+                        {
+                            o.Add(reader.ReadDateTimeOffset());
+                            break;
+                        }
+                    case RavenBinaryToken.Boolean:
+                        {
+                            o.Add(reader.ReadBoolean());
+                            break;
+                        }
+                    case RavenBinaryToken.Bytes:
+                        {
+                            o.Add(reader.ReadBytes());
+                            break;
+                        }
+                    case RavenBinaryToken.Null:
+                        {
+                            o.Add(new RavenJValue(null, JTokenType.Null));
+                            break;
+                        }
+                    case RavenBinaryToken.Undefined:
+                        {
+                            o.Add(new RavenJValue(null, JTokenType.Undefined));
+                            break;
+                        }
+                    default:
+                        throw new InvalidOperationException(StringUtils.FormatWith("The RavenJObject should not be on a token of type {0}.", CultureInfo.InvariantCulture, reader.Current));
+                }
+            }
+
+            if (!reader.ReadToken() || reader.Current != RavenBinaryToken.ArrayEnd)
+                throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+            return o;
         }
 
         public new static RavenJArray Load(JsonReader reader)

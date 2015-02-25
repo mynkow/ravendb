@@ -126,6 +126,70 @@ namespace Raven.Tests.Linq
             EnsureIsEquivalentAfterSerialization(RavenJArray.FromObject(users));
         }
 
+        private class EmptyUser
+        {
+        }
+
+        private class EmptyObjectThenArray
+        {
+            public EmptyUser User { get; set; }
+            public int[] Array { get; set; }
+        }
+
+        [Fact]
+        public void WithEmptyObjectThenArray()
+        {
+            var @object = new EmptyObjectThenArray()
+            {
+                User = new EmptyUser(),
+                Array = new int[] { 1, 2, 3, 4, 5 }
+            };
+
+            EnsureIsEquivalentAfterSerialization(RavenJToken.FromObject(@object));
+        }
+
+
+        private class SimplierUser
+        {
+            public string Id { get; set; }
+        }
+
+        private class SimplierObjectThenArray
+        {
+            public SimplierUser User { get; set; }
+            public int[] Array { get; set; }
+        }
+
+        [Fact]
+        public void WithSimplierObjectThenArray()
+        {
+            var @object = new SimplierObjectThenArray()
+            {
+                User = new SimplierUser { Id = "users/10203" },
+                Array = new int[] { 1, 2, 3, 4, 5 }
+            };
+
+            EnsureIsEquivalentAfterSerialization(RavenJToken.FromObject(@object));
+        }
+
+        private class ObjectThenArray
+        {
+            public User User { get; set; }
+            public int[] Array { get; set; }
+        }
+
+        [Fact]
+        public void WithObjectThenArray()
+        {
+            var @object = new ObjectThenArray()
+            {
+                User = new User { Id = "users/10203", Active = true, Created = DateTime.Now, Age = 38, Info = "Testing Info", Name = "This user" },
+                Array = new int[] { 1, 2, 3, 4, 5 }
+            };
+
+            EnsureIsEquivalentAfterSerialization(RavenJToken.FromObject(@object));
+        }
+
         private void EnsureIsEquivalentAfterSerialization(RavenJToken token)
         {
             var memoryStream = new MemoryStream();

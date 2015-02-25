@@ -21,27 +21,29 @@ namespace Raven.Tryouts
 	{
 		private static void Main()
 		{
-			var store = new DocumentStore
-			{
-				Url = "http://live-test.ravendb.net",
-				DefaultDatabase = "Northwind"
-			};
+            BulkInsertsPerformance.Main();
 
-			store.Initialize();
+            //var store = new DocumentStore
+            //{
+            //    Url = "http://live-test.ravendb.net",
+            //    DefaultDatabase = "Northwind"
+            //};
 
-			var patchExisting = new ScriptedPatchRequest
-			{
-				Script = "this.Counter++;",
-			};
-			var patchDefault = new ScriptedPatchRequest
-			{
-				Script = "this.Counter=100;",
-			};
+            //store.Initialize();
 
-			var docId = "TestDocs/1";
+            //var patchExisting = new ScriptedPatchRequest
+            //{
+            //    Script = "this.Counter++;",
+            //};
+            //var patchDefault = new ScriptedPatchRequest
+            //{
+            //    Script = "this.Counter=100;",
+            //};
 
-			store.DatabaseCommands.Patch(docId, patchExisting, patchDefault, new RavenJObject());
-			var results = store.DatabaseCommands.Get("TestDocs/1").DataAsJson;
+            //var docId = "TestDocs/1";
+
+            //store.DatabaseCommands.Patch(docId, patchExisting, patchDefault, new RavenJObject());
+            //var results = store.DatabaseCommands.Get("TestDocs/1").DataAsJson;
 
 		}
 	}

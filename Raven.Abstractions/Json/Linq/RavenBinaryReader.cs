@@ -8,7 +8,7 @@ using System.IO;
 
 namespace Raven.Json.Linq
 {
-    public class RavenBinaryReader
+    public class RavenBinaryReader : IDisposable
     {
         public RavenBinaryToken Current { get; set; }
 
@@ -19,8 +19,14 @@ namespace Raven.Json.Linq
         public RavenBinaryReader( BinaryReader reader )
         {
             this.reader = reader;
-
+            
             this.Current = RavenBinaryToken.None;
+        }
+
+
+        public RavenBinaryToken PeekToken()
+        {
+            return (RavenBinaryToken)reader.PeekChar();
         }
 
         public bool ReadToken()
@@ -116,6 +122,11 @@ namespace Raven.Json.Linq
         public ushort ReadUInt16()
         {
             return reader.ReadUInt16();
+        }
+
+        public void Dispose()
+        {
+            // TODO: Properly implement IDisposable
         }
     }
 }

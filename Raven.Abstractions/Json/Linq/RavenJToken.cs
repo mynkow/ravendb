@@ -271,7 +271,15 @@ namespace Raven.Json.Linq
             if (reader.Current != RavenBinaryToken.BodyStart)
                 throw new Exception("Error reading RavenJToken from RavenBinaryReader. Header is corrupted: {0}".FormatWith(CultureInfo.InvariantCulture, reader.Current));
 
-            return LoadMany(reader, header);
+            // Prime the token for the next one reading.
+            if (!reader.ReadToken())
+                throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+            foreach (var token in LoadMany(reader, header))
+                yield return token;
+
+            if (reader.Current != RavenBinaryToken.BodyEnd)
+                throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
         }
 
         internal static IEnumerable<RavenJToken> LoadMany(RavenBinaryReader reader, RavenBinaryHeader header)
@@ -289,34 +297,38 @@ namespace Raven.Json.Linq
                         {
                             throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
                         }
-                    case RavenBinaryToken.ValueStart:
-                        {
-                            token = RavenJValue.Load(reader, header);
-                            break;
-                        }
                     case RavenBinaryToken.ObjectStart:
                         {
                             token = RavenJObject.Load(reader, header);
+                            if (reader.Current != RavenBinaryToken.ObjectEnd)
+                                throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
                             break;
                         }
                     case RavenBinaryToken.ArrayStart:
                         {
                             token = RavenJArray.Load(reader, header);
+                            if (reader.Current != RavenBinaryToken.ArrayEnd)
+                                throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
                             break;
-                        }
+                        }                        
                     default:
                         {
-                            throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+                            if ((int)reader.Current > (int)RavenBinaryToken.Primitives)
+                                token = RavenJValue.Load(reader, header);
+                            else
+                                throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+                            break;
                         }
                 }               
 
-                //// Prime the token for the next one reading.
-                //if (!reader.ReadToken())
-                //    throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
-
                 yield return token;
 
-                @continue = reader.Current == RavenBinaryToken.ObjectStart || reader.Current == RavenBinaryToken.ArrayStart || reader.Current == RavenBinaryToken.ValueStart;
+                if ( !reader.ReadToken() )
+                    throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+                @continue = reader.Current == RavenBinaryToken.ObjectStart || reader.Current == RavenBinaryToken.ArrayStart;
 
             } while (@continue);
         }
@@ -332,47 +344,31 @@ namespace Raven.Json.Linq
                     {
                         throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
                     }
-                case RavenBinaryToken.ValueStart:
-                    {
-                        token = RavenJValue.Load(reader, header);
-                        break;
-                    }
                 case RavenBinaryToken.ObjectStart:
                     {
                         token = RavenJObject.Load(reader, header);
+                        if (reader.Current != RavenBinaryToken.ObjectEnd)
+                            throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
                         break;
                     }
                 case RavenBinaryToken.ArrayStart:
                     {
                         token = RavenJArray.Load(reader, header);
+                        if (reader.Current != RavenBinaryToken.ArrayEnd)
+                            throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
                         break;
                     }
                 default:
                     {
-                        throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+                        if ((int)reader.Current > (int)RavenBinaryToken.Primitives)
+                            token = RavenJValue.Load(reader, header);
+                        else
+                            throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+                        break;
                     }
             }
-
-            //if (reader.Current == RavenBinaryToken.ArrayEnd || reader.Current == RavenBinaryToken.ObjectEnd || reader.Current == RavenBinaryToken.ValueEnd)
-            //{
-            //    throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
-            //}
-
-            //if (reader.Current != RavenBinaryToken.ArrayEnd && reader.Current != RavenBinaryToken.ObjectEnd && reader.Current != RavenBinaryToken.ValueEnd)
-            //{
-            //    if (reader.Current != RavenBinaryToken.BodyEnd)
-            //        throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
-            //}
-
-            if (reader.Current == RavenBinaryToken.BodyEnd)
-            {
-                // Prime the token for the next one reading but do not fail in case there is nothing else available in the stream.
-                reader.ReadToken();
-            }
-            //else if (!reader.ReadToken())
-            //{
-            //    throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
-            //} 
                                         
             return token;
         }
@@ -388,7 +384,12 @@ namespace Raven.Json.Linq
             if (!reader.ReadToken())
                 throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
 
-            return Load(reader, header);            
+            var token = Load(reader, header);
+
+            if (!reader.ReadToken() || reader.Current != RavenBinaryToken.BodyEnd)
+                throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+            return token;
         }
 
         /// <summary>

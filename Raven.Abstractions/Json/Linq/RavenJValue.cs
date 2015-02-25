@@ -246,7 +246,7 @@ namespace Raven.Json.Linq
 
         internal new static RavenJValue Load(RavenBinaryReader reader, RavenBinaryHeader header)
         {
-            if (reader.Current != RavenBinaryToken.ValueStart)
+            if (reader.Current <= RavenBinaryToken.Primitives )
                 throw new Exception("Error reading RavenJValue from RavenBinaryReader.");
 
             RavenJValue v;
@@ -292,7 +292,7 @@ namespace Raven.Json.Linq
                     throw new InvalidOperationException(StringUtils.FormatWith("The RavenJValue should not be on a token of type {0}.", CultureInfo.InvariantCulture, reader.Current));
             }
 
-            if (reader.Current != RavenBinaryToken.ValueEnd)
+            if (reader.Current <= RavenBinaryToken.Primitives)
                 throw new Exception("Error reading RavenJValue from RavenBinaryReader.");
 
             // Prime the token for the next one reading.

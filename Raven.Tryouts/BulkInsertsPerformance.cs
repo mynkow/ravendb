@@ -216,15 +216,15 @@ namespace Raven.Tryouts
         }
 
         private const int BatchSize = 24;
-        static void Main()
+        public static void Main()
         {
             var list = new List<Data>();
 
-            //list.Add(new Data
-            //{
-            //    Method = "Bson/None",
-            //    Elapsed = Benchmark("database-1a", new BulkInsertOptions { Format = BulkInsertFormat.Bson, Compression = BulkInsertCompression.None })
-            //});
+            list.Add(new Data
+            {
+                Method = "Sbin/GZip",
+                Elapsed = Benchmark("database-4b", new BulkInsertOptions { Format = BulkInsertFormat.SimpleBinary, Compression = BulkInsertCompression.GZip })
+            });
 
             list.Add(new Data
             {
@@ -232,17 +232,29 @@ namespace Raven.Tryouts
                 Elapsed = Benchmark("database-2a", new BulkInsertOptions { Format = BulkInsertFormat.Json, Compression = BulkInsertCompression.None })
             });
 
-            //list.Add(new Data
-            //{
-            //    Method = "Bson/GZip",
-            //    Elapsed = Benchmark("database-3c", new BulkInsertOptions { Format = BulkInsertFormat.Bson, Compression = BulkInsertCompression.GZip })
-            //});
+            list.Add(new Data
+            {
+                Method = "Sbin/None",
+                Elapsed = Benchmark("database-2a", new BulkInsertOptions { Format = BulkInsertFormat.SimpleBinary, Compression = BulkInsertCompression.None })
+            });
 
-            //list.Add(new Data
-            //{
-            //    Method = "Json/GZip",
-            //    Elapsed = Benchmark("database-4a", new BulkInsertOptions { Format = BulkInsertFormat.Json, Compression = BulkInsertCompression.GZip })
-            //});
+            list.Add(new Data
+            {
+                Method = "Json/GZip",
+                Elapsed = Benchmark("database-4a", new BulkInsertOptions { Format = BulkInsertFormat.Json, Compression = BulkInsertCompression.GZip })
+            });
+
+            list.Add(new Data
+            {
+                Method = "Bson/None",
+                Elapsed = Benchmark("database-1c", new BulkInsertOptions { Format = BulkInsertFormat.Bson, Compression = BulkInsertCompression.None })
+            });
+
+            list.Add(new Data
+            {
+                Method = "Bson/GZip",
+                Elapsed = Benchmark("database-3c", new BulkInsertOptions { Format = BulkInsertFormat.Bson, Compression = BulkInsertCompression.GZip })
+            });
 
             foreach ( var data in list )
                 Console.WriteLine(string.Format( "Method: {0} - {1}." , data.Method, data.Elapsed));
@@ -251,7 +263,7 @@ namespace Raven.Tryouts
         }
 
         public static TimeSpan Benchmark(string database, BulkInsertOptions options)
-        {            
+        {           
             using (var store = new DocumentStore
             {
                 Url = "http://localhost:8080",
@@ -259,6 +271,8 @@ namespace Raven.Tryouts
             }.Initialize(true))
             {
                 IndexCreation.CreateIndexes(typeof(Program).GetType().Assembly, store);
+
+                Console.WriteLine("Starting with " + options.Format + " with compression mode: " + options.Compression);
 
                 var sp = Stopwatch.StartNew();
                 using (var insert = store.BulkInsert(options: options))
@@ -270,7 +284,11 @@ namespace Raven.Tryouts
                 while (store.DatabaseCommands.GetStatistics().StaleIndexes.Length != 0)
                     Thread.Sleep(500);
 
-                return sp.Elapsed;
+                var elapsed = sp.Elapsed;
+
+                Console.WriteLine(string.Format("Elapsed {0}/{1}: {2}", options.Format, options.Compression, elapsed));
+
+                return elapsed;
             }
         }
 
@@ -280,7 +298,7 @@ namespace Raven.Tryouts
             var parser = new Parser();
             var buffer = new byte[1024 * 1024];// more than big enough for all files
 
-            using (var bz2 = new BZip2InputStream(File.Open(@"I:\Temp\freedb-complete-20150101.tar.bz2", FileMode.Open)))
+            using (var bz2 = new BZip2InputStream(File.Open(@"D:\Scratch\freedb-complete-20150101.tar.bz2", FileMode.Open)))
             using (var tar = new TarInputStream(bz2))
             {
                 int processed = 0;
@@ -288,7 +306,7 @@ namespace Raven.Tryouts
                 TarEntry entry;
                 while ((entry = tar.GetNextEntry()) != null)
                 {
-                    if (processed >= 1000000)
+                    if (processed >= 50000)
                         return;
 
                     if (entry.Size == 0 || entry.Name == "README" || entry.Name == "COPYING")

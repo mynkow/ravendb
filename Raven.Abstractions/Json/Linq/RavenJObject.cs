@@ -201,8 +201,6 @@ namespace Raven.Json.Linq
             string propName = null;
             var o = new RavenJObject();
 
-            bool advanced = false;
-
             for (int i = 0; i < propertyCount; i++)
             {                
                 byte index = reader.ReadByte();
@@ -212,18 +210,22 @@ namespace Raven.Json.Linq
                 if (!reader.ReadToken())
                     throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
 
-                advanced = false;
                 switch (reader.Current)
                 {
                     case RavenBinaryToken.ObjectStart:
                         {
                             o.Add(propName, RavenJObject.Load(reader, header));
-                            advanced = true;
+                            if (reader.Current != RavenBinaryToken.ObjectEnd)
+                                throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
                             break;
                         }
                     case RavenBinaryToken.ArrayStart:
                         {
                             o.Add(propName, RavenJArray.Load(reader, header));
+                            if (reader.Current != RavenBinaryToken.ArrayEnd)
+                                throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
                             break;
                         }
                     case RavenBinaryToken.String:
@@ -271,18 +273,8 @@ namespace Raven.Json.Linq
                 }   
             }
 
-            if (!advanced)
-            {
-                if (!reader.ReadToken())
-                    throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
-            }
-
-            if (reader.Current != RavenBinaryToken.ObjectEnd)
+            if (!reader.ReadToken() && reader.Current != RavenBinaryToken.ObjectEnd)
                 throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
-
-            // Prime the token for the next one reading.
-            if (!reader.ReadToken())
-                throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
 
             return o;
         }

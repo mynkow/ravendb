@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace Raven.Json.Linq
 {
+
     public enum RavenBinaryToken
     {
         None = 0,
@@ -17,8 +18,9 @@ namespace Raven.Json.Linq
         ObjectEnd = 8,
         ArrayStart = 4,
         ArrayEnd = 9,
-        ValueStart = 5,
-        ValueEnd = 10,
+
+        // Unused it is only a marker. 
+        Primitives = 30,
 
         Null = 32,
         Undefined = 33,

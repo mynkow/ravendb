@@ -33,6 +33,17 @@ namespace Raven.Json.Linq
             this.bodyWriter = new BinaryWriter(bodyStream);
         }
 
+        public void WriteMany(IEnumerable<RavenJToken> batch)
+        {
+            WriteStartBody();
+
+            foreach (var @object in batch)
+                Write(@object);
+
+            WriteEndBody();
+            Flush();
+        }
+
         public void Write(RavenJToken token)
         {
             switch (token.Type)
@@ -92,6 +103,7 @@ namespace Raven.Json.Linq
         private void WriteArray(RavenJArray array)
         {
             bodyWriter.Write((byte)RavenBinaryToken.ArrayStart);
+            bodyWriter.Write(array.Length);
 
             foreach (var token in array)
                 Write(token);
@@ -147,9 +159,7 @@ namespace Raven.Json.Linq
 
         public void WriteValue( RavenJValue record )
         {
-            bodyWriter.Write((byte)RavenBinaryToken.ValueStart);
             WritePrimitive(record);
-            bodyWriter.Write((byte)RavenBinaryToken.ValueEnd); 
         }
 
         private void WritePrimitive(RavenJValue record)
@@ -268,6 +278,8 @@ namespace Raven.Json.Linq
         {
             writer.Flush();
         }
+
+
 
 
     }

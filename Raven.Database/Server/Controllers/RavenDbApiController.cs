@@ -508,6 +508,7 @@ namespace Raven.Database.Server.Controllers
             {
                 case "bson": return BulkInsertFormat.Bson;
                 case "json": return BulkInsertFormat.Json;
+                case "sbin": return BulkInsertFormat.SimpleBinary;
                 default: throw new NotSupportedException(string.Format("The format '{0}' is not supported", format.ToString()));
             }
         }
