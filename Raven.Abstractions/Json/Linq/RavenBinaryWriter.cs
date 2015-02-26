@@ -86,8 +86,10 @@ namespace Raven.Json.Linq
             }
             writer.Write((byte)RavenBinaryToken.HeaderEnd);
 
+            writer.Write((int)bodyStream.Position + 2);
+
             writer.Write((byte)RavenBinaryToken.BodyStart);
-            {
+            {                
                 bodyStream.Position = 0;
                 bodyStream.CopyTo(writer.BaseStream);
             }            

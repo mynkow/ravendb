@@ -12,12 +12,14 @@ namespace Raven.Json.Linq
     {
         public RavenBinaryToken Current { get; set; }
 
-        private readonly BinaryReader reader;
+        private readonly BinaryReader streamReader;
+        private BinaryReader reader;
 
         public RavenBinaryReader( Stream stream ) : this ( new BinaryReader(stream) ) { }
 
-        public RavenBinaryReader( BinaryReader reader )
+        public RavenBinaryReader(BinaryReader reader)
         {
+            this.streamReader = reader;
             this.reader = reader;
             
             this.Current = RavenBinaryToken.None;
@@ -28,13 +30,16 @@ namespace Raven.Json.Linq
         {
             return (RavenBinaryToken)reader.PeekChar();
         }
-
+        
         public bool ReadToken()
         {
             try
             {
                 var token = reader.ReadByte();
+                
                 this.Current = (RavenBinaryToken)token;
+                if (this.Current == RavenBinaryToken.BodyEnd)
+                    this.reader = streamReader;
             }
             catch
             {
@@ -65,8 +70,13 @@ namespace Raven.Json.Linq
             if (!this.ReadToken() && this.Current != RavenBinaryToken.HeaderEnd)
                 throw new Exception("Error reading header from RavenBinaryReader.");
 
+            var bodySize = this.ReadInteger();
+            byte[] body = this.reader.ReadBytes(bodySize);            
+            var memoryStream = new MemoryStream(body);
+            this.reader = new BinaryReader(memoryStream);
+
             // Prime the token for the next one reading.
-            if (!this.ReadToken())
+            if (!this.ReadToken() && this.Current != RavenBinaryToken.BodyStart)
                 throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
 
             return new RavenBinaryHeader(propertyNameIndex);
