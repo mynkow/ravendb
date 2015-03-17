@@ -1,17 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Threading.Tasks;
-using Raven.Abstractions.Data;
+﻿using Raven.Abstractions.Data;
 using Raven.Abstractions.Extensions;
+using Raven.Abstractions.Json;
 using Raven.Imports.Newtonsoft.Json;
 using Raven.Imports.Newtonsoft.Json.Linq;
 using Raven.Imports.Newtonsoft.Json.Utilities;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using MiscellaneousUtils = Raven.Json.Utilities.MiscellaneousUtils;
 using StringUtils = Raven.Json.Utilities.StringUtils;
-using System.Collections.Concurrent;
-using Raven.Abstractions;
-using Raven.Abstractions.Json;
 
 namespace Raven.Json.Linq
 {
@@ -233,6 +231,75 @@ namespace Raven.Json.Linq
 			}
 		}
 
+        public new static RavenJValue Load(RavenBinaryReader reader)
+        {
+            return (RavenJValue)RavenJToken.Load(reader);
+        }
+
+        public new static IEnumerable<RavenJValue> LoadMany(RavenBinaryReader reader)
+        {
+            return RavenJToken.LoadMany(reader)
+                              .Select(x => (RavenJValue)x);
+        }
+
+        internal new static RavenJValue Load(RavenBinaryReader reader, RavenBinaryHeader header)
+        {
+            if (reader.Current <= RavenBinaryToken.Primitives )
+                throw new Exception("Error reading RavenJValue from RavenBinaryReader.");
+
+            RavenJValue v;
+            switch (reader.Current)
+            {
+                case RavenBinaryToken.String:
+                    {
+                        v = new RavenJValue(reader.ReadString());
+                        break;
+                    }
+                case RavenBinaryToken.Integer:
+                    {
+                        v = new RavenJValue(reader.ReadInteger());
+                        break;
+                    }
+                case RavenBinaryToken.Float:
+                    {
+                        v = new RavenJValue(reader.ReadSingle());
+                        break;
+                    }
+                case RavenBinaryToken.Date:
+                    {
+                        v = new RavenJValue(reader.ReadDateTimeOffset());
+                        break;
+                    }
+                case RavenBinaryToken.Boolean:
+                    {
+                        v = new RavenJValue(reader.ReadBoolean());
+                        break;
+                    }
+                case RavenBinaryToken.Bytes:
+                    {
+                        v = new RavenJValue(reader.ReadBytes());
+                        break;
+                    }
+                case RavenBinaryToken.Null:
+                    v = new RavenJValue(null, JTokenType.Null);
+                    break;
+                case RavenBinaryToken.Undefined:
+                    v = new RavenJValue(null, JTokenType.Undefined);
+                    break;
+                default:
+                    throw new InvalidOperationException(StringUtils.FormatWith("The RavenJValue should not be on a token of type {0}.", CultureInfo.InvariantCulture, reader.Current));
+            }
+
+            if (reader.Current <= RavenBinaryToken.Primitives)
+                throw new Exception("Error reading RavenJValue from RavenBinaryReader.");
+
+            // Prime the token for the next one reading.
+            if (!reader.ReadToken())
+                throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+            return v;
+        }
+
 		public new static RavenJValue Load(JsonReader reader)
 		{
 			RavenJValue v;
@@ -259,6 +326,19 @@ namespace Raven.Json.Linq
 			return v;
 		}
 
+
+        public override void WriteTo(RavenBinaryWriter writer, params JsonConverter[] converters)
+        {
+            if (converters != null && converters.Any())
+                throw new NotSupportedException("Not supported yet.");
+
+            writer.WriteStartBody();
+  
+            writer.WriteValue(this);
+
+            writer.WriteEndBody();
+            writer.Flush();
+        }
         public override void WriteTo(JsonWriter writer, JsonConverterCollection converters)
         {
             switch (_valueType)

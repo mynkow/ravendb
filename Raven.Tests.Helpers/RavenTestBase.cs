@@ -882,6 +882,7 @@ namespace Raven.Tests.Helpers
 		{
 			get
 			{
+                yield return new[] { new BulkInsertOptions { Format = BulkInsertFormat.SimpleBinary } };
 				yield return new[] { new BulkInsertOptions { Format = BulkInsertFormat.Bson, Compression = BulkInsertCompression.GZip } };
 				yield return new[] { new BulkInsertOptions { Format = BulkInsertFormat.Json } };
 				yield return new[] { new BulkInsertOptions { Compression = BulkInsertCompression.None } };

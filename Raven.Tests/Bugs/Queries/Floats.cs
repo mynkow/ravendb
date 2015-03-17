@@ -54,22 +54,38 @@ namespace Raven.Tests.Bugs.Queries
 			Assert.Equal(3.3f, readSingle);
 		}
 
-		[Fact]
-		public void WithBson()
-		{
-			var ravenJObject = RavenJObject.FromObject(new FloatValue
-			{
-				Value = 3.3f
-			});
-			var memoryStream = new MemoryStream();
-			ravenJObject.WriteTo(new BsonWriter(memoryStream));
-			memoryStream.Position = 0;
-			ravenJObject = RavenJObject.Load(new BsonReader(memoryStream));
+        [Fact]
+        public void WithBson()
+        {
+            var ravenJObject = RavenJObject.FromObject(new FloatValue
+            {
+                Value = 3.3f
+            });
+            var memoryStream = new MemoryStream();
+            ravenJObject.WriteTo(new BsonWriter(memoryStream));
+            memoryStream.Position = 0;
+            ravenJObject = RavenJObject.Load(new BsonReader(memoryStream));
 
 
-			var s = ravenJObject.ToString(Formatting.None);
-			Assert.Equal("{\"Id\":0,\"Value\":3.3}", s);
-		}
+            var s = ravenJObject.ToString(Formatting.None);
+            Assert.Equal("{\"Id\":0,\"Value\":3.3}", s);
+        }
+
+        [Fact]
+        public void WithRavenBinary()
+        {
+            var ravenJObject = RavenJObject.FromObject(new FloatValue
+            {
+                Value = 3.3f
+            });
+            var memoryStream = new MemoryStream();
+            ravenJObject.WriteTo(new RavenBinaryWriter(memoryStream));
+            memoryStream.Position = 0;
+            ravenJObject = RavenJObject.Load(new RavenBinaryReader(memoryStream));
+
+            var s = ravenJObject.ToString(Formatting.None);
+            Assert.Equal("{\"Id\":0,\"Value\":3.3}", s);
+        }
 
 
 		[Fact]

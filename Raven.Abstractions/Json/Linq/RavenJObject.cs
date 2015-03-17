@@ -1,16 +1,17 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Threading.Tasks;
+﻿using Raven.Abstractions.Data;
 using Raven.Abstractions.Extensions;
 using Raven.Abstractions.Json;
 using Raven.Imports.Newtonsoft.Json;
 using Raven.Imports.Newtonsoft.Json.Linq;
 using Raven.Json.Utilities;
-using Raven.Abstractions.Data;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 
 namespace Raven.Json.Linq
 {
@@ -179,6 +180,108 @@ namespace Raven.Json.Linq
 			return (RavenJObject)token;
 		}
 
+        public new static RavenJObject Load(RavenBinaryReader reader)
+        {
+            return (RavenJObject)RavenJToken.Load(reader);
+        }
+
+        public new static IEnumerable<RavenJObject> LoadMany(RavenBinaryReader reader)
+        {
+            foreach (var item in RavenJToken.LoadMany(reader))
+            {
+                RavenJObject array = (RavenJObject)item;
+                yield return array;
+            }
+        }
+
+        internal new static RavenJObject Load(RavenBinaryReader reader, RavenBinaryHeader header)
+        {
+            if (reader.Current != RavenBinaryToken.ObjectStart)
+                throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+            int propertyCount = (int) reader.ReadUInt16();
+
+            string propName = null;
+            var o = new RavenJObject();
+
+            for (int i = 0; i < propertyCount; i++)
+            {                
+                byte index = reader.ReadByte();
+                if (!header.TryGetPropertyName(index, out propName))
+                    throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+                if (!reader.ReadToken())
+                    throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+                switch (reader.Current)
+                {
+                    case RavenBinaryToken.ObjectStart:
+                        {
+                            o.Add(propName, RavenJObject.Load(reader, header));
+                            if (reader.Current != RavenBinaryToken.ObjectEnd)
+                                throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+                            break;
+                        }
+                    case RavenBinaryToken.ArrayStart:
+                        {
+                            o.Add(propName, RavenJArray.Load(reader, header));
+                            if (reader.Current != RavenBinaryToken.ArrayEnd)
+                                throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+                            break;
+                        }
+                    case RavenBinaryToken.String:
+                        {
+                            o.Add(propName, reader.ReadString());
+                            break;
+                        }
+                    case RavenBinaryToken.Integer:
+                        {
+                            o.Add(propName, reader.ReadInteger());
+                            break;
+                        }
+                    case RavenBinaryToken.Float:
+                        {
+                            o.Add(propName, reader.ReadSingle());
+                            break;
+                        }
+                    case RavenBinaryToken.Date:
+                        {
+                            o.Add(propName, reader.ReadDateTimeOffset());
+                            break;
+                        }
+                    case RavenBinaryToken.Boolean:
+                        {
+                            o.Add(propName, reader.ReadBoolean());
+                            break;
+                        }
+                    case RavenBinaryToken.Bytes:
+                        {
+                            o.Add(propName, reader.ReadBytes());
+                            break;
+                        }
+                    case RavenBinaryToken.Null:
+                        {
+                            o.Add(propName, new RavenJValue(null, JTokenType.Null));
+                            break;
+                        }
+                    case RavenBinaryToken.Undefined:
+                        {
+                            o.Add(propName, new RavenJValue(null, JTokenType.Undefined));
+                            break;
+                        }
+                    default:
+                        throw new InvalidOperationException(StringUtils.FormatWith("The RavenJObject should not be on a token of type {0}.", CultureInfo.InvariantCulture, reader.Current));
+                }   
+            }
+
+            if (!reader.ReadToken() && reader.Current != RavenBinaryToken.ObjectEnd)
+                throw new Exception("Error reading RavenJObject from RavenBinaryReader.");
+
+            return o;
+        }
+
 		/// <summary>
 		/// Loads an <see cref="RavenJObject"/> from a <see cref="JsonReader"/>. 
 		/// </summary>
@@ -281,9 +384,27 @@ namespace Raven.Json.Linq
 			}
 		}
 
-        public override void WriteTo(JsonWriter writer, JsonConverterCollection converters)
+        public override void WriteTo(RavenBinaryWriter writer, params JsonConverter[] converters )
         {
-            writer.WriteStartObject();
+            if (converters != null && converters.Any())
+                throw new NotSupportedException("Not supported yet.");
+
+            writer.WriteStartBody();
+
+            writer.Write(this);
+
+            writer.WriteEndBody();
+            writer.Flush();
+        }
+
+		/// <summary>
+		/// Writes this token to a <see cref="JsonWriter"/>.
+		/// </summary>
+		/// <param name="writer">A <see cref="JsonWriter"/> into which this method will write.</param>
+		/// <param name="converters">A collection of <see cref="JsonConverter"/> which will be used when writing the token.</param>
+		public override void WriteTo(JsonWriter writer, JsonConverterCollection converters)
+		{
+			writer.WriteStartObject();
 
             if (Properties != null)
             {

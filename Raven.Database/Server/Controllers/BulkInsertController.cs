@@ -211,28 +211,62 @@ namespace Raven.Database.Server.Controllers
             }
         }
 
-		private IEnumerable<JsonDocument> YieldDocumentsInBatch(CancellationTimeout timeout, Stream partialStream, BulkInsertOptions options, Action<int> increaseDocumentsCount)
-		{
-			using (var reader = new BinaryReader(partialStream))
-			{
-				switch (options.Format)
-				{
-					case BulkInsertFormat.Bson:
-						{
-							var count = reader.ReadInt32();
+        private IEnumerable<JsonDocument> YieldDocumentsInBatch(CancellationTimeout timeout, Stream partialStream, BulkInsertOptions options, Action<int> increaseDocumentsCount)
+        {
+            using ( var reader = new BinaryReader(partialStream) )
+            {
+                var count = reader.ReadInt32();
 
-							return YieldBsonDocumentsInBatch(timeout, reader, count, increaseDocumentsCount).ToArray();
-						}
-					case BulkInsertFormat.Json:
-						{
-							var count = reader.ReadInt32();
+                switch (options.Format)
+                {
+                    case BulkInsertFormat.Bson:
+                        {
+                            return YieldBsonDocumentsInBatch(timeout, reader, count, increaseDocumentsCount).ToArray();
+                        }
+                    case BulkInsertFormat.Json:
+                        {
+                            return YieldJsonDocumentsInBatch(timeout, partialStream, count, increaseDocumentsCount).ToArray();
+                        }
+                    case BulkInsertFormat.SimpleBinary:
+                        {
+                            return YieldSimpleBinaryDocumentsInBatch(timeout, reader, count, increaseDocumentsCount).ToArray();
+                        }
+                    default: throw new NotSupportedException(string.Format("The format '{0}' is not supported", options.Format.ToString()));
+                }
+            }
+        }
 
-							return YieldJsonDocumentsInBatch(timeout, partialStream, count, increaseDocumentsCount).ToArray();
-						}
-					default: throw new NotSupportedException(string.Format("The format '{0}' is not supported", options.Format.ToString()));
-				}
-			}
-		}
+        private IEnumerable<JsonDocument> YieldSimpleBinaryDocumentsInBatch(CancellationTimeout timeout, BinaryReader reader, int count, Action<int> increaseDocumentsCount)
+        {
+            using (RavenBinaryReader sbinReader = new RavenBinaryReader(reader))
+            {
+                int documentCount = 0;
+
+                while (sbinReader.ReadToken())
+                {
+                    if (sbinReader.Current == RavenBinaryToken.HeaderStart)
+                        break;
+                }
+
+                if (sbinReader.Current != RavenBinaryToken.HeaderStart)
+                    throw new InvalidOperationException("Could not get document");
+
+                foreach (var token in RavenJToken.LoadMany(sbinReader))
+                {
+                    timeout.Delay();
+
+                    var doc = (RavenJObject)token;                    
+                    yield return PrepareJsonDocument(doc);
+
+                    documentCount++;
+                }
+
+                if (sbinReader.Current != RavenBinaryToken.BodyEnd || documentCount != count )
+                    throw new InvalidOperationException("Could not get all document");
+
+                increaseDocumentsCount(count);
+            }            
+        }
 
         private IEnumerable<JsonDocument> YieldBsonDocumentsInBatch(CancellationTimeout timeout, BinaryReader reader, int count, Action<int> increaseDocumentsCount)
         {

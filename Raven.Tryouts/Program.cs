@@ -24,8 +24,10 @@ namespace Raven.Tryouts
 	{
 		private static void Main()
 		{
+            BulkInsertsPerformance.Main();
+
 			using (var x = new RavenDB_3286())
-			{
+            //{
 				x.Basic();
 			}
 		}

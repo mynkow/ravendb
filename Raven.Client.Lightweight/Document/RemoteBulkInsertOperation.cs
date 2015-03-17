@@ -200,7 +200,8 @@ namespace Raven.Client.Document
             switch(options.Format)
             {
                 case BulkInsertFormat.Bson: requestUrl.Append("&format=bson"); break;
-                case BulkInsertFormat.Json: requestUrl.Append("&format=json"); break;                    
+                case BulkInsertFormat.Json: requestUrl.Append("&format=json"); break;
+                case BulkInsertFormat.SimpleBinary: requestUrl.Append("&format=sbin"); break;
             }
 
             switch(options.Compression)
@@ -466,6 +467,11 @@ namespace Raven.Client.Document
                             WriteJsonBatchToBuffer(options, countingStream, batch);
                             break;
                         }
+                    case BulkInsertFormat.SimpleBinary:
+                        {
+                            WriteSimpleBinaryBatchToBuffer(options, countingStream, batch);
+                            break;
+                        }
                     default: throw new NotSupportedException(string.Format("The format '{0}' is not supported", options.Format.ToString()));
                 }                
 
@@ -494,6 +500,17 @@ namespace Raven.Client.Document
             
         }
 
+        private static void WriteSimpleBinaryBatchToBuffer(BulkInsertOptions options, CountingStream stream, ICollection<RavenJObject> batch)
+        {
+            var binaryWriter = new BinaryWriter(stream);
+            binaryWriter.Write(batch.Count);
+            binaryWriter.Flush();
+
+            var jsonWriter = new RavenBinaryWriter(stream);
+            jsonWriter.WriteMany(batch);
+            jsonWriter.Flush();
+
+        }
         private static void WriteJsonBatchToBuffer(BulkInsertOptions options, CountingStream stream, ICollection<RavenJObject> batch)
         {
             var binaryWriter = new BinaryWriter(stream);
@@ -510,7 +527,7 @@ namespace Raven.Client.Document
                 doc.WriteTo(jsonWriter);
             }
             jsonWriter.Flush();
-           
+
         }
 
         private void ReportInternal(string format, params object[] args)

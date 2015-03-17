@@ -10,6 +10,7 @@
     {
         Bson = 0, 
         Json = 1,        
+        SimpleBinary = 2,
     }
 
 	/// <summary>

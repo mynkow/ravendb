@@ -304,6 +304,10 @@
     <Compile Include="Json\JsonDateTimeISO8601Converter.cs" />
     <Compile Include="Json\Linq\DictionaryWithParentSnapshot.cs" />
     <Compile Include="Json\Linq\Extensions.cs" />
+    <Compile Include="Json\Linq\RavenBinaryHeader.cs" />
+    <Compile Include="Json\Linq\RavenBinaryReader.cs" />
+    <Compile Include="Json\Linq\RavenBinaryToken.cs" />
+    <Compile Include="Json\Linq\RavenBinaryWriter.cs" />
     <Compile Include="Json\Linq\RavenJArray.cs" />
     <Compile Include="Json\Linq\RavenJObject.cs" />
     <Compile Include="Json\Linq\RavenJPath.cs" />
