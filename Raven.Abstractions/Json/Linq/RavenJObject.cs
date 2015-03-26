@@ -7,6 +7,7 @@ using Raven.Json.Utilities;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -271,6 +272,23 @@ namespace Raven.Json.Linq
                             o.Add(propName, new RavenJValue(null, JTokenType.Undefined));
                             break;
                         }
+                    case RavenBinaryToken.Guid:
+                        {
+                            var guidBuffer = reader.ReadBytes();
+                            Debug.Assert( guidBuffer.Length == 16);
+                            o.Add(propName, new RavenJValue(new Guid(guidBuffer)));
+                            break;
+                        }
+                    case RavenBinaryToken.Decimal:
+                        {
+                            o.Add(propName, new RavenJValue(reader.ReadDecimal()));
+                            break;
+                        }
+                    case RavenBinaryToken.Double:
+                        {
+                            o.Add(propName, new RavenJValue(reader.ReadDouble()));
+                            break;
+                        }
                     default:
                         throw new InvalidOperationException(StringUtils.FormatWith("The RavenJObject should not be on a token of type {0}.", CultureInfo.InvariantCulture, reader.Current));
                 }   
@@ -384,7 +402,7 @@ namespace Raven.Json.Linq
 			}
 		}
 
-        public override void WriteTo(RavenBinaryWriter writer, params JsonConverter[] converters )
+        public override void WriteTo(RavenBinaryWriter writer, JsonConverterCollection converters)
         {
             if (converters != null && converters.Any())
                 throw new NotSupportedException("Not supported yet.");

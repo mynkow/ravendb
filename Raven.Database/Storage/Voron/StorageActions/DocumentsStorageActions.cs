@@ -491,7 +491,7 @@ namespace Raven.Database.Storage.Voron.StorageActions
 			else
 				metadataStream.Write((long)0);
 
-			metadata.Metadata.WriteTo(metadataStream);
+			metadata.Metadata.WriteToBinary(metadataStream);
 
 			metadataStream.Position = 0;
 
@@ -508,8 +508,6 @@ namespace Raven.Database.Storage.Voron.StorageActions
 		{
 			try
 			{
-                //var loweredKey = CreateKey(key);
-
 				var metadataReadResult = metadataIndex.Read(Snapshot, loweredKey, writeBatch.Value);
 				if (metadataReadResult == null)
 					return null;
@@ -523,7 +521,7 @@ namespace Raven.Database.Storage.Voron.StorageActions
 
 					var existingCachedDocument = documentCacher.GetCachedDocument(loweredKey, etag);
 
-					var metadata = existingCachedDocument != null ? existingCachedDocument.Metadata : stream.ToJObject();
+					var metadata = existingCachedDocument != null ? existingCachedDocument.Metadata : stream.ToJObjectFromBinary();
 					var lastModified = DateTime.FromBinary(lastModifiedDateTimeBinary);
 
 					return new JsonDocumentMetadata
@@ -570,7 +568,7 @@ namespace Raven.Database.Storage.Voron.StorageActions
 			using (var finalDataStream = documentCodecs.Aggregate((Stream)new UndisposableStream(dataStream),
 				(current, codec) => codec.Encode(loweredKey, data, metadata, current)))
 			{
-				data.WriteTo(finalDataStream);
+				data.WriteToBinary(finalDataStream);
 				finalDataStream.Flush();
 			}
 
@@ -591,8 +589,6 @@ namespace Raven.Database.Storage.Voron.StorageActions
 		{
 			try
 			{
-                //var loweredKey = CreateKey(key);
-
 				size = -1;
 
 				var existingCachedDocument = documentCacher.GetCachedDocument(loweredKey, existingEtag);
@@ -615,7 +611,7 @@ namespace Raven.Database.Storage.Voron.StorageActions
 						if (stream != decodedDocumentStream)
 							streamToUse = new CountingStream(decodedDocumentStream);
 
-						var documentData = decodedDocumentStream.ToJObject();
+						var documentData = decodedDocumentStream.ToJObjectFromBinary();
 
 						size = (int)Math.Max(stream.Position, streamToUse.Position);
 						documentCacher.SetCachedDocument(loweredKey, existingEtag, documentData, metadata, size);
@@ -629,7 +625,6 @@ namespace Raven.Database.Storage.Voron.StorageActions
                 InvalidDataException invalidDataException = null;
 			    try
 			    {
-                    // var loweredKey = CreateKey(key);
                     size = -1;
                     var documentReadResult = tableStorage.Documents.Read(Snapshot, loweredKey, writeBatch.Value);
                     if (documentReadResult == null) //non existing document

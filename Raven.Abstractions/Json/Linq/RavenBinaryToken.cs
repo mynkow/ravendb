@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace Raven.Json.Linq
 {
 
-    public enum RavenBinaryToken
+    public enum RavenBinaryToken : byte
     {
         None = 0,
         HeaderStart = 1,
@@ -32,5 +32,7 @@ namespace Raven.Json.Linq
         Bytes = 39,
         TimeSpan = 40,
         Guid = 41,
+        Double = 42,
+        Decimal = 43,
     }
 }

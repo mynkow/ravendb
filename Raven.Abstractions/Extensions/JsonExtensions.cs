@@ -51,14 +51,14 @@ namespace Raven.Abstractions.Extensions
                 return ToJObject(stream);
 		}
 
-		/// <summary>
-		/// Convert a byte array to a RavenJObject
-		/// </summary>
-		public static RavenJObject ToJObject(this Stream self)
-		{
+        /// <summary>
+        /// Convert a byte array to a RavenJObject
+        /// </summary>
+        public static RavenJObject ToJObject(this Stream self)
+        {
             var streamWithCachedHeader = new StreamWithCachedHeader(self, 5);
             if (IsJson(streamWithCachedHeader))
-			{
+            {
                 using (var streamReader = new StreamReader(streamWithCachedHeader, Encoding.UTF8, false, 1024, true))
                 using (var jsonReader = new RavenJsonTextReader(streamReader))
                 {
@@ -68,24 +68,46 @@ namespace Raven.Abstractions.Extensions
 
             return RavenJObject.Load(new BsonReader(streamWithCachedHeader)
             {
-				DateTimeKindHandling = DateTimeKind.Utc,
-			});
-		}
+                DateTimeKindHandling = DateTimeKind.Utc,
+            });
+        }
 
-		/// <summary>
-		/// Convert a RavenJToken to a byte array
-		/// </summary>
-		public static void WriteTo(this RavenJToken self, Stream stream)
-		{
+        /// <summary>
+        /// Convert a byte array to a RavenJObject
+        /// </summary>
+        public static RavenJObject ToJObjectFromBinary(this Stream self)
+        {
+            using (var jsonReader = new RavenBinaryReader(self))
+            {
+                return RavenJObject.Load(jsonReader);
+            }
+        }
+
+        /// <summary>
+        /// Convert a RavenJToken to a byte array
+        /// </summary>
+        public static void WriteTo(this RavenJToken self, Stream stream)
+        {
             using (var streamWriter = new StreamWriter(stream, Encoding.UTF8, 1024, true))
             using (var jsonWriter = new JsonTextWriter(streamWriter))
-			{
+            {
                 jsonWriter.Formatting = Formatting.None;
                 jsonWriter.DateFormatHandling = DateFormatHandling.IsoDateFormat;
                 jsonWriter.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
                 jsonWriter.DateFormatString = Default.DateTimeFormatsToWrite;
                 self.WriteTo(jsonWriter, Default.Converters);
-		    }
+            }
+        }
+
+        /// <summary>
+        /// Convert a RavenJToken to a byte array
+        /// </summary>
+        public static void WriteToBinary(this RavenJToken self, Stream stream)
+        {
+            using (var binaryWriter = new RavenBinaryWriter(stream))
+            {
+                self.WriteTo(binaryWriter);
+            }
         }
 
         public static IEnumerable<string> EnumerateJsonObjects(this StreamReader input, char openChar = '{', char closeChar = '}')

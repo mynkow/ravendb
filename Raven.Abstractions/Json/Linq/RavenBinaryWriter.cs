@@ -8,7 +8,7 @@ using System.Text;
 
 namespace Raven.Json.Linq
 {
-    public class RavenBinaryWriter
+    public class RavenBinaryWriter : IDisposable
     {
         private readonly BinaryWriter writer;
 
@@ -18,7 +18,7 @@ namespace Raven.Json.Linq
         private MemoryStream bodyStream;
         private BinaryWriter bodyWriter;
 
-        public RavenBinaryWriter(Stream stream) : this ( new BinaryWriter(stream) ) { }
+        public RavenBinaryWriter(Stream stream) : this ( new BinaryWriter(stream, Encoding.UTF8, true) ) { }
 
         public RavenBinaryWriter(BinaryWriter writer)
         {
@@ -179,7 +179,8 @@ namespace Raven.Json.Linq
                     {
                         if (_value is decimal)
                         {
-                            throw new NotSupportedException();
+                            bodyWriter.Write((byte)RavenBinaryToken.Decimal);
+                            bodyWriter.Write(record.Value<decimal>());
                         }
                         else if (_value is float)
                         {
@@ -188,7 +189,8 @@ namespace Raven.Json.Linq
                         }
                         else
                         {
-                            throw new NotSupportedException();
+                            bodyWriter.Write((byte)RavenBinaryToken.Double);
+                            bodyWriter.Write(record.Value<double>());
                         }
                         return;
                     }
@@ -248,7 +250,9 @@ namespace Raven.Json.Linq
                         var guid = (Guid)_value;
                         byte[] array = guid.ToByteArray();
 
+                        // inefficient but good enough for now.
                         bodyWriter.Write((byte)RavenBinaryToken.Guid);
+                        bodyWriter.Write(16);
                         bodyWriter.Write(array);
 
                         return;
@@ -284,5 +288,11 @@ namespace Raven.Json.Linq
 
 
 
+
+        public void Dispose()
+        {
+            if (writer != null)
+                writer.Dispose();
+        }
     }
 }

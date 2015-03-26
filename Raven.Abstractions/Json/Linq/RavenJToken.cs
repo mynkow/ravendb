@@ -141,7 +141,12 @@ namespace Raven.Json.Linq
             }
         }
 
-        public abstract void WriteTo(RavenBinaryWriter writer, params JsonConverter[] converters);
+        public abstract void WriteTo(RavenBinaryWriter writer, JsonConverterCollection converters);
+
+        public void WriteTo(RavenBinaryWriter writer, params JsonConverter[] converters)
+        {
+            WriteTo(writer, new JsonConverterCollection(converters));
+        }
 
         /// <summary>
         ///     Writes this token to a <see cref="JsonWriter" />.

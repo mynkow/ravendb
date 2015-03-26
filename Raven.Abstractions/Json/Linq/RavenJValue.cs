@@ -327,7 +327,7 @@ namespace Raven.Json.Linq
 		}
 
 
-        public override void WriteTo(RavenBinaryWriter writer, params JsonConverter[] converters)
+        public override void WriteTo(RavenBinaryWriter writer, JsonConverterCollection converters)
         {
             if (converters != null && converters.Any())
                 throw new NotSupportedException("Not supported yet.");

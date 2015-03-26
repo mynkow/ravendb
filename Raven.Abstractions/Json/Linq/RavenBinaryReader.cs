@@ -124,6 +124,16 @@ namespace Raven.Json.Linq
             return reader.ReadBytes(size);
         }
 
+        public double ReadDouble()
+        {
+            return reader.ReadDouble();
+        }
+
+        public decimal ReadDecimal()
+        {
+            return reader.ReadDecimal();
+        }
+
         public byte ReadByte()
         {
             return reader.ReadByte();
