@@ -1064,7 +1064,8 @@ namespace Raven.Database.Storage.Voron.StorageActions
 
         private static string HashKey(string key)
         {
-            return Convert.ToBase64String(Encryptor.Current.Hash.Compute16(Encoding.UTF8.GetBytes(key)));
+            return Convert.ToBase64String(BitConverter.GetBytes(Hashing.CalculateHash(Encoding.UTF8.GetBytes(key))));
+            //return Convert.ToBase64String(Encryptor.Current.Hash.Compute16());
         }
 	}
 
