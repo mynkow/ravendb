@@ -308,6 +308,8 @@
     <Compile Include="Json\Linq\RavenBinaryReader.cs" />
     <Compile Include="Json\Linq\RavenBinaryToken.cs" />
     <Compile Include="Json\Linq\RavenBinaryWriter.cs" />
+    <Compile Include="Json\Linq\RavenFlatReader.cs" />
+    <Compile Include="Json\Linq\RavenFlatWriter.cs" />
     <Compile Include="Json\Linq\RavenJArray.cs" />
     <Compile Include="Json\Linq\RavenJObject.cs" />
     <Compile Include="Json\Linq\RavenJPath.cs" />
@@ -422,6 +424,8 @@
     <Compile Include="Util\AsyncManualResetEvent.cs" />
     <Compile Include="Util\AtomicDictionary.cs" />
     <Compile Include="Util\Base62Util.cs" />
+    <Compile Include="Util\Buffers\ByteBuffer.cs" />
+    <Compile Include="Util\Buffers\FlatBufferBuilder.cs" />
     <Compile Include="Util\ComparableByteArray.cs" />
     <Compile Include="Util\CompletedTask.cs" />
     <Compile Include="Util\ConcurrentSet.cs" />

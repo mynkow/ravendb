@@ -1,6 +1,7 @@
 ﻿using Raven.Abstractions.Data;
 using Raven.Abstractions.Extensions;
 using Raven.Abstractions.Json;
+using Raven.Json.Linq;
 using Raven.Imports.Newtonsoft.Json;
 using Raven.Imports.Newtonsoft.Json.Linq;
 using Raven.Json.Utilities;
@@ -596,5 +597,13 @@ namespace Raven.Json.Linq
 
 			throw new Exception("Error reading RavenJObject from JsonReader.");
 		}
-	}
+
+        public override void WriteTo(RavenFlatWriter writer, JsonConverterCollection converters)
+        {
+            if (converters != null && converters.Any())
+                throw new NotSupportedException("Not supported yet.");
+
+            throw new NotImplementedException();
+        }
+    }
 }

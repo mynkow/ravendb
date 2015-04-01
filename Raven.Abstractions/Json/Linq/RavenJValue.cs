@@ -339,6 +339,7 @@ namespace Raven.Json.Linq
             writer.WriteEndBody();
             writer.Flush();
         }
+
         public override void WriteTo(JsonWriter writer, JsonConverterCollection converters)
         {
             switch (_valueType)
@@ -771,5 +772,13 @@ namespace Raven.Json.Linq
 			}
 			return v;
 		}
-	}
+
+        public override void WriteTo(RavenFlatWriter writer, JsonConverterCollection converters)
+        {
+            if (converters != null && converters.Any())
+                throw new NotSupportedException("Not supported yet.");
+
+            throw new NotImplementedException();
+        }
+    }
 }

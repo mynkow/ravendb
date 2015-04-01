@@ -602,6 +602,7 @@
     <Compile Include="Linq\IsNullOrEmpty.cs" />
     <Compile Include="Linq\OfTypeSupport.cs" />
     <Compile Include="Linq\RavenBinarySerialization.cs" />
+    <Compile Include="Linq\RavenFlatBufferSerialization.cs" />
     <Compile Include="Linq\SelectDictionaryItem.cs" />
     <Compile Include="Linq\SelectManyShouldWork.cs" />
     <Compile Include="Linq\WhereStringEquals.cs" />

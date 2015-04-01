@@ -148,6 +148,13 @@ namespace Raven.Json.Linq
             WriteTo(writer, new JsonConverterCollection(converters));
         }
 
+        public abstract void WriteTo(RavenFlatWriter writer, JsonConverterCollection converters);
+
+        public void WriteTo(RavenFlatWriter writer, params JsonConverter[] converters)
+        {
+            WriteTo(writer, new JsonConverterCollection(converters));
+        }
+
         /// <summary>
         ///     Writes this token to a <see cref="JsonWriter" />.
         /// </summary>
@@ -402,6 +409,16 @@ namespace Raven.Json.Linq
                 throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
 
             return token;
+        }
+
+        public static IEnumerable<RavenJToken> LoadMany(RavenFlatReader reader)
+        {
+            throw new NotImplementedException();
+        }
+
+        public static RavenJToken Load(RavenFlatReader reader)
+        {
+            throw new NotImplementedException();
         }
 
         /// <summary>

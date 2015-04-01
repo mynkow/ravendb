@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Raven.Tests.Linq
 {
-    public class RavenBinarySerialization
+    public class RavenFlatBufferSerialization
     {
         public class Recursive
         {
@@ -32,9 +32,35 @@ namespace Raven.Tests.Linq
             public List<Recursive> Recurse { get; set; }
         }
 
+        private class EmptyUser
+        {
+        }
+
+        private class EmptyObjectThenArray
+        {
+            public EmptyUser User { get; set; }
+            public int[] Array { get; set; }
+        }
+
+        private class SimplierUser
+        {
+            public string Id { get; set; }
+        }
+
+        private class SimplierObjectThenArray
+        {
+            public SimplierUser User { get; set; }
+            public int[] Array { get; set; }
+        }
+
+        private class ObjectThenArray
+        {
+            public User User { get; set; }
+            public int[] Array { get; set; }
+        }
 
         [Fact]
-        public void Binary_WithObject()
+        public void Flat_WithObject()
         {
             var user = RavenJObject.FromObject(new User { Id = "users/10203", Active = true, Created = DateTime.Now, Age = 38, Info = "Testing Info", Name = "This user" });
 
@@ -42,7 +68,7 @@ namespace Raven.Tests.Linq
         }
 
         [Fact]
-        public void Binary_WithRecursiveObject()
+        public void Flat_WithRecursiveObject()
         {
             var r = new Recursive
             {
@@ -61,7 +87,7 @@ namespace Raven.Tests.Linq
         }
 
         [Fact]
-        public void Binary_WithRecursiveArray()
+        public void Flat_WithRecursiveArray()
         {
             var r = new RecursiveWithArray
             {
@@ -87,7 +113,7 @@ namespace Raven.Tests.Linq
         }
 
         [Fact]
-        public void Binary_WithRecursiveList()
+        public void Flat_WithRecursiveList()
         {
             var r = new RecursiveWithList
             {
@@ -114,7 +140,7 @@ namespace Raven.Tests.Linq
 
 
         [Fact]
-        public void Binary_WithArray()
+        public void Flat_WithArray()
         {
             var users = new[] 
             { 
@@ -126,18 +152,8 @@ namespace Raven.Tests.Linq
             EnsureIsEquivalentAfterSerialization(RavenJArray.FromObject(users));
         }
 
-        private class EmptyUser
-        {
-        }
-
-        private class EmptyObjectThenArray
-        {
-            public EmptyUser User { get; set; }
-            public int[] Array { get; set; }
-        }
-
         [Fact]
-        public void Binary_WithEmptyObjectThenArray()
+        public void Flat_WithEmptyObjectThenArray()
         {
             var @object = new EmptyObjectThenArray()
             {
@@ -148,20 +164,8 @@ namespace Raven.Tests.Linq
             EnsureIsEquivalentAfterSerialization(RavenJToken.FromObject(@object));
         }
 
-
-        private class SimplierUser
-        {
-            public string Id { get; set; }
-        }
-
-        private class SimplierObjectThenArray
-        {
-            public SimplierUser User { get; set; }
-            public int[] Array { get; set; }
-        }
-
         [Fact]
-        public void Binary_WithSimplierObjectThenArray()
+        public void Flat_WithSimplierObjectThenArray()
         {
             var @object = new SimplierObjectThenArray()
             {
@@ -172,14 +176,8 @@ namespace Raven.Tests.Linq
             EnsureIsEquivalentAfterSerialization(RavenJToken.FromObject(@object));
         }
 
-        private class ObjectThenArray
-        {
-            public User User { get; set; }
-            public int[] Array { get; set; }
-        }
-
         [Fact]
-        public void Binary_WithObjectThenArray()
+        public void Flat_WithObjectThenArray()
         {
             var @object = new ObjectThenArray()
             {
@@ -193,10 +191,10 @@ namespace Raven.Tests.Linq
         private void EnsureIsEquivalentAfterSerialization(RavenJToken token)
         {
             var memoryStream = new MemoryStream();
-            token.WriteTo(new RavenBinaryWriter(memoryStream));
-            
+            token.WriteTo(new RavenFlatWriter(memoryStream));
+
             memoryStream.Position = 0;
-            var deserializedObject = RavenJToken.Load(new RavenBinaryReader(memoryStream));
+            var deserializedObject = RavenJToken.Load(new RavenFlatReader(memoryStream));
 
             var s = token.ToString(Formatting.None);
             var d = deserializedObject.ToString(Formatting.None);
