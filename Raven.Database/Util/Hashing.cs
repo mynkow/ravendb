@@ -32,115 +32,124 @@ using System.Threading.Tasks;
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Based on xxHashSharp
+// Based on xxHashSharp && the original xxHash implementation
 
 namespace Raven.Database.Util
 {
     public unsafe static class Hashing
     {
-        public static unsafe uint CalculateHash(byte* buffer, int len, uint seed = 0)
+        public static class XXHash32
         {
-            uint h32;
-            int index = 0;
-
-            var bufferInt = (uint*)buffer;
-            if (len >= 16)
+            public static unsafe uint Calculate(byte* buffer, int len, uint seed = 0)
             {
-                int limit = len - 16;
-                uint v1 = seed + PRIME32_1 + PRIME32_2;
-                uint v2 = seed + PRIME32_2;
-                uint v3 = seed + 0;
-                uint v4 = seed - PRIME32_1;
-               
-                do
+                uint h32;
+                int index = 0;
+
+                var bufferInt = (uint*)buffer;
+                if (len >= 16)
                 {
-                    v1 = CalcSubHash(v1, bufferInt);
-                    bufferInt++;
-                    v2 = CalcSubHash(v2, bufferInt);
-                    bufferInt++;
-                    v3 = CalcSubHash(v3, bufferInt);
-                    bufferInt++;
-                    v4 = CalcSubHash(v4, bufferInt);
-                    bufferInt++;
+                    int limit = len - 16;
+                    uint v1 = seed + PRIME32_1 + PRIME32_2;
+                    uint v2 = seed + PRIME32_2;
+                    uint v3 = seed + 0;
+                    uint v4 = seed - PRIME32_1;
 
-                    index += 4 * 4;
+                    do
+                    {
+                        v1 = CalcSubHash32(v1, bufferInt);
+                        bufferInt++;
+                        v2 = CalcSubHash32(v2, bufferInt);
+                        bufferInt++;
+                        v3 = CalcSubHash32(v3, bufferInt);
+                        bufferInt++;
+                        v4 = CalcSubHash32(v4, bufferInt);
+                        bufferInt++;
+
+                        index += 4 * 4;
+                    }
+                    while (index <= limit);
+
+                    h32 = RotateLeft32(v1, 1) + RotateLeft32(v2, 7) + RotateLeft32(v3, 12) + RotateLeft32(v4, 18);
                 }
-                while (index <= limit);
+                else
+                {
+                    h32 = seed + PRIME32_5;
+                }
 
-                h32 = RotateLeft(v1, 1) + RotateLeft(v2, 7) + RotateLeft(v3, 12) + RotateLeft(v4, 18);
+                h32 += (uint)len;
+
+                while (index <= len - 4)
+                {
+                    h32 += *bufferInt * PRIME32_3;
+                    h32 = RotateLeft32(h32, 17) * PRIME32_4;
+                    bufferInt++;
+                    index += 4;
+                }
+
+                while (index < len)
+                {
+                    h32 += buffer[index] * PRIME32_5;
+                    h32 = RotateLeft32(h32, 11) * PRIME32_1;
+                    index++;
+                }
+
+                h32 ^= h32 >> 15;
+                h32 *= PRIME32_2;
+                h32 ^= h32 >> 13;
+                h32 *= PRIME32_3;
+                h32 ^= h32 >> 16;
+
+                return h32;
             }
-            else
+
+            public static uint Calculate(string value, Encoding encoder, uint seed = 0)
             {
-                h32 = seed + PRIME32_5;
+                var buf = encoder.GetBytes(value);
+
+                fixed (byte* buffer = buf)
+                {
+                    return Calculate(buffer, buf.Length, seed);
+                }
             }
-
-            h32 += (uint)len;
-
-            while (index <= len - 4)
+            public static uint CalculateRaw(string buf, uint seed = 0)
             {
-                h32 += *bufferInt * PRIME32_3;
-                h32 = RotateLeft(h32, 17) * PRIME32_4;
-                bufferInt++;
-                index += 4;
+                fixed (char* buffer = buf)
+                {
+                    return Calculate((byte*)buffer, buf.Length * sizeof(char), seed);
+                }
             }
 
-            while (index < len)
+            public static uint Calculate(byte[] buf, int len = -1, uint seed = 0)
             {
-                h32 += buffer[index] * PRIME32_5;
-                h32 = RotateLeft(h32, 11) * PRIME32_1;
-                index++;
+                if (len == -1)
+                    len = buf.Length;
+
+                fixed (byte* buffer = buf)
+                {
+                    return Calculate(buffer, len, seed);
+                }
             }
 
-            h32 ^= h32 >> 15;
-            h32 *= PRIME32_2;
-            h32 ^= h32 >> 13;
-            h32 *= PRIME32_3;
-            h32 ^= h32 >> 16;
+            private const uint PRIME32_1 = 2654435761U;
+            private const uint PRIME32_2 = 2246822519U;
+            private const uint PRIME32_3 = 3266489917U;
+            private const uint PRIME32_4 = 668265263U;
+            private const uint PRIME32_5 = 374761393U;
 
-            return h32;
-        }
-
-        public static uint CalculateHash(byte[] buf, int len = -1, uint seed = 0)
-        {
-            if (len == -1)
-                len = buf.Length;
-
-            fixed ( byte* buffer = buf )
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private static uint CalcSubHash32(uint value, uint* buf)
             {
-                return CalculateHash(buffer, len, seed);
+                value += *buf * PRIME32_2;
+                value = RotateLeft32(value, 13);
+                value *= PRIME32_1;
+                return value;
             }
-        }
 
-        private const uint PRIME32_1 = 2654435761U;
-        private const uint PRIME32_2 = 2246822519U;
-        private const uint PRIME32_3 = 3266489917U;
-        private const uint PRIME32_4 = 668265263U;
-        private const uint PRIME32_5 = 374761393U;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static uint CalcSubHash(uint value, byte[] buf, int index)
-        {
-            uint read_value = BitConverter.ToUInt32(buf, index);
-            value += read_value * PRIME32_2;
-            value = RotateLeft(value, 13);
-            value *= PRIME32_1;
-            return value;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static uint CalcSubHash(uint value, uint* buf)
-        {
-            value += *buf * PRIME32_2;
-            value = RotateLeft(value, 13);
-            value *= PRIME32_1;
-            return value;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static uint RotateLeft(uint value, int count)
-        {
-            return (value << count) | (value >> (32 - count));
-        }
-
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private static uint RotateLeft32(uint value, int count)
+            {
+                return (value << count) | (value >> (32 - count));
+            }
+        } 
     }
 }

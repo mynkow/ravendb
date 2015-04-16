@@ -141,6 +141,7 @@
     <Compile Include="Utils\Entities\TShirt.cs" />
     <Compile Include="Utils\Entities\TShirtType.cs" />
     <Compile Include="Utils\Etag.cs" />
+    <Compile Include="Utils\Hashing.cs" />
     <Compile Include="Utils\Indexes\CameraCost.cs" />
     <Compile Include="Utils\Indexes\Events_SpatialIndex.cs" />
     <Compile Include="Utils\Entities\ISearchable.cs" />
