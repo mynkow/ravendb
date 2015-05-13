@@ -165,6 +165,13 @@ namespace Raven.Json.Linq
             }
         }
 
+        public abstract void WriteTo(RavenFlatWriter writer, JsonConverterCollection converters);
+
+        public void WriteTo(RavenFlatWriter writer, params JsonConverter[] converters)
+        {
+            WriteTo(writer, new JsonConverterCollection(converters));
+        }
+
         /// <summary>
         ///     Writes this token to a <see cref="JsonWriter" />.
         /// </summary>
@@ -291,6 +298,137 @@ namespace Raven.Json.Linq
         public static RavenJToken Load(JsonReader reader)
         {
             return ReadFrom(reader);
+        }
+
+        public static IEnumerable<RavenJToken> LoadMany(RavenFlatReader reader)
+        {
+            throw new NotImplementedException();
+
+            //RavenBinaryHeader header = reader.ReadHeader();
+
+            //if (reader.Current != RavenBinaryToken.BodyStart)
+            //    throw new Exception("Error reading RavenJToken from RavenBinaryReader. Header is corrupted: {0}".FormatWith(CultureInfo.InvariantCulture, reader.Current));
+
+            //// Prime the token for the next one reading.
+            //if (!reader.ReadToken())
+            //    throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+            //foreach (var token in LoadMany(reader, header))
+            //    yield return token;
+
+            //if (reader.Current != RavenBinaryToken.BodyEnd)
+            //    throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+        }
+
+        //internal static IEnumerable<RavenJToken> LoadMany(RavenBinaryReader reader, RavenBinaryHeader header)
+        //{
+        //    bool @continue = false;
+
+        //    do
+        //    {
+        //        RavenJToken token;
+        //        switch (reader.Current)
+        //        {
+        //            case RavenBinaryToken.None:
+        //            case RavenBinaryToken.HeaderStart:
+        //            case RavenBinaryToken.HeaderEnd:
+        //                {
+        //                    throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+        //                }
+        //            case RavenBinaryToken.ObjectStart:
+        //                {
+        //                    token = RavenJObject.Load(reader, header);
+        //                    if (reader.Current != RavenBinaryToken.ObjectEnd)
+        //                        throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+        //                    break;
+        //                }
+        //            case RavenBinaryToken.ArrayStart:
+        //                {
+        //                    token = RavenJArray.Load(reader, header);
+        //                    if (reader.Current != RavenBinaryToken.ArrayEnd)
+        //                        throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+        //                    break;
+        //                }                        
+        //            default:
+        //                {
+        //                    if ((int)reader.Current > (int)RavenBinaryToken.Primitives)
+        //                        token = RavenJValue.Load(reader, header);
+        //                    else
+        //                        throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+        //                    break;
+        //                }
+        //        }               
+
+        //        yield return token;
+
+        //        if ( !reader.ReadToken() )
+        //            throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+        //        @continue = reader.Current == RavenBinaryToken.ObjectStart || reader.Current == RavenBinaryToken.ArrayStart;
+
+        //    } while (@continue);
+        //}
+
+        //internal static RavenJToken Load(RavenBinaryReader reader, RavenBinaryHeader header)
+        //{
+        //    RavenJToken token;
+        //    switch (reader.Current)
+        //    {
+        //        case RavenBinaryToken.None:
+        //        case RavenBinaryToken.HeaderStart:
+        //        case RavenBinaryToken.HeaderEnd:
+        //            {
+        //                throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+        //            }
+        //        case RavenBinaryToken.ObjectStart:
+        //            {
+        //                token = RavenJObject.Load(reader, header);
+        //                if (reader.Current != RavenBinaryToken.ObjectEnd)
+        //                    throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+        //                break;
+        //            }
+        //        case RavenBinaryToken.ArrayStart:
+        //            {
+        //                token = RavenJArray.Load(reader, header);
+        //                if (reader.Current != RavenBinaryToken.ArrayEnd)
+        //                    throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+        //                break;
+        //            }
+        //        default:
+        //            {
+        //                if ((int)reader.Current > (int)RavenBinaryToken.Primitives)
+        //                    token = RavenJValue.Load(reader, header);
+        //                else
+        //                    throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+        //                break;
+        //            }
+        //    }
+                                        
+        //    return token;
+        //}
+
+        public static RavenJToken Load(RavenFlatReader reader)
+        {
+            throw new NotImplementedException();
+            //RavenBinaryHeader header = reader.ReadHeader();
+
+            //if (reader.Current != RavenBinaryToken.BodyStart)
+            //    throw new Exception("Error reading RavenJToken from RavenBinaryReader. Header is corrupted: {0}".FormatWith(CultureInfo.InvariantCulture, reader.Current));
+
+            //// Prime the token for the next one reading.
+            //if (!reader.ReadToken())
+            //    throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+            //var token = Load(reader, header);
+
+            //if (!reader.ReadToken() || reader.Current != RavenBinaryToken.BodyEnd)
+            //    throw new Exception("Error reading RavenJToken from RavenBinaryReader.");
+
+            //return token;
         }
 
         /// <summary>

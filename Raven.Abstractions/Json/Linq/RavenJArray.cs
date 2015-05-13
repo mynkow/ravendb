@@ -335,5 +335,13 @@ namespace Raven.Json.Linq
 
 			throw new Exception("Error reading RavenJArray from JsonReader.");
 		}
-	}
+
+        public override void WriteTo(RavenFlatWriter writer, JsonConverterCollection converters)
+        {
+            if (converters != null && converters.Any())
+                throw new NotSupportedException("Not supported yet.");
+
+            throw new NotImplementedException();
+        }
+    }
 }

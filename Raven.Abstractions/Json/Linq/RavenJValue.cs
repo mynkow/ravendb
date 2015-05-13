@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
+using System.Linq;
 using Raven.Abstractions.Data;
 using Raven.Abstractions.Extensions;
 using Raven.Imports.Newtonsoft.Json;
@@ -258,6 +259,20 @@ namespace Raven.Json.Linq
 			}
 			return v;
 		}
+
+
+        //public override void WriteTo(RavenBinaryWriter writer, JsonConverterCollection converters)
+        //{
+        //    if (converters != null && converters.Any())
+        //        throw new NotSupportedException("Not supported yet.");
+
+        //    writer.WriteStartBody();
+  
+        //    writer.WriteValue(this);
+
+        //    writer.WriteEndBody();
+        //    writer.Flush();
+        //}
 
         public override void WriteTo(JsonWriter writer, JsonConverterCollection converters)
         {
@@ -691,5 +706,13 @@ namespace Raven.Json.Linq
 			}
 			return v;
 		}
-	}
+
+        public override void WriteTo(RavenFlatWriter writer, JsonConverterCollection converters)
+        {
+            if (converters != null && converters.Any())
+                throw new NotSupportedException("Not supported yet.");
+
+            throw new NotImplementedException();
+        }
+    }
 }

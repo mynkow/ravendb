@@ -216,7 +216,7 @@ namespace Raven.Tryouts
         }
 
         private const int BatchSize = 24;
-        static void Main()
+        public static void Main()
         {
             var list = new List<Data>();
 

@@ -1,5 +1,22 @@
 ﻿using System;
-using Raven.Tests.Core.Replication;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using Raven.Abstractions.Data;
+using Raven.Client;
+using Raven.Client.Connection.Async;
+using Raven.Client.Document;
+using Raven.Client.Extensions;
+using Raven.Client.Indexes;
+using Raven.Client.Linq;
+using Raven.Imports.Newtonsoft.Json;
+using Raven.Json.Linq;
+using Raven.SlowTests.Issues;
+using Raven.Tests.Common;
+using Raven.Tests.Core;
+using Raven.Tests.Core.Querying;
+using Raven.Tests.Issues;
+using Raven.Tests.Spatial.JsonConverters.GeoJson;
 
 namespace Raven.Tryouts
 {
@@ -7,15 +24,8 @@ namespace Raven.Tryouts
 	{
 		private static void Main()
 		{
-			for (int i = 0; i < 1000; i++)
-			{
-				Console.WriteLine(i);
-				using (var test = new IndexReplication())
-				{
-					test.Should_replicate_all_indexes_if_relevant_endpoint_is_hit();
-				}
-			}
+            BulkInsertsPerformance.Main();
 		}
-
 	}
+
 }
