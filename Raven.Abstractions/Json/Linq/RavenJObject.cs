@@ -465,7 +465,8 @@ namespace Raven.Json.Linq
             if (converters != null && converters.Any())
                 throw new NotSupportedException("Not supported yet.");
 
-            throw new NotImplementedException();
+            writer.Write(this);
+            writer.Flush();
         }
     }
 }

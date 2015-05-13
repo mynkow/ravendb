@@ -310,6 +310,7 @@
     <Compile Include="Json\Linq\DictionaryWithParentSnapshot.cs" />
     <Compile Include="Json\Linq\Extensions.cs" />
     <Compile Include="Json\Linq\RavenFlatReader.cs" />
+    <Compile Include="Json\Linq\RavenFlatToken.cs" />
     <Compile Include="Json\Linq\RavenFlatWriter.cs" />
     <Compile Include="Json\Linq\RavenJArray.cs" />
     <Compile Include="Json\Linq\RavenJObject.cs" />

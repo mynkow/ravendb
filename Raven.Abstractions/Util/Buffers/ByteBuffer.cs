@@ -286,5 +286,10 @@ namespace Raven.Abstractions.Util.Buffers
                 }
             }
         }
+
+        public void Clear()
+        {
+            _pos = 0;
+        }
     }
 }
