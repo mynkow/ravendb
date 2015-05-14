@@ -7,50 +7,56 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Raven.Abstractions.Json.Linq;
+using System.Runtime.InteropServices;
 
 namespace Raven.Json.Linq
 {
-    public class RavenFlatWriter : IDisposable
-    {        
-        protected struct VTableItem
-        {
-            public byte NameIndex;
-            public byte Type;            
-            public int Size;
 
-            public VTableItem( byte nameIndex, byte type, byte size = 0 )
-            {
-                this.NameIndex = nameIndex;
-                this.Type = type;
-                this.Size = size;            
-            }
+    [StructLayout(LayoutKind.Explicit)]
+    internal struct VTableItem
+    {
+        [FieldOffset(0)]
+        public byte NameIndex;
+        [FieldOffset(1)]
+        public byte Type;
+        [FieldOffset(2)]
+        public ushort Size;
+
+        public VTableItem(byte nameIndex, byte type, ushort size = 0)
+        {
+            this.NameIndex = nameIndex;
+            this.Type = type;
+            this.Size = size;
         }
+    }
 
-        protected class VTable : IEquatable<VTable>
+    internal class VTable : IEquatable<VTable>
+    {
+        public readonly List<VTableItem> Items = new List<VTableItem>();
+
+        public bool Equals(VTable other)
         {
-            public readonly List<VTableItem> Items = new List<VTableItem>();
+            if (Items.Count != other.Items.Count)
+                return false;
 
-            public bool Equals(VTable other)
+            var seq1 = Items;
+            var seq2 = other.Items;
+
+            for (int i = 0; i < seq1.Count; i++)
             {
-                if (Items.Count != other.Items.Count)
+                var item1 = seq1[i];
+                var item2 = seq2[i];
+
+                if (item1.NameIndex != item2.NameIndex || item1.Type != item2.Type || item1.Size != item2.Size)
                     return false;
-
-                var seq1 = Items;
-                var seq2 = other.Items;
-
-                for ( int i = 0; i < seq1.Count; i++ )
-                {
-                    var item1 = seq1[i];
-                    var item2 = seq2[i];
-
-                    if (item1.NameIndex != item2.NameIndex || item1.Type != item2.Type || item1.Size != item2.Size)
-                        return false;
-                }
-
-                return true;
             }
-        }
 
+            return true;
+        }
+    }
+
+    public class RavenFlatWriter : IDisposable
+    {
         private const int InitialSize = 64;
 
         private readonly BinaryWriter writer;
@@ -84,6 +90,8 @@ namespace Raven.Json.Linq
         public void Write(RavenJToken token)
         {
             this._bb.Clear();
+            this._space = this._bb.Length - this._bb.Position;
+
             this._vtables.Clear();
             this._mapProperties.Clear();
             this._mapPropertiesToIndex.Clear();            
@@ -121,13 +129,19 @@ namespace Raven.Json.Linq
                         break;
                     }
             }
-        }
 
+            int startIndex = this._bb.Position;
+            int dataLength = this._bb.Length - startIndex;
+
+            this.writer.Write(this._bb.Data, startIndex, dataLength);
+        }
+        
         private int WriteObjectInternal(RavenJObject @object)
         {
             VTable vtable = new VTable();
+            
             List<KeyValuePair<string, RavenJToken>> primitives = new List<KeyValuePair<string, RavenJToken>>();
-            List<int> complexOffsets = new List<int>();            
+            List<int> ptrOffsets = new List<int>();            
 
             // Recursively write all the complex properties in reverse order.
             foreach (var pair in @object)
@@ -142,7 +156,7 @@ namespace Raven.Json.Linq
 
                             VTableItem vtableEntry = CreateVTableEntry(token, pair.Key);
                             vtable.Items.Add(vtableEntry);
-                            complexOffsets.Add(offset);
+                            ptrOffsets.Add(offset);
                             break;
                         }
                     case JTokenType.Array:
@@ -151,20 +165,44 @@ namespace Raven.Json.Linq
                             int offset = WriteArrayInternal((RavenJArray)token, pair.Key, out vtableEntry);
                             
                             vtable.Items.Add(vtableEntry);
-                            complexOffsets.Add(offset);
+                            ptrOffsets.Add(offset);
                             break;
+                        }
+                    case JTokenType.String: 
+                        {
+                            // This is a variable size type
+                            VTableItem vtableEntry = CreateVTableEntry(token, pair.Key);
+                            vtable.Items.Add(vtableEntry);
+
+                            var data = (RavenJValue)token;
+                            Add((string)data.Value);
+                            ptrOffsets.Add(Offset);
+                            break;
+                        }
+                    case JTokenType.Uri:
+                        {
+                            throw new NotImplementedException();
+                        }
+                    case JTokenType.Bytes:
+                        {
+                            throw new NotImplementedException();
+                        }
+                    case JTokenType.Undefined:
+                        {
+                            throw new NotImplementedException();
                         }
                     default:
                         {
-                            // Mark all primitives to be processed later.
+                            // Mark all fixed size primitives to be processed later.
                             primitives.Add(pair);
                             break;
                         }
                 }
             }
 
-            Prep(sizeof(int) * complexOffsets.Count, 0);
-            foreach ( var offset in complexOffsets )
+            // Write all the variable size data and complex pointers. 
+            Prep(sizeof(int) * ptrOffsets.Count, 0);
+            foreach ( var offset in ptrOffsets )
             {
                 // Write the offset
                 Put(offset);
@@ -256,9 +294,41 @@ namespace Raven.Json.Linq
             throw new NotImplementedException();
         }
 
-        private int WritePrimitiveInternal(RavenJToken token, string name, out VTableItem vtableEntry)
+        private int WritePrimitiveInternal(RavenJValue token, string name, out VTableItem vtableEntry)
         {
-            throw new NotImplementedException();
+            vtableEntry = CreateVTableEntry(token, name);
+
+            switch (token.Type)
+            {
+                case JTokenType.Boolean:
+                    Put((bool)token.Value);
+                    break;
+                case JTokenType.Integer:
+                    Put((int)token.Value);
+                    break;
+                case JTokenType.Float:
+                    Put((float)token.Value);
+                    break;
+                case JTokenType.Date:
+                    Put((DateTime)token.Value);
+                    break;
+                case JTokenType.TimeSpan:
+                    throw new NotImplementedException();
+                case JTokenType.Guid:
+                    throw new NotImplementedException();
+                case JTokenType.Uri:
+                    throw new NotImplementedException();
+                case JTokenType.Bytes:
+                    throw new NotImplementedException();
+                case JTokenType.Null:
+                    throw new NotImplementedException();
+                case JTokenType.Undefined:
+                    throw new NotImplementedException();
+                default:
+                    throw new NotSupportedException();
+            }
+
+            return Offset;
         }
 
         
@@ -271,25 +341,32 @@ namespace Raven.Json.Linq
         private void WriteMagicNumberForArray()
         {
             Prep(sizeof(byte) * 2);
-            Put((byte)0x2A);
             Put((byte)0x3A);
+            Put((byte)0x2A);
         }
 
         private void WriteMagicNumberForObject()
         {
             Prep(sizeof(byte) * 2);
-            Put((byte)0x2A);
             Put((byte)0xA3);
+            Put((byte)0x2A);
         }
 
         private void WriteSize()
         {
-            throw new NotImplementedException();
+            int dataSegmentSize = Offset;
+            Put((int)dataSegmentSize);
         }
 
         private void WritePropertyTable()
         {
-            throw new NotImplementedException();
+            int count = this._mapProperties.Count;
+
+            for (int i = count - 1; i >= 0; i-- )
+                Add(this._mapProperties[i]);
+
+            Prep(1);
+            Put((byte)count);
         }
 
         private void WriteArrayVTables(VTableItem rootVTable)
@@ -299,7 +376,33 @@ namespace Raven.Json.Linq
 
         private void WriteObjectVTables()
         {
-            throw new NotImplementedException();
+            int sizeOfVTableItem = Marshal.SizeOf(typeof(VTableItem));
+
+            checked
+            {                
+                for (int i = this._vtables.Count - 1; i >= 0; i--)
+                {
+                    var vtable = this._vtables[i];
+
+                    int count = vtable.Items.Count;
+
+                    Prep(1, count * sizeOfVTableItem);
+
+                    for (int vidx = count - 1; vidx >= 0; vidx--)
+                    {
+                        var item = vtable.Items[vidx];
+
+                        Put(item.Size);
+                        Put(item.Type);
+                        Put(item.NameIndex);
+                    }
+
+                    Put((byte)count);
+                }
+
+                Prep(1, 1);
+                Put((byte)this._vtables.Count);
+            }
         }
 
 
@@ -421,6 +524,11 @@ namespace Raven.Json.Linq
             _bb.PutUshort(_space -= sizeof(ushort), x);
         }
 
+        private void Put(char x)
+        {
+            _bb.PutChar(_space -= sizeof(char), x);
+        }
+
         private void Put(int x)
         {
             _bb.PutInt(_space -= sizeof(int), x);
@@ -451,6 +559,17 @@ namespace Raven.Json.Linq
             _bb.PutDouble(_space -= sizeof(double), x);
         }
 
+        private void Put(string x)
+        {
+            _bb.PutString(_space -= sizeof(char) * x.Length, x);
+        }
+
+        private void Put(DateTime x)
+        {
+            _bb.PutLong(_space -= sizeof(long), x.Ticks);
+        }
+
+
         // Adds a scalar to the buffer, properly aligned, and the buffer grown
         // if needed.
         private void Add(bool x) { Prep(sizeof(byte), 0); Put(x); }
@@ -467,6 +586,20 @@ namespace Raven.Json.Linq
         {
             Prep(sizeof(double), 0);
             Put(x);
+        }
+
+        private void Add(DateTime x)
+        {
+            Prep(sizeof(long), 0);
+            Put(x.Ticks);
+        }
+
+        private void Add(string x)
+        {
+            Prep(1, sizeof(char) * x.Length + sizeof(int));
+            
+            Put(x);
+            Put((int) x.Length);
         }
 
 

@@ -139,6 +139,18 @@ namespace Raven.Abstractions.Util.Buffers
             _pos = offset;
         }
 
+        public unsafe void PutChar(int offset, char value)
+        {
+            AssertOffsetAndLength(offset, sizeof(char));
+            fixed (byte* ptr = _buffer)
+            {
+                *(ushort*)(ptr + offset) = BitConverter.IsLittleEndian
+                    ? (ushort)value
+                    : ReverseBytes((ushort)value);
+            }
+            _pos = offset;
+        }
+
         public unsafe void PutLong(int offset, long value)
         {
             PutUlong(offset, (ulong)value);
@@ -189,6 +201,25 @@ namespace Raven.Abstractions.Util.Buffers
                     *(ulong*)(ptr + offset) = ReverseBytes(*(ulong*)(ptr + offset));
                 }
             }
+            _pos = offset;
+        }
+
+        public unsafe void PutString(int offset, string value)
+        {
+            AssertOffsetAndLength(offset, sizeof(char) * value.Length);
+
+            fixed (byte* ptr = _buffer)
+            fixed (char* charPtr = value)
+            {
+                for (int i = value.Length - 1; i >= 0; i-- )
+                {
+                    *(ushort*)(ptr + offset + i) = BitConverter.IsLittleEndian
+                                        ? (ushort) charPtr[i]
+                                        : ReverseBytes((ushort)charPtr[i]);
+
+                }
+            }
+
             _pos = offset;
         }
 
@@ -291,5 +322,7 @@ namespace Raven.Abstractions.Util.Buffers
         {
             _pos = 0;
         }
+
+
     }
 }
