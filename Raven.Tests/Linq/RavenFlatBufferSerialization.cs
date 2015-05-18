@@ -195,10 +195,8 @@ namespace Raven.Tests.Linq
 
             memoryStream.Position = 0;
             var deserializedObject = RavenJToken.Load(new RavenFlatReader(memoryStream));
-
-            var s = token.ToString(Formatting.None);
-            var d = deserializedObject.ToString(Formatting.None);
-            Assert.Equal(s, d);
+                        
+            Assert.True(RavenJToken.DeepEquals(token, deserializedObject), token.ToString() + " " + deserializedObject.ToString() );
         }
     }
 }

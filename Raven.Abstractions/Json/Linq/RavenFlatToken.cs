@@ -11,11 +11,12 @@ namespace Raven.Abstractions.Json.Linq
         IsArray = 1 << 7, // Bit 8 ON
         IsObject = 1 << 6, // Bit 7 ON
         IsPtr = 1 << 5, // Bit 6 ON
-        IsReserved = 1 << 4, // Bit 5 ON
-        IsPrimitive = 0x0F, // Bits 1 to 4
+        AsPrimitive = 0x1F, // Bits 1 to 5
     }
 
-    [Flags]
+    /// <summary>
+    /// The definition of tokens. We have up to 32 available token values.
+    /// </summary>
     public enum RavenFlatToken : byte
     {
         Invalid = 0,
@@ -33,6 +34,6 @@ namespace Raven.Abstractions.Json.Linq
         Uri,
         Bytes, 
         Null,
-        Undefined = 20,        
+        Undefined = 20,                 
     }
 }

@@ -11,9 +11,16 @@ using System.Runtime.InteropServices;
 
 namespace Raven.Json.Linq
 {
+    public static class RavenFlatProtocol
+    {
+        public const short PrimitiveMarker = 0x3700;
+        public const short ObjectMarker = 0x3A2A;
+        public const short ArrayMarker = 0x3AF2;
+    }
+
 
     [StructLayout(LayoutKind.Explicit)]
-    internal struct VTableItem
+    public struct VTableItem
     {
         [FieldOffset(0)]
         public byte NameIndex;
@@ -30,7 +37,7 @@ namespace Raven.Json.Linq
         }
     }
 
-    internal class VTable : IEquatable<VTable>
+    public class VTable : IEquatable<VTable>
     {
         public readonly List<VTableItem> Items = new List<VTableItem>();
 
@@ -52,7 +59,7 @@ namespace Raven.Json.Linq
             }
 
             return true;
-        }
+        }        
     }
 
     public class RavenFlatWriter : IDisposable
@@ -201,7 +208,7 @@ namespace Raven.Json.Linq
             }
 
             // Write all the variable size data and complex pointers. 
-            Prep(sizeof(int) * ptrOffsets.Count, 0);
+            PrepNoAlign(sizeof(int) * ptrOffsets.Count);
             foreach ( var offset in ptrOffsets )
             {
                 // Write the offset
@@ -227,7 +234,7 @@ namespace Raven.Json.Linq
             }
 
             // Write VTable index for this object.
-            Add((byte)vtableIndex);
+            Put((byte)vtableIndex);
 
             return Offset;
         }
@@ -239,12 +246,14 @@ namespace Raven.Json.Linq
 
             if ( name == null )
             {
-                // If we are the root, we dont care about the mapping.
+                // If we are the root, we don't care about the mapping.
                 index = 0xFE;
             }
             else if (!this._mapPropertiesToIndex.TryGetValue(name, out index))
             {
                 int current = this._mapProperties.Count;
+
+                // TODO: Relax this using 7bit encoding of the size for even the experimental release.
                 if (current > 0x00FE)
                     throw new NotSupportedException("The current implementation does not support a document which has more than 255 different property names. Let us know if you stumble upon this.");
 
@@ -332,30 +341,29 @@ namespace Raven.Json.Linq
         }
 
         
+        
         private void WriteMagicNumberForPrimitive()
         {
-            Prep(sizeof(byte));
-            Put((byte)0x37);
+            PrepNoAlign(sizeof(ushort));
+            Put((ushort)RavenFlatProtocol.PrimitiveMarker);
         }
 
         private void WriteMagicNumberForArray()
         {
-            Prep(sizeof(byte) * 2);
-            Put((byte)0x3A);
-            Put((byte)0x2A);
+            PrepNoAlign(sizeof(ushort));
+            Put((ushort)RavenFlatProtocol.ArrayMarker);
         }
 
         private void WriteMagicNumberForObject()
         {
-            Prep(sizeof(byte) * 2);
-            Put((byte)0xA3);
-            Put((byte)0x2A);
+            PrepNoAlign(sizeof(ushort));
+            Put((ushort)RavenFlatProtocol.ObjectMarker);
         }
 
         private void WriteSize()
         {
             int dataSegmentSize = Offset;
-            Put((int)dataSegmentSize);
+            Put(dataSegmentSize);
         }
 
         private void WritePropertyTable()
@@ -365,7 +373,8 @@ namespace Raven.Json.Linq
             for (int i = count - 1; i >= 0; i-- )
                 Add(this._mapProperties[i]);
 
-            Prep(1);
+            // TODO: Relax this using 7bit encoding of the size for even the experimental release.
+            PrepNoAlign(1);
             Put((byte)count);
         }
 
@@ -379,16 +388,19 @@ namespace Raven.Json.Linq
             int sizeOfVTableItem = Marshal.SizeOf(typeof(VTableItem));
 
             checked
-            {                
+            {
+                // We write them in reverse order to ensure that we then read the properties correctly. 
                 for (int i = this._vtables.Count - 1; i >= 0; i--)
                 {
                     var vtable = this._vtables[i];
 
                     int count = vtable.Items.Count;
 
-                    Prep(1, count * sizeOfVTableItem);
+                    // TODO: Relax this using 7bit encoding of the size for even the experimental release.
+                    PrepNoAlign(count * sizeOfVTableItem);
 
-                    for (int vidx = count - 1; vidx >= 0; vidx--)
+                    // We write them in the correct order to ensure that we then read the properties in reverse as they were written.
+                    for (int vidx = 0; vidx < count; vidx++)
                     {
                         var item = vtable.Items[vidx];
 
@@ -400,44 +412,11 @@ namespace Raven.Json.Linq
                     Put((byte)count);
                 }
 
-                Prep(1, 1);
+                // TODO: Relax this using 7bit encoding of the size for even the experimental release.
+                PrepNoAlign(1);
                 Put((byte)this._vtables.Count);
             }
         }
-
-
-
-        private static bool IsObject(byte descriptor)
-        {
-            throw new NotImplementedException();
-        }
-
-        private static bool IsArray(byte descriptor)
-        {
-            throw new NotImplementedException();
-        }
-
-        private static bool IsPrimitive(byte descriptor)
-        {
-            throw new NotImplementedException();
-        }
-
-        private static bool IsComplex(byte descriptor)
-        {
-            throw new NotImplementedException();
-        }
-
-        private static bool IsVariableSize(byte descriptor)
-        {
-            throw new NotImplementedException();
-        }
-
-        private static bool IsFixedSize(byte descriptor)
-        {
-            throw new NotImplementedException();
-        }
-
-
 
         #region Utilities
 
@@ -486,7 +465,7 @@ namespace Raven.Json.Linq
             var alignSize =
                 ((~((int)_bb.Length - _space + additionalBytes)) + 1) &
                 (size - 1);
-            
+
             // Reallocate the buffer if needed.
             while (_space < alignSize + size + additionalBytes)
             {
@@ -497,6 +476,22 @@ namespace Raven.Json.Linq
             }
 
             Pad(alignSize);
+        }
+
+        // Prepare to write an element of `size` after `additional_bytes`
+        // have been written, e.g. if you write a string, you need to align
+        // such the int length field is aligned to SIZEOF_INT, and the string
+        // data follows it directly.
+        // If all you need to do is align, `additional_bytes` will be 0.
+        private void PrepNoAlign(int size)
+        {
+            // Reallocate the buffer if needed.
+            while (_space < size )
+            {
+                var oldBufSize = (int)_bb.Length;
+                GrowBuffer();
+                _space += (int)_bb.Length - oldBufSize;
+            }
         }
 
         private void Put(bool x)
@@ -569,37 +564,12 @@ namespace Raven.Json.Linq
             _bb.PutLong(_space -= sizeof(long), x.Ticks);
         }
 
-
-        // Adds a scalar to the buffer, properly aligned, and the buffer grown
-        // if needed.
-        private void Add(bool x) { Prep(sizeof(byte), 0); Put(x); }
-        private void Add(sbyte x) { Prep(sizeof(sbyte), 0); Put(x); }
-        private void Add(byte x) { Prep(sizeof(byte), 0); Put(x); }
-        private void Add(short x) { Prep(sizeof(short), 0); Put(x); }
-        private void Add(ushort x) { Prep(sizeof(ushort), 0); Put(x); }
-        private void Add(int x) { Prep(sizeof(int), 0); Put(x); }
-        private void Add(uint x) { Prep(sizeof(uint), 0); Put(x); }
-        private void Add(long x) { Prep(sizeof(long), 0); Put(x); }
-        private void Add(ulong x) { Prep(sizeof(ulong), 0); Put(x); }
-        private void Add(float x) { Prep(sizeof(float), 0); Put(x); }
-        private void Add(double x)
-        {
-            Prep(sizeof(double), 0);
-            Put(x);
-        }
-
-        private void Add(DateTime x)
-        {
-            Prep(sizeof(long), 0);
-            Put(x.Ticks);
-        }
-
         private void Add(string x)
         {
-            Prep(1, sizeof(char) * x.Length + sizeof(int));
-            
+            PrepNoAlign(sizeof(char) * x.Length + sizeof(int));
+
             Put(x);
-            Put((int) x.Length);
+            Put((int)x.Length);
         }
 
 

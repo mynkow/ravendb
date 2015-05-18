@@ -211,11 +211,12 @@ namespace Raven.Abstractions.Util.Buffers
             fixed (byte* ptr = _buffer)
             fixed (char* charPtr = value)
             {
-                for (int i = value.Length - 1; i >= 0; i-- )
+                char* ptrWithOffset = (char*) (ptr + offset);
+                for (int i = value.Length - 1; i >= 0; i--)
                 {
-                    *(ushort*)(ptr + offset + i) = BitConverter.IsLittleEndian
-                                        ? (ushort) charPtr[i]
-                                        : ReverseBytes((ushort)charPtr[i]);
+                    *(ptrWithOffset + i) = BitConverter.IsLittleEndian
+                                        ? charPtr[i]
+                                        : (char)ReverseBytes((ushort)charPtr[i]);
 
                 }
             }

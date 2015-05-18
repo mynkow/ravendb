@@ -413,8 +413,7 @@ namespace Raven.Json.Linq
 
         public static RavenJToken Load(RavenFlatReader reader)
         {
-            throw new NotImplementedException();
-            //RavenBinaryHeader header = reader.ReadHeader();
+            return reader.Read();
 
             //if (reader.Current != RavenBinaryToken.BodyStart)
             //    throw new Exception("Error reading RavenJToken from RavenBinaryReader. Header is corrupted: {0}".FormatWith(CultureInfo.InvariantCulture, reader.Current));
