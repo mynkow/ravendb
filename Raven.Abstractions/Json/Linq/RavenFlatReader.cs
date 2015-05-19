@@ -64,53 +64,106 @@ namespace Raven.Json.Linq
                 {
                     case JTokenType.Object:
                         {
-                            var token = new RavenJObject();
-
-                            byte vtableIndex = binaryReader.ReadByte();                            
-
-                            VTable vtable = header.VTables[vtableIndex];
-                            foreach ( var element in vtable.Items )
-                            {
-                                string propertyName = header.Properties[element.NameIndex];
-                                byte type = element.Type;
-
-                                if (IsObject(type))
-                                {                                    
-                                    if( IsArray(type) )
-                                    {
-                                        // We handle this as an array of objects.
-                                        throw new NotImplementedException();
-                                    }
-                                    else
-                                    {
-                                        // We handle this as an object.
-                                        throw new NotImplementedException();
-                                    }                                    
-                                }
-                                else
-                                {
-                                    // In either case we care about the type
-                                    byte primitiveType = (byte)(type & (byte)RavenFlatTokenMask.AsPrimitive);                                    
-                                     
-                                    if (IsPointer(type))
-                                    {
-                                        // This is a variable size primitive like string.
-                                        token[propertyName] = ReadVariableSizePrimitive(token, propertyName, (RavenFlatToken)primitiveType, binaryReader);
-                                    }
-                                    else
-                                    {
-                                        // This is a fixed size primitive.
-                                        token[propertyName] = ReadFixedSizePrimitive(token, propertyName, (RavenFlatToken)primitiveType, binaryReader);
-                                    }
-                                }                                
-                            }
-
-                            return token;
+                            return ReadObjectInternal(binaryReader);
                         }
-                        break;
+                    case JTokenType.Array:
+                        {
+                            return ReadArrayInternal(binaryReader);
+                        }
                     default: throw new NotImplementedException();
                 }
             }
+        }
+
+        private RavenJArray ReadArrayInternal(BinaryReader binaryReader)
+        {
+            var token = new RavenJArray();
+
+            byte arrayType = binaryReader.ReadByte();            
+            if (IsArray(arrayType))
+            {
+                if (IsObject(arrayType))
+                {
+                    // This is the case where the content are full blown objects, primitives or unknown types.
+                    // We are storing the data-type before any object.
+
+                    int arrayContentSize = binaryReader.ReadInt32();
+                    
+                    byte[] arrayContentTypes = binaryReader.ReadBytes(arrayContentSize);
+                    foreach (byte type in arrayContentTypes)
+                    {
+                        if ( IsArray(type) )
+                        {
+                            
+                        }
+                        else if ( IsObject (type) )
+                        {
+
+                        }    
+                        else
+                        {
+                            switch ( (RavenFlatToken) type )
+                            {
+                            
+                            }
+
+                        }
+                    }
+                }
+                else
+                {
+                    // These are for special types like integer arrays that may use a different encoding. 
+                    throw new NotSupportedException("Special encodings are not supported yet.");
+                }
+            }
+                        
+            throw new NotSupportedException("The content is not a flat buffer array or it is an unsupported type");
+        }
+
+        private RavenJObject ReadObjectInternal(BinaryReader binaryReader)
+        {
+            var token = new RavenJObject();
+
+            byte vtableIndex = binaryReader.ReadByte();
+
+            VTable vtable = header.VTables[vtableIndex];
+            foreach (var element in vtable.Items)
+            {
+                string propertyName = header.Properties[element.NameIndex];
+                byte type = element.Type;
+
+                if (IsObject(type))
+                {
+                    if (IsArray(type))
+                    {
+                        // We handle this as an array of objects.
+                        token[propertyName] = ReadArrayInternal(binaryReader);
+                    }
+                    else
+                    {
+                        // We handle this as an object.
+                        token[propertyName] = ReadObjectInternal(binaryReader);
+                    }
+                }
+                else
+                {
+                    // In either case we care about the type
+                    byte primitiveType = (byte)(type & (byte)RavenFlatTokenMask.AsPrimitive);
+
+                    if (IsPointer(type))
+                    {
+                        // This is a variable size primitive like string.
+                        token[propertyName] = ReadVariableSizePrimitive(token, propertyName, (RavenFlatToken)primitiveType, binaryReader);
+                    }
+                    else
+                    {
+                        // This is a fixed size primitive.
+                        token[propertyName] = ReadFixedSizePrimitive(token, propertyName, (RavenFlatToken)primitiveType, binaryReader);
+                    }
+                }
+            }
+
+            return token;
         }
 
         private RavenJValue ReadFixedSizePrimitive(RavenJToken token, string propertyName, RavenFlatToken type, BinaryReader binaryReader)

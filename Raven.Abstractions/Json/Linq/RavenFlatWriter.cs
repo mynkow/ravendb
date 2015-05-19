@@ -110,7 +110,7 @@ namespace Raven.Json.Linq
                     {
                         // Object: IsObject && !IsPrimitive (Bit7 ON - Bit8 OFF)                        
                         var offset = WriteObjectInternal((RavenJObject)token);
-                        WriteObjectVTables();
+                        WriteVTables();
                         WritePropertyTable();                        
                         WriteSize();
                         WriteMagicNumberForObject();
@@ -121,8 +121,8 @@ namespace Raven.Json.Linq
                         // Array: IsArray (Bit7 ON/OFF - Bit8 ON)   
                         VTableItem vtableEntry;
                         var offset = WriteArrayInternal((RavenJArray)token, null, out vtableEntry);
-                        WriteArrayVTables(vtableEntry);
-                        WritePropertyTable();
+                        WriteVTables();
+                        WritePropertyTable();   
                         WriteSize();
                         WriteMagicNumberForArray();
                         break;
@@ -378,12 +378,7 @@ namespace Raven.Json.Linq
             Put((byte)count);
         }
 
-        private void WriteArrayVTables(VTableItem rootVTable)
-        {
-            throw new NotImplementedException();
-        }
-
-        private void WriteObjectVTables()
+        private void WriteVTables()
         {
             int sizeOfVTableItem = Marshal.SizeOf(typeof(VTableItem));
 
