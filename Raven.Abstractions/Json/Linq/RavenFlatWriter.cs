@@ -110,7 +110,7 @@ namespace Raven.Json.Linq
                     {
                         // Object: IsObject && !IsPrimitive (Bit7 ON - Bit8 OFF)                        
                         var offset = WriteObjectInternal((RavenJObject)token);
-                        WriteObjectVTables();
+                        WriteVTables();
                         WritePropertyTable();                        
                         WriteSize();
                         WriteMagicNumberForObject();
@@ -119,10 +119,9 @@ namespace Raven.Json.Linq
                 case JTokenType.Array:
                     {
                         // Array: IsArray (Bit7 ON/OFF - Bit8 ON)   
-                        VTableItem vtableEntry;
-                        var offset = WriteArrayInternal((RavenJArray)token, null, out vtableEntry);
-                        WriteArrayVTables(vtableEntry);
-                        WritePropertyTable();
+                        var offset = WriteArrayInternal((RavenJArray)token);
+                        WriteVTables();
+                        WritePropertyTable();   
                         WriteSize();
                         WriteMagicNumberForArray();
                         break;
@@ -168,9 +167,9 @@ namespace Raven.Json.Linq
                         }
                     case JTokenType.Array:
                         {
-                            VTableItem vtableEntry;
-                            int offset = WriteArrayInternal((RavenJArray)token, pair.Key, out vtableEntry);
-                            
+                            int offset = WriteArrayInternal((RavenJArray)token);
+
+                            VTableItem vtableEntry = CreateVTableEntry(token, pair.Key);
                             vtable.Items.Add(vtableEntry);
                             ptrOffsets.Add(offset);
                             break;
@@ -298,7 +297,7 @@ namespace Raven.Json.Linq
             }
         }
 
-        private int WriteArrayInternal(RavenJToken token, string name, out VTableItem vtableEntry)
+        private int WriteArrayInternal(RavenJToken token)
         {
             throw new NotImplementedException();
         }
@@ -378,12 +377,7 @@ namespace Raven.Json.Linq
             Put((byte)count);
         }
 
-        private void WriteArrayVTables(VTableItem rootVTable)
-        {
-            throw new NotImplementedException();
-        }
-
-        private void WriteObjectVTables()
+        private void WriteVTables()
         {
             int sizeOfVTableItem = Marshal.SizeOf(typeof(VTableItem));
 
