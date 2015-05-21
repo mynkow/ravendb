@@ -77,7 +77,7 @@ namespace Raven.Json.Linq
 
         private RavenJArray ReadArrayInternal(BinaryReader binaryReader)
         {
-            var token = new RavenJArray();
+            var resultToken = new RavenJArray();
 
             byte arrayType = binaryReader.ReadByte();            
             if (IsArray(arrayType))
@@ -86,29 +86,44 @@ namespace Raven.Json.Linq
                 {
                     // This is the case where the content are full blown objects, primitives or unknown types.
                     // We are storing the data-type before any object.
-
                     int arrayContentSize = binaryReader.ReadInt32();
                     
-                    byte[] arrayContentTypes = binaryReader.ReadBytes(arrayContentSize);
-                    foreach (byte type in arrayContentTypes)
-                    {
-                        if ( IsArray(type) )
-                        {
-                            
-                        }
-                        else if ( IsObject (type) )
-                        {
+                    int[] arrayPointers = new int[arrayContentSize];
+                    for (int i = 0; i < arrayContentSize; i++)
+                        arrayPointers[i] = binaryReader.ReadInt32();
 
-                        }    
+                    for (int i = 0;  i < arrayContentSize; i++)
+                    {
+                        binaryReader.BaseStream.Position = arrayPointers[i];
+
+                        byte type = binaryReader.ReadByte();
+
+                        RavenJToken token;
+                        if (IsObject(type))
+                        {
+                            if (IsArray(type))
+                                token = ReadArrayInternal(binaryReader);
+                            else
+                                token = ReadObjectInternal(binaryReader);
+                        }
                         else
                         {
-                            switch ( (RavenFlatToken) type )
-                            {
-                            
-                            }
+                            byte primitiveType = (byte)(type & (byte)RavenFlatTokenMask.AsPrimitive);
 
+                            if (IsPointer(type))
+                            {
+                                // This is a variable size primitive like string.
+                                token = ReadVariableSizePrimitiveDirect((RavenFlatToken)primitiveType, binaryReader);
+                            }
+                            else
+                            {
+                                // This is a fixed size primitive.
+                                token = ReadFixedSizePrimitive((RavenFlatToken)primitiveType, binaryReader);
+                            }
                         }
-                    }
+
+                        resultToken.Add(token);
+                    }                    
                 }
                 else
                 {
@@ -134,16 +149,13 @@ namespace Raven.Json.Linq
 
                 if (IsObject(type))
                 {
-                    if (IsArray(type))
-                    {
-                        // We handle this as an array of objects.
-                        token[propertyName] = ReadArrayInternal(binaryReader);
-                    }
-                    else
-                    {
-                        // We handle this as an object.
-                        token[propertyName] = ReadObjectInternal(binaryReader);
-                    }
+                    // We handle this as an object.
+                    token[propertyName] = ReadObjectInternal(binaryReader);
+                }
+                else if (IsArray(type))
+                {
+                    // We handle this as an array of objects.
+                    token[propertyName] = ReadArrayInternal(binaryReader);
                 }
                 else
                 {
@@ -153,12 +165,12 @@ namespace Raven.Json.Linq
                     if (IsPointer(type))
                     {
                         // This is a variable size primitive like string.
-                        token[propertyName] = ReadVariableSizePrimitive(token, propertyName, (RavenFlatToken)primitiveType, binaryReader);
+                        token[propertyName] = ReadVariableSizePrimitiveFromPtr((RavenFlatToken)primitiveType, binaryReader);
                     }
                     else
                     {
                         // This is a fixed size primitive.
-                        token[propertyName] = ReadFixedSizePrimitive(token, propertyName, (RavenFlatToken)primitiveType, binaryReader);
+                        token[propertyName] = ReadFixedSizePrimitive((RavenFlatToken)primitiveType, binaryReader);
                     }
                 }
             }
@@ -166,7 +178,7 @@ namespace Raven.Json.Linq
             return token;
         }
 
-        private RavenJValue ReadFixedSizePrimitive(RavenJToken token, string propertyName, RavenFlatToken type, BinaryReader binaryReader)
+        private RavenJValue ReadFixedSizePrimitive(RavenFlatToken type, BinaryReader binaryReader)
         {
             switch (type)
             {
@@ -183,7 +195,7 @@ namespace Raven.Json.Linq
             }
         }
 
-        private RavenJValue ReadVariableSizePrimitive(RavenJToken token, string propertyName, RavenFlatToken type, BinaryReader binaryReader)
+        private RavenJValue ReadVariableSizePrimitiveFromPtr(RavenFlatToken type, BinaryReader binaryReader)
         {
             int ptr = binaryReader.ReadInt32();
 
@@ -191,28 +203,33 @@ namespace Raven.Json.Linq
             try
             {
                 binaryReader.BaseStream.Position = header.GetOffset(ptr);
-
-                unsafe
-                {
-                    switch (type)
-                    {
-                        case RavenFlatToken.String:                          
-                            int size = binaryReader.ReadInt32();
-
-                            byte[] stringBytes = binaryReader.ReadBytes(size * 2);
-                            fixed (byte* stringAsBytes = stringBytes)
-                            {
-                                string @string = new string((char*)stringAsBytes, 0, size);
-                                return new RavenJValue(@string);
-                            }
-                        default: throw new NotSupportedException("Unsupported types yet.");
-                    }
-                }                
+                return ReadVariableSizePrimitiveDirect(type, binaryReader);
+               
             }
             finally
             {
                 binaryReader.BaseStream.Position = currentPosition;                
             }
+        }
+
+        private RavenJValue ReadVariableSizePrimitiveDirect(RavenFlatToken type, BinaryReader binaryReader)
+        {
+            unsafe
+            {
+                switch (type)
+                {
+                    case RavenFlatToken.String:
+                        int size = binaryReader.ReadInt32();
+
+                        byte[] stringBytes = binaryReader.ReadBytes(size * 2);
+                        fixed (byte* stringAsBytes = stringBytes)
+                        {
+                            string @string = new string((char*)stringAsBytes, 0, size);
+                            return new RavenJValue(@string);
+                        }
+                    default: throw new NotSupportedException("Unsupported types yet.");
+                }
+            } 
         }
 
         private int ReadHeader()

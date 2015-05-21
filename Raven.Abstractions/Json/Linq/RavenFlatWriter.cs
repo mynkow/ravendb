@@ -208,7 +208,7 @@ namespace Raven.Json.Linq
 
             // Write all the variable size data and complex pointers. 
             PrepNoAlign(sizeof(int) * ptrOffsets.Count);
-            foreach ( var offset in ptrOffsets )
+            foreach (var offset in ptrOffsets)
             {
                 // Write the offset
                 Put(offset);
@@ -233,6 +233,7 @@ namespace Raven.Json.Linq
             }
 
             // Write VTable index for this object.
+            PrepNoAlign(sizeof(byte));
             Put((byte)vtableIndex);
 
             return Offset;
@@ -243,9 +244,9 @@ namespace Raven.Json.Linq
             // Lookup the index for that property name.
             byte index;
 
-            if ( name == null )
+            if ( string.IsNullOrEmpty(name) )
             {
-                // If we are the root, we don't care about the mapping.
+                // If we are the root or we don't care about the mapping.
                 index = 0xFE;
             }
             else if (!this._mapPropertiesToIndex.TryGetValue(name, out index))
@@ -299,7 +300,52 @@ namespace Raven.Json.Linq
 
         private int WriteArrayInternal(RavenJToken token)
         {
-            throw new NotImplementedException();
+            var arrayToken = (RavenJArray)token;
+
+            // TODO: We still do not support arrays of primitives without prefixed types. 
+
+            var ptrOffsets = new List<int>();  
+            foreach ( var item in arrayToken )
+            {
+                switch (item.Type)
+                {
+                    case JTokenType.Object:
+                        {
+                            WriteObjectInternal((RavenJObject)item);
+                            Put((byte)(RavenFlatTokenMask.IsObject));
+                            break;
+                        }
+                    case JTokenType.Array:
+                        {
+                            WriteArrayInternal((RavenJArray)item);
+                            Put((byte)(RavenFlatTokenMask.IsArray));
+                            break;
+                        }
+                    default:
+                        {
+                            VTableItem itemVTable;
+                            WritePrimitiveInternal((RavenJValue)item, string.Empty, out itemVTable);
+                            Put(itemVTable.Type);                            
+                            break;
+                        }
+                }
+
+                ptrOffsets.Add(Offset);
+            }
+
+            // Write all the offsets governing those items.
+            PrepNoAlign(sizeof(int) * ptrOffsets.Count);
+            for (int i = ptrOffsets.Count - 1; i >= 0; i--)
+            {
+                // Write the offset in reverse order to read them in one go.
+                Put(ptrOffsets[i]);
+            }
+
+            // The amount of items.
+            Put(arrayToken.Length);
+            Put((byte)(RavenFlatTokenMask.IsArray | RavenFlatTokenMask.IsObject));
+
+            return Offset;
         }
 
         private int WritePrimitiveInternal(RavenJValue token, string name, out VTableItem vtableEntry)
@@ -329,7 +375,7 @@ namespace Raven.Json.Linq
                 case JTokenType.Bytes:
                     throw new NotImplementedException();
                 case JTokenType.Null:
-                    throw new NotImplementedException();
+                    break;
                 case JTokenType.Undefined:
                     throw new NotImplementedException();
                 default:
