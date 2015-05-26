@@ -494,7 +494,7 @@ namespace Raven.Database.Storage.Voron.StorageActions
 			else
 				metadataStream.Write((long)0);
 
-			metadata.Metadata.WriteTo(metadataStream);
+			metadata.Metadata.WriteToBinary(metadataStream);
 
 			metadataStream.Position = 0;
 
@@ -522,7 +522,7 @@ namespace Raven.Database.Storage.Voron.StorageActions
 
 					var existingCachedDocument = documentCacher.GetCachedDocument(normalizedKey, etag);
 
-					var metadata = existingCachedDocument != null ? existingCachedDocument.Metadata : stream.ToJObject();
+					var metadata = existingCachedDocument != null ? existingCachedDocument.Metadata : stream.ToJObjectFromBinary();
 					var lastModified = DateTime.FromBinary(lastModifiedDateTimeBinary);
 
 					return new JsonDocumentMetadata
@@ -568,7 +568,7 @@ namespace Raven.Database.Storage.Voron.StorageActions
 			using (var finalDataStream = documentCodecs.Aggregate((Stream)new UndisposableStream(dataStream),
 				(current, codec) => codec.Encode(normalizedKey, data, metadata, current)))
 			{
-				data.WriteTo(finalDataStream);
+				data.WriteToBinary(finalDataStream);
 				finalDataStream.Flush();
 			}
 
@@ -613,7 +613,7 @@ namespace Raven.Database.Storage.Voron.StorageActions
 						if (stream != decodedDocumentStream)
 							streamToUse = new CountingStream(decodedDocumentStream);
 
-						var documentData = decodedDocumentStream.ToJObject();
+						var documentData = decodedDocumentStream.ToJObjectFromBinary();
 
 						size = (int)Math.Max(stream.Position, streamToUse.Position);
 						documentCacher.SetCachedDocument(normalizedKey, existingEtag, documentData, metadata, size);

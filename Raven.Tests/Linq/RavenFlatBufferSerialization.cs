@@ -165,6 +165,17 @@ namespace Raven.Tests.Linq
         }
 
         [Fact]
+        public void Flat_WithArrayOfStrings()
+        {
+            var @object = new
+            {
+                Array = new string[] { "1", "23", "456" }
+            };
+
+            EnsureIsEquivalentAfterSerialization(RavenJToken.FromObject(@object));
+        }
+
+        [Fact]
         public void Flat_WithSimplierObjectThenArray()
         {
             var @object = new SimplierObjectThenArray()

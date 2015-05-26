@@ -273,7 +273,7 @@ namespace Raven.Json.Linq
                     return new VTableItem(index, (byte)RavenFlatToken.Boolean, sizeof(byte));
                 case JTokenType.Integer:
                     // TODO: Find out if this is an integer or a long.
-                    return new VTableItem(index, (byte)RavenFlatToken.Integer, sizeof(int));
+                    return new VTableItem(index, (byte)RavenFlatToken.Integer, sizeof(long));
                 case JTokenType.Float:
                     // TODO: Find out if this is a float or a double.
                     return new VTableItem(index, (byte)RavenFlatToken.Float, sizeof(float));                    
@@ -312,19 +312,34 @@ namespace Raven.Json.Linq
                     case JTokenType.Object:
                         {
                             WriteObjectInternal((RavenJObject)item);
+
+                            PrepNoAlign(sizeof(byte));
                             Put((byte)(RavenFlatTokenMask.IsObject));
                             break;
                         }
                     case JTokenType.Array:
                         {
                             WriteArrayInternal((RavenJArray)item);
+                            
+                            PrepNoAlign(sizeof(byte));
                             Put((byte)(RavenFlatTokenMask.IsArray));
+                            break;
+                        }
+                    case JTokenType.String:
+                        {
+                            // This is a variable size type
+                            Add(item.Value<string>());
+
+                            PrepNoAlign(sizeof(byte));
+                            Put((byte)(RavenFlatToken.String));
                             break;
                         }
                     default:
                         {
                             VTableItem itemVTable;
                             WritePrimitiveInternal((RavenJValue)item, string.Empty, out itemVTable);
+                            
+                            PrepNoAlign(sizeof(byte));
                             Put(itemVTable.Type);                            
                             break;
                         }
@@ -334,7 +349,7 @@ namespace Raven.Json.Linq
             }
 
             // Write all the offsets governing those items.
-            PrepNoAlign(sizeof(int) * ptrOffsets.Count);
+            PrepNoAlign(sizeof(int) * (ptrOffsets.Count + 2));
             for (int i = ptrOffsets.Count - 1; i >= 0; i--)
             {
                 // Write the offset in reverse order to read them in one go.
@@ -352,19 +367,21 @@ namespace Raven.Json.Linq
         {
             vtableEntry = CreateVTableEntry(token, name);
 
+            PrepNoAlign(sizeof(long));
+
             switch (token.Type)
             {
                 case JTokenType.Boolean:
-                    Put((bool)token.Value);
+                    Put(token.Value<bool>());
                     break;
                 case JTokenType.Integer:
-                    Put((int)token.Value);
+                    Put((long)token.Value<long>());
                     break;
                 case JTokenType.Float:
-                    Put((float)token.Value);
+                    Put(token.Value<float>());
                     break;
                 case JTokenType.Date:
-                    Put((DateTime)token.Value);
+                    Put(token.Value<DateTime>());
                     break;
                 case JTokenType.TimeSpan:
                     throw new NotImplementedException();
@@ -408,6 +425,8 @@ namespace Raven.Json.Linq
         private void WriteSize()
         {
             int dataSegmentSize = Offset;
+
+            PrepNoAlign(sizeof(int));
             Put(dataSegmentSize);
         }
 
@@ -437,7 +456,7 @@ namespace Raven.Json.Linq
                     int count = vtable.Items.Count;
 
                     // TODO: Relax this using 7bit encoding of the size for even the experimental release.
-                    PrepNoAlign(count * sizeOfVTableItem);
+                    PrepNoAlign(count * sizeOfVTableItem + 1);
 
                     // We write them in the correct order to ensure that we then read the properties in reverse as they were written.
                     for (int vidx = 0; vidx < count; vidx++)

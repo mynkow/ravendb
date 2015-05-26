@@ -111,17 +111,21 @@ namespace Raven.Json.Linq
                         }
                         else
                         {
-                            byte primitiveType = (byte)(type & (byte)RavenFlatTokenMask.AsPrimitive);
+                            var primitiveType = (RavenFlatToken)(type & (byte)RavenFlatTokenMask.AsPrimitive);
 
                             if (IsPointer(type))
                             {
                                 // This is a variable size primitive like string.
-                                token = ReadVariableSizePrimitiveFromPtr((RavenFlatToken)primitiveType, binaryReader);
+                                token = ReadVariableSizePrimitiveFromPtr(primitiveType, binaryReader);
+                            }
+                            else if ( primitiveType == RavenFlatToken.String )
+                            {
+                                token = ReadVariableSizePrimitiveDirect(primitiveType, binaryReader);
                             }
                             else
                             {
                                 // This is a fixed size primitive.
-                                token = ReadFixedSizePrimitive((RavenFlatToken)primitiveType, binaryReader);
+                                token = ReadFixedSizePrimitive(primitiveType, binaryReader);
                             }
                         }
 
@@ -217,7 +221,7 @@ namespace Raven.Json.Linq
                     byte boolean = binaryReader.ReadByte();
                     return new RavenJValue(boolean == 1);
                 case RavenFlatToken.Integer:
-                    return new RavenJValue(binaryReader.ReadInt32());
+                    return new RavenJValue(binaryReader.ReadInt64());
                 case RavenFlatToken.Float:
                     return new RavenJValue(BitConverter.ToSingle(binaryReader.ReadBytes(4), 0));
                 case RavenFlatToken.Date:

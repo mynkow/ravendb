@@ -72,6 +72,14 @@ namespace Raven.Abstractions.Extensions
 			});
 		}
 
+        public static RavenJObject ToJObjectFromBinary(this Stream self)
+        {
+            using (var reader = new RavenFlatReader(self))
+            {
+                return (RavenJObject) RavenJToken.Load(reader);
+            }
+        }
+
 		/// <summary>
 		/// Convert a RavenJToken to a byte array
 		/// </summary>
@@ -86,6 +94,14 @@ namespace Raven.Abstractions.Extensions
                 jsonWriter.DateFormatString = Default.DateTimeFormatsToWrite;
                 self.WriteTo(jsonWriter, Default.Converters);
 		    }
+        }
+
+        public static void WriteToBinary( this RavenJToken self, Stream stream )
+        {
+            using ( var binaryWriter = new RavenFlatWriter(  new BinaryWriter(stream, Encoding.Default, true)))
+            {
+                self.WriteTo(binaryWriter);
+            }
         }
 
         public static IEnumerable<string> EnumerateJsonObjects(this StreamReader input, char openChar = '{', char closeChar = '}')
