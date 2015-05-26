@@ -76,23 +76,23 @@ namespace Raven.Json.Linq
         }
 
         private RavenJArray ReadArrayInternal(BinaryReader binaryReader)
-        {
-            var resultToken = new RavenJArray();
-
+        {           
             byte arrayType = binaryReader.ReadByte();            
-            if (IsArray(arrayType))
+            if (IsArray(arrayType) && IsObject(arrayType))
             {
-                if (IsObject(arrayType))
-                {
-                    // This is the case where the content are full blown objects, primitives or unknown types.
-                    // We are storing the data-type before any object.
-                    int arrayContentSize = binaryReader.ReadInt32();
+                // This is the case where the content are full blown objects, primitives or unknown types.
+                // We are storing the data-type before any object.
+                int arrayContentSize = binaryReader.ReadInt32();
                     
-                    int[] arrayPointers = new int[arrayContentSize];
-                    for (int i = 0; i < arrayContentSize; i++)
-                        arrayPointers[i] = binaryReader.ReadInt32();
+                int[] arrayPointers = new int[arrayContentSize];
+                for (int i = 0; i < arrayContentSize; i++)
+                    arrayPointers[i] = header.GetOffset( binaryReader.ReadInt32() );
 
-                    for (int i = 0;  i < arrayContentSize; i++)
+                long position = binaryReader.BaseStream.Position;
+                try
+                {
+                    var resultToken = new RavenJArray();
+                    for (int i = 0; i < arrayContentSize; i++)
                     {
                         binaryReader.BaseStream.Position = arrayPointers[i];
 
@@ -101,10 +101,13 @@ namespace Raven.Json.Linq
                         RavenJToken token;
                         if (IsObject(type))
                         {
-                            if (IsArray(type))
-                                token = ReadArrayInternal(binaryReader);
-                            else
-                                token = ReadObjectInternal(binaryReader);
+                            // We handle this as an object.
+                            token = ReadObjectInternal(binaryReader);
+                        }
+                        else if (IsArray(type))
+                        {
+                            // We handle this as an array of objects.
+                            token = ReadArrayInternal(binaryReader);
                         }
                         else
                         {
@@ -113,7 +116,7 @@ namespace Raven.Json.Linq
                             if (IsPointer(type))
                             {
                                 // This is a variable size primitive like string.
-                                token = ReadVariableSizePrimitiveDirect((RavenFlatToken)primitiveType, binaryReader);
+                                token = ReadVariableSizePrimitiveFromPtr((RavenFlatToken)primitiveType, binaryReader);
                             }
                             else
                             {
@@ -123,13 +126,20 @@ namespace Raven.Json.Linq
                         }
 
                         resultToken.Add(token);
-                    }                    
+                    }
+
+                    return resultToken;
                 }
-                else
+                finally
                 {
-                    // These are for special types like integer arrays that may use a different encoding. 
+                    binaryReader.BaseStream.Position = position;
+                }             
+            }
+            else
+            {
+                // These are for special types like integer arrays that may use a different encoding. 
+                if ( IsArray(arrayType) )
                     throw new NotSupportedException("Special encodings are not supported yet.");
-                }
             }
                         
             throw new NotSupportedException("The content is not a flat buffer array or it is an unsupported type");
@@ -150,12 +160,33 @@ namespace Raven.Json.Linq
                 if (IsObject(type))
                 {
                     // We handle this as an object.
-                    token[propertyName] = ReadObjectInternal(binaryReader);
+                    int ptr = binaryReader.ReadInt32();
+                    long position = binaryReader.BaseStream.Position;
+                    try
+                    {
+                        binaryReader.BaseStream.Position = header.GetOffset(ptr);
+                        token[propertyName] = ReadObjectInternal(binaryReader);
+                    }
+                    finally
+                    {
+                        binaryReader.BaseStream.Position = position;
+                    }
                 }
                 else if (IsArray(type))
                 {
                     // We handle this as an array of objects.
-                    token[propertyName] = ReadArrayInternal(binaryReader);
+                    int ptr = binaryReader.ReadInt32();
+                    long position = binaryReader.BaseStream.Position;
+                    try
+                    {
+                        binaryReader.BaseStream.Position = header.GetOffset(ptr);
+                        token[propertyName] = ReadArrayInternal(binaryReader);
+                    }
+                    finally
+                    {
+                        binaryReader.BaseStream.Position = position;
+                    }
+                    
                 }
                 else
                 {
@@ -191,6 +222,8 @@ namespace Raven.Json.Linq
                     return new RavenJValue(BitConverter.ToSingle(binaryReader.ReadBytes(4), 0));
                 case RavenFlatToken.Date:
                     return new RavenJValue(new DateTime(binaryReader.ReadInt64()));
+                case RavenFlatToken.Null:
+                    return null;
                 default: throw new NotSupportedException("Unsupported types yet.");
             }
         }
