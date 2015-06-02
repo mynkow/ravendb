@@ -113,8 +113,7 @@ namespace Raven.Abstractions.Util
                 var values = new TValue[newCapacity];
                 var hashes = new uint[newCapacity];
 
-                for (int i = 0; i < newCapacity; i++)
-                    hashes[i] = kUnusedHash;
+                BlockCopyMemoryHelper.Memset(hashes, 0, newCapacity, kUnusedHash);
 
                 _keys = src._keys;
                 _values = src._values;
@@ -140,8 +139,8 @@ namespace Raven.Abstractions.Util
             _keys = new TKey[newCapacity];
             _values = new TValue[newCapacity];
             _hashes = new uint[newCapacity];
-            for (int i = 0; i < newCapacity; i++)
-                _hashes[i] = kUnusedHash;
+
+            BlockCopyMemoryHelper.Memset(_hashes, 0, newCapacity, kUnusedHash);
 
             _capacity = newCapacity;
 
@@ -171,15 +170,15 @@ namespace Raven.Abstractions.Util
 
             Contract.Assert(_numberOfUsed < _capacity);
 
-            int numProbes = 0;
+            int numProbes = 1;
             bool couldInsert = false;
             while (!couldInsert)
             {
-                numProbes++;
-
                 bucket = (bucket + numProbes) % _capacity;
 
                 couldInsert = TryAdd(bucket, (uint)hash, key, value);
+
+                numProbes++;
             }
         }
 
@@ -242,8 +241,8 @@ namespace Raven.Abstractions.Util
             var keys = new TKey[newCapacity];
             var values = new TValue[newCapacity];
             var hashes = new uint[newCapacity];
-            for (int i = 0; i < newCapacity; i++)
-                hashes[i] = kUnusedHash;
+
+            BlockCopyMemoryHelper.Memset(hashes, 0, newCapacity, kUnusedHash);
 
             Rehash(keys, values, hashes);
 
@@ -278,7 +277,8 @@ namespace Raven.Abstractions.Util
                 var keys = _keys;
                 var values = _values;
 
-                if (CompareKey(hashes[bucket], keys[bucket], (uint)hash, key))
+                var nKeys = keys[bucket];
+                if (CompareKey(hashes[bucket], nKeys, (uint)hash, key))
                     return values[bucket];
 
                 int numProbes = 1; // how many times we've probed
@@ -289,7 +289,8 @@ namespace Raven.Abstractions.Util
                 {
                     bucket = (bucket + numProbes) % _capacity;
 
-                    if (CompareKey(hashes[bucket], keys[bucket], (uint)hash, key, ref canContinue))
+                    nKeys = keys[bucket];
+                    if (CompareKey(hashes[bucket], nKeys, (uint)hash, key, ref canContinue))
                         return values[bucket];
 
                     numProbes++;
@@ -447,8 +448,8 @@ namespace Raven.Abstractions.Util
             var keys = new TKey[newCapacity];
             var values = new TValue[newCapacity];
             var hashes = new uint[newCapacity];
-            for (int i = 0; i < newCapacity; i++)
-                hashes[i] = kUnusedHash;
+
+            BlockCopyMemoryHelper.Memset(hashes, 0, newCapacity, kUnusedHash);
 
             Rehash(keys, values, hashes);
 
@@ -464,6 +465,7 @@ namespace Raven.Abstractions.Util
             _nextGrowthThreshold = _capacity * 4 / tLoadFactor4;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(TKey key, out TValue value)
         {
             int hash = GetInternalHashCode(key);
@@ -472,27 +474,29 @@ namespace Raven.Abstractions.Util
             var hashes = _hashes;
             var keys = _keys;
 
-            if (CompareKey(hashes[bucket], keys[bucket], (uint)hash, key))
+            var nKey = keys[bucket];
+            if (CompareKey(hashes[bucket], nKey, (uint)hash, key))
             {
                 value = _values[bucket];
                 return true;
             }
 
-
-            uint numProbes = 0; // how many times we've probed
+            uint numProbes = 1; // how many times we've probed
             Contract.Assert(_numberOfUsed < _capacity);
 
             bool canContinue = true;
             while (canContinue)
             {
-                numProbes++;
                 bucket = (int)((bucket + numProbes) % _capacity);
 
-                if (CompareKey(hashes[bucket], keys[bucket], (uint)hash, key, ref canContinue))
+                nKey = keys[bucket];
+                if (CompareKey(hashes[bucket], nKey, (uint)hash, key, ref canContinue))
                 {
                     value = _values[bucket];
                     return true;
                 }
+
+                numProbes++;
             }
 
             value = default(TValue);
@@ -534,7 +538,7 @@ namespace Raven.Abstractions.Util
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int Lookup(TKey key)
         {
-            int hash = comparer.GetHashCode(key) & 0x7FFFFFFF;
+            int hash = GetInternalHashCode(key);
             int bucket = hash % _capacity;
 
             var hashes = _hashes;
@@ -544,17 +548,18 @@ namespace Raven.Abstractions.Util
                 return bucket;
 
 
-            uint numProbes = 0; // how many times we've probed
+            uint numProbes = 1; // how many times we've probed
             Contract.Assert(_numberOfUsed < _capacity);
 
             bool canContinue = true;
             while (canContinue)
             {
-                numProbes++;
                 bucket = (int)((bucket + numProbes) % _capacity);
 
                 if (CompareKey(hashes[bucket], keys[bucket], (uint)hash, key, ref canContinue))
                     return bucket;
+
+                numProbes++;
             }
 
             return InvalidNodePosition;
@@ -582,7 +587,7 @@ namespace Raven.Abstractions.Util
                     bucket = (bucket + numProbes) % capacity;
                 }
 
-                hashes[bucket] = _hashes[it];
+                hashes[bucket] = hash;
                 keys[bucket] = _keys[it];
                 values[bucket] = _values[it];
             }
@@ -625,9 +630,7 @@ namespace Raven.Abstractions.Util
             for (int i = 0; i < count; i++)
             {
                 if (hashes[i] < kDeletedHash)
-                {
                     array[index++] = new KeyValuePair<TKey, TValue>(keys[i], values[i]);
-                }
             }
         }
 
@@ -992,6 +995,31 @@ namespace Raven.Abstractions.Util
                 {
                     index = 0;
                     currentValue = default(TValue);
+                }
+            }
+        }
+
+
+        private class BlockCopyMemoryHelper
+        {
+            public static void Memset(uint[] array, int start, int count, uint value)
+            {
+                int block = 64, index = 0;
+                int length = Math.Min(block, array.Length);
+
+                //Fill the initial array
+                while (index < length)
+                {
+                    array[index++] = value;
+                }
+
+                length = array.Length;
+                while (index < length)
+                {
+                    Buffer.BlockCopy(array, 0, array, index * sizeof(uint), Math.Min(block * sizeof(uint), (length - index) * sizeof(uint)));
+                    index += block;
+
+                    block *= 2;
                 }
             }
         }
