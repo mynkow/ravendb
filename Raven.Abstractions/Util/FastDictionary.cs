@@ -10,6 +10,61 @@ using System.Threading.Tasks;
 
 namespace System.Collections.Generic
 {
+    internal static class DictionaryHelper
+    {
+        /// <summary>
+        /// Minimum size we're willing to let hashtables be.
+        /// Must be a power of two, and at least 4.
+        /// Note, however, that for a given hashtable, the initial size is a function of the first constructor arg, and may be > kMinBuckets.
+        /// </summary>
+        internal const int kMinBuckets = 4;
+
+        /// <summary>
+        /// By default, if you don't specify a hashtable size at construction-time, we use this size.  Must be a power of two, and  at least kMinBuckets.
+        /// </summary>
+        internal const int kInitialCapacity = 32;
+
+        internal const int kPowerOfTableSize = 2048;
+
+        private readonly static int[] nextPowerOf2Table = new int[kPowerOfTableSize];
+
+        static DictionaryHelper()
+        {
+            for (int i = 0; i <= kMinBuckets; i++)
+                nextPowerOf2Table[i] = kMinBuckets;
+
+            for (int i = kMinBuckets + 1; i < kPowerOfTableSize; i++)
+                nextPowerOf2Table[i] = NextPowerOf2Internal(i);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static int NextPowerOf2(int v)
+        {
+            if (v < kPowerOfTableSize)
+            {
+                return nextPowerOf2Table[v];
+            }
+            else
+            {
+                return NextPowerOf2Internal(v);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int NextPowerOf2Internal(int v)
+        {
+            v--;
+            v |= v >> 1;
+            v |= v >> 2;
+            v |= v >> 4;
+            v |= v >> 8;
+            v |= v >> 16;
+            v++;
+
+            return v;
+        }
+    }
+
     public class FastDictionary<TKey, TValue> : IEnumerable<KeyValuePair<TKey, TValue>>
     {
         const int InvalidNodePosition = -1;
@@ -17,27 +72,31 @@ namespace System.Collections.Generic
         public const uint kUnusedHash = 0xFFFFFFFF;
         public const uint kDeletedHash = 0xFFFFFFFE;
 
-        /// <summary>
-        /// Minimum size we're willing to let hashtables be.
-        /// Must be a power of two, and at least 4.
-        /// Note, however, that for a given hashtable, the initial size is a function of the first constructor arg, and may be > kMinBuckets.
-        /// </summary>
-        const int kMinBuckets = 4;
-
-        /// <summary>
-        /// By default, if you don't specify a hashtable size at construction-time, we use this size.  Must be a power of two, and  at least kMinBuckets.
-        /// </summary>
-        const int kInitialCapacity = 32;
-
         // TLoadFactor4 - controls hash map load. 4 means 100% load, ie. hashmap will grow
         // when number of items == capacity. Default value of 6 means it grows when
         // number of items == capacity * 3/2 (6/4). Higher load == tighter maps, but bigger
         // risk of collisions.
         static int tLoadFactor = 6;
 
-        private uint[] _hashes;
-        private TKey[] _keys;
-        private TValue[] _values;
+        private struct Entry
+        {
+            public uint Hash;
+            public TKey Key;
+            public TValue Value;
+
+            public Entry(uint hash, TKey key, TValue value)
+            {
+                this.Hash = hash;
+                this.Key = key;
+                this.Value = value;
+            }
+        }
+
+        private Entry[] _entries;
+
+        //private uint[] _hashes;
+        //private TKey[] _keys;
+        //private TValue[] _values;
 
         private int _capacity;
 
@@ -69,20 +128,6 @@ namespace System.Collections.Generic
             get { return Count == 0; }
         }
 
-        private static int[] nextPowerOf2Table;
-
-        static FastDictionary()
-        {
-            nextPowerOf2Table = new int[512];
-
-            for (int i = 0; i <= kMinBuckets; i++)
-                nextPowerOf2Table[i] = kMinBuckets;
-
-            for (int i = kMinBuckets + 1; i < nextPowerOf2Table.Length; i++)
-                nextPowerOf2Table[i] = NextPowerOf2(i);
-        }
-
-
         public FastDictionary(int initialBucketCount, IEnumerable<KeyValuePair<TKey, TValue>> src, IEqualityComparer<TKey> comparer)
             : this(initialBucketCount, comparer)
         {
@@ -93,14 +138,17 @@ namespace System.Collections.Generic
                 this[item.Key] = item.Value;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public FastDictionary(FastDictionary<TKey, TValue> src, IEqualityComparer<TKey> comparer)
             : this(src._capacity, src, comparer)
         { }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public FastDictionary(FastDictionary<TKey, TValue> src)
             : this(src._capacity, src, src.comparer)
         { }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public FastDictionary(int initialBucketCount, FastDictionary<TKey, TValue> src, IEqualityComparer<TKey> comparer)
         {
             Contract.Requires(src != null);
@@ -109,7 +157,7 @@ namespace System.Collections.Generic
 
             this.comparer = comparer ?? EqualityComparer<TKey>.Default;
 
-            this._initialCapacity = initialBucketCount;
+            this._initialCapacity = DictionaryHelper.NextPowerOf2(initialBucketCount);
             this._capacity = Math.Max(src._capacity, initialBucketCount);
             this._size = src._size;
             this._numberOfUsed = src._numberOfUsed;
@@ -121,37 +169,37 @@ namespace System.Collections.Generic
             if (comparer == src.comparer)
             {
                 // Initialization through copy (very efficient) because the comparer is the same.
-                this._keys = new TKey[newCapacity];
-                this._values = new TValue[newCapacity];
-                this._hashes = new uint[newCapacity];
+                this._entries = new Entry[newCapacity];
+                Array.Copy(src._entries, _entries, newCapacity);
 
-                Array.Copy(src._keys, _keys, newCapacity);
-                Array.Copy(src._values, _values, newCapacity);
-                Array.Copy(src._hashes, _hashes, newCapacity);
+                //this._keys = new TKey[newCapacity];
+                //this._values = new TValue[newCapacity];
+                //this._hashes = new uint[newCapacity];
+
+                //Array.Copy(src._keys, _keys, newCapacity);
+                //Array.Copy(src._values, _values, newCapacity);
+                //Array.Copy(src._hashes, _hashes, newCapacity);
             }
             else
             {
                 // Initialization through rehashing because the comparer is not the same.
-                var keys = new TKey[newCapacity];
-                var values = new TValue[newCapacity];
-                var hashes = new uint[newCapacity];
-
-                BlockCopyMemoryHelper.Memset(hashes, 0, newCapacity, kUnusedHash);
+                var entries = new Entry[newCapacity];
+                BlockCopyMemoryHelper.Memset(entries, new Entry(kUnusedHash, default(TKey), default(TValue)));
 
                 // Creating a temporary alias to use for rehashing.
-                this._keys = src._keys;
-                this._values = src._values;
-                this._hashes = src._hashes;
+                this._entries = src._entries;
 
                 // This call will rewrite the aliases
-                Rehash(keys, values, hashes);
+                Rehash(entries);
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public FastDictionary(IEqualityComparer<TKey> comparer)
-            : this(kInitialCapacity, comparer)
+            : this(DictionaryHelper.kInitialCapacity, comparer)
         { }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public FastDictionary(int initialBucketCount, IEqualityComparer<TKey> comparer)
         {
             Contract.Ensures(_capacity >= initialBucketCount);
@@ -159,20 +207,14 @@ namespace System.Collections.Generic
             this.comparer = comparer ?? EqualityComparer<TKey>.Default;
 
             // Calculate the next power of 2.
-            int newCapacity = initialBucketCount >= kMinBuckets ? initialBucketCount : kMinBuckets;
-            if (newCapacity < nextPowerOf2Table.Length)
-                newCapacity = nextPowerOf2Table[newCapacity];
-            else
-                newCapacity = NextPowerOf2(newCapacity);
+            int newCapacity = initialBucketCount >= DictionaryHelper.kMinBuckets ? initialBucketCount : DictionaryHelper.kMinBuckets;
+            newCapacity = DictionaryHelper.NextPowerOf2(newCapacity);
 
             this._initialCapacity = newCapacity;
 
             // Initialization
-            this._keys = new TKey[newCapacity];
-            this._values = new TValue[newCapacity];
-            this._hashes = new uint[newCapacity];
-
-            BlockCopyMemoryHelper.Memset(_hashes, 0, newCapacity, kUnusedHash);
+            this._entries = new Entry[newCapacity];
+            BlockCopyMemoryHelper.Memset(this._entries, new Entry(kUnusedHash, default(TKey), default(TValue)));
 
             this._capacity = newCapacity;
 
@@ -183,7 +225,7 @@ namespace System.Collections.Generic
             this._nextGrowthThreshold = _capacity * 4 / tLoadFactor;
         }
 
-        public FastDictionary(int initialBucketCount = kInitialCapacity)
+        public FastDictionary(int initialBucketCount = DictionaryHelper.kInitialCapacity)
             : this(initialBucketCount, EqualityComparer<TKey>.Default)
         { }
 
@@ -204,7 +246,7 @@ namespace System.Collections.Generic
             int numProbes = 1;
             do
             {
-                uint nHash = _hashes[bucket];
+                uint nHash = _entries[bucket].Hash;
                 if (nHash == kUnusedHash)
                 {
                     _numberOfUsed++;
@@ -221,7 +263,7 @@ namespace System.Collections.Generic
                 }
                 else
                 {
-                    if (nHash == uhash && comparer.Equals(_keys[bucket], key))
+                    if (nHash == uhash && comparer.Equals(_entries[bucket].Key, key))
                         throw new ArgumentException("Cannot add duplicated key.", "key");
                 }
 
@@ -231,9 +273,9 @@ namespace System.Collections.Generic
             while (true);
 
         SET:
-            this._hashes[bucket] = uhash;
-            this._keys[bucket] = key;
-            this._values[bucket] = value;
+            this._entries[bucket].Hash = uhash;
+            this._entries[bucket].Key = key;
+            this._entries[bucket].Value = value;
         }
 
         public bool Remove(TKey key)
@@ -257,16 +299,18 @@ namespace System.Collections.Generic
         {
             Contract.Ensures(_size <= Contract.OldValue<int>(_size));
 
-            if (_hashes[node] < kDeletedHash)
+            if (_entries[node].Hash < kDeletedHash)
             {
-                SetNode(node, kDeletedHash, default(TKey), default(TValue));
+                _entries[node].Hash = kDeletedHash;
+                _entries[node].Key = default(TKey);
+                _entries[node].Value = default(TValue);
 
                 _numberOfDeleted++;
                 _size--;
             }
 
             Contract.Assert(_numberOfDeleted >= Contract.OldValue<int>(_numberOfDeleted));
-            Contract.Assert(_hashes[node] == kDeletedHash);
+            Contract.Assert(_entries[node].Hash == kDeletedHash);
 
             if (3 * this._numberOfDeleted / 2 > this._capacity - this._numberOfUsed)
             {
@@ -290,29 +334,14 @@ namespace System.Collections.Generic
             Contract.Ensures(this._numberOfUsed < this._capacity);
 
             // Calculate the next power of 2.
-            if (newCapacity < nextPowerOf2Table.Length)
-                newCapacity = nextPowerOf2Table[newCapacity];
-            else
-                newCapacity = NextPowerOf2(newCapacity);
+            newCapacity = Math.Max(DictionaryHelper.NextPowerOf2(newCapacity), _initialCapacity);
 
-            newCapacity = Math.Max(newCapacity, _initialCapacity);
+            var entries = new Entry[newCapacity];
+            BlockCopyMemoryHelper.Memset(entries, new Entry(kUnusedHash, default(TKey), default(TValue)));
 
-            var keys = new TKey[newCapacity];
-            var values = new TValue[newCapacity];
-            var hashes = new uint[newCapacity];
-
-            BlockCopyMemoryHelper.Memset(hashes, 0, newCapacity, kUnusedHash);
-
-            Rehash(keys, values, hashes);
+            Rehash(entries);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void SetNode(int node, uint hash, TKey key, TValue value)
-        {
-            _hashes[node] = hash;
-            _keys[node] = key;
-            _values[node] = value;
-        }
 
         public TValue this[TKey key]
         {
@@ -325,17 +354,15 @@ namespace System.Collections.Generic
                 int hash = GetInternalHashCode(key);
                 int bucket = hash % _capacity;
 
-                var hashes = _hashes;
-                var keys = _keys;
-                var values = _values;
+                var entries = _entries;
 
                 uint nHash;
                 int numProbes = 1;
                 do
                 {
-                    nHash = hashes[bucket];
-                    if (nHash == hash && comparer.Equals(keys[bucket], key))
-                        return values[bucket];
+                    nHash = entries[bucket].Hash;
+                    if (nHash == hash && comparer.Equals(entries[bucket].Key, key))
+                        return entries[bucket].Value;
 
                     bucket = (bucket + numProbes) % _capacity;
                     numProbes++;
@@ -361,7 +388,7 @@ namespace System.Collections.Generic
                 int numProbes = 1;
                 do
                 {
-                    uint nHash = _hashes[bucket];
+                    uint nHash = _entries[bucket].Hash;
                     if (nHash == kUnusedHash)
                     {
                         _numberOfUsed++;
@@ -378,7 +405,7 @@ namespace System.Collections.Generic
                     }
                     else
                     {
-                        if (nHash == uhash && comparer.Equals(_keys[bucket], key))
+                        if (nHash == uhash && comparer.Equals(_entries[bucket].Key, key))
                             goto SET;
                     }
 
@@ -390,18 +417,16 @@ namespace System.Collections.Generic
                 while (true);
 
             SET:
-                this._hashes[bucket] = uhash;
-                this._keys[bucket] = key;
-                this._values[bucket] = value;
+                this._entries[bucket].Hash = uhash;
+                this._entries[bucket].Key = key;
+                this._entries[bucket].Value = value;
             }
         }
 
         public void Clear()
         {
-            var keys = new TKey[_capacity];
-            var values = new TValue[_capacity];
-
-            BlockCopyMemoryHelper.Memset(_hashes, 0, _capacity, kUnusedHash);
+            _entries = new Entry[_capacity];
+            BlockCopyMemoryHelper.Memset(_entries, new Entry(kUnusedHash, default(TKey), default(TValue)));
 
             _numberOfUsed = 0;
             _numberOfDeleted = 0;
@@ -423,13 +448,10 @@ namespace System.Collections.Generic
             Contract.Requires(newCapacity >= _capacity);
             Contract.Ensures((_capacity & (_capacity - 1)) == 0);
 
-            var keys = new TKey[newCapacity];
-            var values = new TValue[newCapacity];
-            var hashes = new uint[newCapacity];
+            var entries = new Entry[newCapacity];
+            BlockCopyMemoryHelper.Memset(entries, new Entry(kUnusedHash, default(TKey), default(TValue)));
 
-            BlockCopyMemoryHelper.Memset(hashes, 0, newCapacity, kUnusedHash);
-
-            Rehash(keys, values, hashes);
+            Rehash(entries);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -441,18 +463,16 @@ namespace System.Collections.Generic
             int hash = GetInternalHashCode(key);
             int bucket = hash % _capacity;
 
-            var hashes = _hashes;
-            var keys = _keys;
-            var values = _values;
+            var entries = _entries;
 
             uint nHash;
             int numProbes = 1;
             do
             {
-                nHash = hashes[bucket];
-                if (nHash == hash && comparer.Equals(keys[bucket], key))
+                nHash = entries[bucket].Hash;
+                if (nHash == hash && comparer.Equals(entries[bucket].Key, key))
                 {
-                    value = values[bucket];
+                    value = entries[bucket].Value;
                     return true;
                 }
 
@@ -479,8 +499,7 @@ namespace System.Collections.Generic
             int hash = GetInternalHashCode(key);
             int bucket = hash % _capacity;
 
-            var hashes = _hashes;
-            var keys = _keys;
+            var entries = _entries;
 
             uint uhash = (uint)hash;
             uint numProbes = 1; // how many times we've probed
@@ -488,8 +507,8 @@ namespace System.Collections.Generic
             uint nHash;
             do
             {
-                nHash = hashes[bucket];
-                if (nHash == hash && comparer.Equals(keys[bucket], key))
+                nHash = entries[bucket].Hash;
+                if (nHash == hash && comparer.Equals(entries[bucket].Key, key))
                     return bucket;
 
                 bucket = (int)((bucket + numProbes) % _capacity);
@@ -508,39 +527,37 @@ namespace System.Collections.Generic
             return comparer.GetHashCode(key) & 0x7FFFFFFF;
         }
 
-        private void Rehash(TKey[] keys, TValue[] values, uint[] hashes)
+        private void Rehash(Entry[] entries)
         {
-            uint capacity = (uint)keys.Length;
+            uint capacity = (uint)entries.Length;
 
             var size = 0;
 
-            for (int it = 0; it < _hashes.Length; it++)
+            for (int it = 0; it < _entries.Length; it++)
             {
-                uint hash = _hashes[it];
+                uint hash = _entries[it].Hash;
                 if (hash >= kDeletedHash) // No interest for the process of rehashing, we are skipping it.
                     continue;
 
                 uint bucket = hash % capacity;
 
                 uint numProbes = 0;
-                while (!(hashes[bucket] == kUnusedHash))
+                while (!(entries[bucket].Hash == kUnusedHash))
                 {
                     numProbes++;
                     bucket = (bucket + numProbes) % capacity;
                 }
 
-                hashes[bucket] = hash;
-                keys[bucket] = _keys[it];
-                values[bucket] = _values[it];
+                entries[bucket].Hash = hash;
+                entries[bucket].Key = _entries[it].Key;
+                entries[bucket].Value = _entries[it].Value;
 
                 size++;
             }
 
-            this._capacity = hashes.Length;
+            this._capacity = entries.Length;
             this._size = size;
-            this._hashes = hashes;
-            this._keys = keys;
-            this._values = values;
+            this._entries = entries;
 
             this._numberOfUsed = size;
             this._numberOfDeleted = 0;
@@ -548,19 +565,6 @@ namespace System.Collections.Generic
             this._nextGrowthThreshold = _capacity * 4 / tLoadFactor;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int NextPowerOf2(int v)
-        {
-            v--;
-            v |= v >> 1;
-            v |= v >> 2;
-            v |= v >> 4;
-            v |= v >> 8;
-            v |= v >> 16;
-            v++;
-
-            return v;
-        }
 
         public void CopyTo(KeyValuePair<TKey, TValue>[] array, int index)
         {
@@ -578,14 +582,12 @@ namespace System.Collections.Generic
 
             int count = _capacity;
 
-            var hashes = _hashes;
-            var keys = _keys;
-            var values = _values;
+            var entries = _entries;
 
             for (int i = 0; i < count; i++)
             {
-                if (hashes[i] < kDeletedHash)
-                    array[index++] = new KeyValuePair<TKey, TValue>(keys[i], values[i]);
+                if (entries[i].Hash < kDeletedHash)
+                    array[index++] = new KeyValuePair<TKey, TValue>(entries[i].Key, entries[i].Value);
             }
         }
 
@@ -619,25 +621,23 @@ namespace System.Collections.Generic
 
             public bool MoveNext()
             {
-                var dict = dictionary;
-
-                var count = dict._capacity;
-                var hashes = dict._hashes;
+                var count = dictionary._capacity;
+                var entries = dictionary._entries;
 
                 // Use unsigned comparison since we set index to dictionary.count+1 when the enumeration ends.
                 // dictionary.count+1 could be negative if dictionary.count is Int32.MaxValue
                 while (index < count)
                 {
-                    if (hashes[index] < kDeletedHash)
+                    if (entries[index].Hash < kDeletedHash)
                     {
-                        current = new KeyValuePair<TKey, TValue>(dict._keys[index], dict._values[index]);
+                        current = new KeyValuePair<TKey, TValue>(entries[index].Key, entries[index].Value);
                         index++;
                         return true;
                     }
                     index++;
                 }
 
-                index = dictionary._capacity + 1;
+                index = count + 1;
                 current = new KeyValuePair<TKey, TValue>();
                 return false;
             }
@@ -689,15 +689,14 @@ namespace System.Collections.Generic
 
         public bool ContainsValue(TValue value)
         {
-            var hashes = _hashes;
-            var values = _values;
+            var entries = _entries;
             int count = _capacity;
 
             if (value == null)
             {
                 for (int i = 0; i < count; i++)
                 {
-                    if (hashes[i] < kDeletedHash && values[i] == null)
+                    if (entries[i].Hash < kDeletedHash && entries[i].Value == null)
                         return true;
                 }
             }
@@ -706,7 +705,7 @@ namespace System.Collections.Generic
                 EqualityComparer<TValue> c = EqualityComparer<TValue>.Default;
                 for (int i = 0; i < count; i++)
                 {
-                    if (hashes[i] < kDeletedHash && c.Equals(values[i], value))
+                    if (entries[i].Hash < kDeletedHash && c.Equals(entries[i].Value, value))
                         return true;
                 }
             }
@@ -742,14 +741,12 @@ namespace System.Collections.Generic
                     throw new ArgumentException("The array plus the offset is too small.");
 
                 int count = dictionary._capacity;
-
-                var hashes = dictionary._hashes;
-                var keys = dictionary._keys;
+                var entries = dictionary._entries;
 
                 for (int i = 0; i < count; i++)
                 {
-                    if (hashes[i] < kDeletedHash)
-                        array[index++] = keys[i];
+                    if (entries[i].Hash < kDeletedHash)
+                        array[index++] = entries[i].Key;
                 }
             }
 
@@ -792,13 +789,12 @@ namespace System.Collections.Generic
                 {
                     var count = dictionary._capacity;
 
-                    var hashes = dictionary._hashes;
-                    var keys = dictionary._keys;
+                    var entries = dictionary._entries;
                     while (index < count)
                     {
-                        if (hashes[index] < kDeletedHash)
+                        if (entries[index].Hash < kDeletedHash)
                         {
-                            currentKey = keys[index];
+                            currentKey = entries[index].Key;
                             index++;
                             return true;
                         }
@@ -868,13 +864,11 @@ namespace System.Collections.Generic
 
                 int count = dictionary._capacity;
 
-                var hashes = dictionary._hashes;
-                var values = dictionary._values;
-
+                var entries = dictionary._entries;
                 for (int i = 0; i < count; i++)
                 {
-                    if (hashes[i] < kDeletedHash)
-                        array[index++] = values[i];
+                    if (entries[i].Hash < kDeletedHash)
+                        array[index++] = entries[i].Value;
                 }
             }
 
@@ -916,13 +910,12 @@ namespace System.Collections.Generic
                 {
                     var count = dictionary._capacity;
 
-                    var hashes = dictionary._hashes;
-                    var values = dictionary._values;
+                    var entries = dictionary._entries;
                     while (index < count)
                     {
-                        if (hashes[index] < kDeletedHash)
+                        if (entries[index].Hash < kDeletedHash)
                         {
-                            currentValue = values[index];
+                            currentValue = entries[index].Value;
                             index++;
                             return true;
                         }
@@ -963,7 +956,8 @@ namespace System.Collections.Generic
 
         private class BlockCopyMemoryHelper
         {
-            public static void Memset(uint[] array, int start, int count, uint value)
+
+            public static void Memset(Entry[] array, Entry value)
             {
                 int block = 64, index = 0;
                 int length = Math.Min(block, array.Length);
@@ -977,7 +971,7 @@ namespace System.Collections.Generic
                 length = array.Length;
                 while (index < length)
                 {
-                    Buffer.BlockCopy(array, 0, array, index * sizeof(uint), Math.Min(block * sizeof(uint), (length - index) * sizeof(uint)));
+                    Array.Copy(array, 0, array, index, Math.Min(block, (length - index)));
                     index += block;
 
                     block *= 2;
