@@ -229,6 +229,7 @@ namespace System.Collections.Generic
             : this(initialBucketCount, EqualityComparer<TKey>.Default)
         { }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Add(TKey key, TValue value)
         {
             Contract.Ensures(this._numberOfUsed <= this._capacity);
@@ -278,6 +279,7 @@ namespace System.Collections.Generic
             this._entries[bucket].Value = value;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Remove(TKey key)
         {
             Contract.Ensures(this._numberOfUsed < this._capacity);
@@ -956,7 +958,7 @@ namespace System.Collections.Generic
 
         private class BlockCopyMemoryHelper
         {
-
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static void Memset(Entry[] array, Entry value)
             {
                 int block = 64, index = 0;
