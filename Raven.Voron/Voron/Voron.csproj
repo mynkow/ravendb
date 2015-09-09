@@ -68,8 +68,12 @@
     <Compile Include="Exceptions\VoronUnrecoverableErrorException.cs" />
     <Compile Include="Impl\FileHeaders\FixedSizeTreeHeader.cs" />
     <Compile Include="Trees\Compact\PrefixTree.cs" />
+    <Compile Include="Trees\Compact\PrefixTreeDataPtr.cs" />
     <Compile Include="Trees\Compact\PrefixTreeFlags.cs" />
+    <Compile Include="Trees\Compact\PrefixTreeIterator.cs" />
     <Compile Include="Trees\Compact\PrefixTreeMutableState.cs" />
+    <Compile Include="Trees\Compact\PrefixTreeNode.cs" />
+    <Compile Include="Trees\Compact\PrefixTreeNodePtr.cs" />
     <Compile Include="Trees\Compact\PrefixTreeRootHeader.cs" />
     <Compile Include="Trees\Fixed\FixedSizeTree.cs" />
     <Compile Include="Trees\Fixed\Iterators.cs" />

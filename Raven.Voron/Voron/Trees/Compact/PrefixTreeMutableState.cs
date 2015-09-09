@@ -6,19 +6,35 @@ using System.Threading.Tasks;
 
 namespace Voron.Trees.Compact
 {
-    public unsafe class PrefixTreeMutableState
+    public sealed unsafe class PrefixTreeMutableState
     {
-        public long RootPageNumber;
-        public long PageCount;
+        public PrefixTreeNodePtr Root;
+        public PrefixTreeNodePtr Head;
+        public PrefixTreeNodePtr Tail;
 
-        public void RecordNewPage(Page p, int num)
-        {
-            PageCount += num;
-        }
+        public long TablePageNumber;
+        public long TablePageCount;
+        public long TableSize;
 
-        public void RecordFreedPage(Page p, int num)
+        public long LeafCount;
+        public long InternalCount;
+        public long NodesPageCount;
+
+        public bool IsModified;
+
+        public PrefixTreeMutableState( PrefixTreeRootHeader* header )
         {
-            PageCount -= num;
+            this.Root = header->Root;
+            this.Head = header->Head;
+            this.Tail = header->Tail;
+
+            this.TablePageNumber = header->TablePageNumber;
+            this.TablePageCount = header->TablePageCount;
+            this.TableSize = header->TableSize;
+
+            this.LeafCount = header->LeafCount;
+            this.InternalCount = header->InternalCount;
+            this.NodesPageCount = header->NodesPageCount;
         }
     }
 }

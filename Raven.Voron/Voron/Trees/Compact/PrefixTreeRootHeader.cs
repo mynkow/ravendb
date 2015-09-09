@@ -7,22 +7,43 @@ using System.Threading.Tasks;
 
 namespace Voron.Trees.Compact
 {
-    [StructLayout(LayoutKind.Explicit, Pack = 1)]
+    // Until we have a final implementation, we are using sequential to make it easier to change.
+    // TODO: Change when the implementation is more mature.
+
+    // [StructLayout(LayoutKind.Explicit, Pack = 1)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)] 
     public struct PrefixTreeRootHeader
     {
-        [FieldOffset(0)]
-        public long RootPageNumber;
-        [FieldOffset(8)]
-        public long BranchPages;
-        [FieldOffset(16)]
-        public long LeafPages;
-        [FieldOffset(40)]
-        public long PageCount;
-        [FieldOffset(48)]
-        public long EntriesCount;
-        [FieldOffset(56)]
-        public int Depth;
-        [FieldOffset(60)]
+        /// <summary>
+        /// The location of the root node
+        /// </summary>
+        public PrefixTreeNodePtr Root;
+
+        /// <summary>
+        /// The location of the head node
+        /// </summary>
+        public PrefixTreeNodePtr Head;
+
+        /// <summary>
+        /// The location of the tail node
+        /// </summary>
+        public PrefixTreeNodePtr Tail;
+
+
+        public long TablePageNumber;
+
+        public long TableSize;
+
+        public long TablePageCount;
+
+       
+        public long InternalCount;
+
+        public long LeafCount;
+
+        public long NodesPageCount;
+
+
         public PrefixTreeFlags Flags;
     }
 }
