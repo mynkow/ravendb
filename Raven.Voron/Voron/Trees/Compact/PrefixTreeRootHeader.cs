@@ -29,19 +29,17 @@ namespace Voron.Trees.Compact
         /// </summary>
         public PrefixTreeNodePtr Tail;
 
+        /// <summary>
+        /// The header of the internal hash table.
+        /// </summary>
+        public PrefixTreeTableHeader Table;
 
-        public long TablePageNumber;
 
-        public long TableSize;
+        public int InternalCount;
 
-        public long TablePageCount;
+        public int LeafCount;
 
-       
-        public long InternalCount;
-
-        public long LeafCount;
-
-        public long NodesPageCount;
+        public int NodesPageCount;
 
 
         public PrefixTreeFlags Flags;

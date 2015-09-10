@@ -75,6 +75,7 @@
     <Compile Include="Trees\Compact\PrefixTreeNode.cs" />
     <Compile Include="Trees\Compact\PrefixTreeNodePtr.cs" />
     <Compile Include="Trees\Compact\PrefixTreeRootHeader.cs" />
+    <Compile Include="Trees\Compact\PrefixTreeTableHeader.cs" />
     <Compile Include="Trees\Fixed\FixedSizeTree.cs" />
     <Compile Include="Trees\Fixed\Iterators.cs" />
     <Compile Include="Impl\Backup\MinimalIncrementalBackup.cs" />

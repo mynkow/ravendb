@@ -12,9 +12,7 @@ namespace Voron.Trees.Compact
         public PrefixTreeNodePtr Head;
         public PrefixTreeNodePtr Tail;
 
-        public long TablePageNumber;
-        public long TablePageCount;
-        public long TableSize;
+        public PrefixTreeTableHeader Table;
 
         public long LeafCount;
         public long InternalCount;
@@ -27,10 +25,7 @@ namespace Voron.Trees.Compact
             this.Root = header->Root;
             this.Head = header->Head;
             this.Tail = header->Tail;
-
-            this.TablePageNumber = header->TablePageNumber;
-            this.TablePageCount = header->TablePageCount;
-            this.TableSize = header->TableSize;
+            this.Table = header->Table;
 
             this.LeafCount = header->LeafCount;
             this.InternalCount = header->InternalCount;

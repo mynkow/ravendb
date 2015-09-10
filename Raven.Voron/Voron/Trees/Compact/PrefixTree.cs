@@ -29,6 +29,7 @@ namespace Voron.Trees.Compact
         static PrefixTree()
         {
            _dataSchema = new StructureSchema<PrefixTreeDataFields>()
+                                    .Add<int>(PrefixTreeDataFields.BlockSize)
                                     .Add<byte[]>(PrefixTreeDataFields.Key)
                                     .Add<byte[]>(PrefixTreeDataFields.Data);
         }

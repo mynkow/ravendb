@@ -7,15 +7,15 @@ using System.Threading.Tasks;
 
 namespace Voron.Trees.Compact
 {
+    // Until we have a final implementation, we are using sequential instead of explicit to make it easier to change.
+    // TODO: Change when the implementation is more mature.
+
     [Flags]
-    public enum PrefixTreeNodeType
+    public enum PrefixTreeNodeType : int // TODO: Change the int requirement when we go explicit layout.
     {
         Internal = 1,
         Leaf = 2,
     }
-
-    // Until we have a final implementation, we are using sequential to make it easier to change.
-    // TODO: Change when the implementation is more mature.
 
     /// <summary>
     /// This is a union type struct used for the purpose of just querying what type of node we are working on.
@@ -25,6 +25,10 @@ namespace Voron.Trees.Compact
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct PrefixTreeNode
     {
+        /// <summary>
+        /// The prefix node type will allow us to know which kind of PrefixTreeNode we are dealing with. 
+        /// </summary>
+        /// <remarks>This enum must use 4 bytes to ensure proper data alignment for performance reasons.</remarks>
         public PrefixTreeNodeType Type;
 
         /// <summary>
