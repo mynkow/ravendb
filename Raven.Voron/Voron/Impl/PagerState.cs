@@ -8,6 +8,9 @@
 
     using Voron.Impl.Paging;
 
+    /// <summary>
+    /// Pager state is not thread-safe.
+    /// </summary>
     public unsafe class PagerState
     {
 	    private readonly AbstractPager _pager;
@@ -54,7 +57,6 @@
 #endif
          
             ReleaseInternal();
-            //_pager.RegisterDisposal(Task.Run(() => ReleaseInternal()));
         }
 
         private void ReleaseInternal()
