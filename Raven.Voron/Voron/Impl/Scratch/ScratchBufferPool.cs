@@ -20,8 +20,7 @@ namespace Voron.Impl.Scratch
 	/// created them. The pages will be kept around until the flush for the journals
 	/// send them to the data file.
 	/// 
-	/// This class relies on internal synchronization and it's multi-threaded safe. 
-    /// However, object returned by method calls on the pool are not strictly thread-safe.
+	/// This class relies on external synchronization and it's no thread safe.     
 	/// </summary>
 	public unsafe class ScratchBufferPool : IDisposable
 	{
@@ -59,48 +58,38 @@ namespace Voron.Impl.Scratch
         }
 
 		private ScratchBufferItem NextFile()
-		{
-            // Must happen atomically (always). 
-            lock ( _scratchBuffers )
-            {
-                _currentScratchNumber++; // This is used only here, so we dont need a memory barrier.
+		{           
+            _currentScratchNumber++; 
 
-                var scratchPager = _options.CreateScratchPager(StorageEnvironmentOptions.ScratchBufferName(_currentScratchNumber));
-                scratchPager.AllocateMorePages(null, Math.Max(_options.InitialFileSize ?? 0, _options.InitialLogFileSize));
+            var scratchPager = _options.CreateScratchPager(StorageEnvironmentOptions.ScratchBufferName(_currentScratchNumber));
+            scratchPager.AllocateMorePages(null, Math.Max(_options.InitialFileSize ?? 0, _options.InitialLogFileSize));
 
-                var scratchFile = new ScratchBufferFile(scratchPager, _currentScratchNumber);
-                var item = new ScratchBufferItem(scratchFile.Number, scratchFile);
+            var scratchFile = new ScratchBufferFile(scratchPager, _currentScratchNumber);
+            var item = new ScratchBufferItem(scratchFile.Number, scratchFile);
 
-                _scratchBuffers.TryAdd(item.Number, item);
+            _scratchBuffers.TryAdd(item.Number, item);
 
-                return item;
-            }
+            return item;
         }
 
 		public PagerState GetPagerState(int scratchNumber)
 		{
-            // Multi-read safety. 
+            // Not thread-safe but only called by a single writer.
             var bufferFile = _scratchBuffers[scratchNumber].File;
-            lock (bufferFile)
-            {
-                return bufferFile.PagerState;
-            }
+            return bufferFile.PagerState;
 		}
 
 		public PageFromScratchBuffer Allocate(Transaction tx, int numberOfPages)
 		{
-			if (tx == null)
+            if (tx == null)
 				throw new ArgumentNullException("tx");
 
 			var size = Utils.NearestPowerOfTwo(numberOfPages);
 
 			PageFromScratchBuffer result;
 
-            // Copy to ensure we dont lose a reference if a new file is created meanwhile. 
-            // In a multithreaded call what could happen is that we have created an scratch buffer which will only have a handful of transactions and will get discarded fast.
             var current = _current;
             var currentFile = current.File;
-
 			if (currentFile.TryGettingFromAllocatedBuffer(tx, numberOfPages, size, out result))
 				return result;
 
