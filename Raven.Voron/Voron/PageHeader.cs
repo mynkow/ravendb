@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace Voron.Data.BTrees
+namespace Voron
 {
     [StructLayout(LayoutKind.Explicit, Pack = 1)]
     public unsafe  struct PageHeader

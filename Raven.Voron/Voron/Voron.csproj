@@ -107,7 +107,7 @@
     <Compile Include="Impl\LowLevelTransaction.cs" />
     <Compile Include="Impl\OutputPointer.cs" />
     <Compile Include="Page.cs" />
-    <Compile Include="Data\BTrees\PageHeader.cs" />
+    <Compile Include="PageHeader.cs" />
     <Compile Include="Data\Compact\PrefixTree.cs" />
     <Compile Include="Data\Compact\PrefixTreeFlags.cs" />
     <Compile Include="Data\Compact\PrefixTreeMutableState.cs" />

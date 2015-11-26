@@ -8,44 +8,41 @@ namespace Voron
     public unsafe class Page
     {
         public readonly byte* Pointer;
-        private readonly PageHeader* _header;
         public readonly IVirtualPager Source;
 
         public Page(byte* pointer, IVirtualPager source)
         {
             Pointer = pointer;
-            _header = (PageHeader*) pointer;
             Source = source;
         }
 
         public long PageNumber
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return _header->PageNumber; }
+            get { return ((PageHeader*)Pointer)->PageNumber; }
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            set { _header->PageNumber = value; }
+            set { ((PageHeader*)Pointer)->PageNumber = value; }
         }
 
         public bool IsOverflow
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return (_header->Flags & PageFlags.Overflow) == PageFlags.Overflow; }
+            get { return (((PageHeader*)Pointer)->Flags & PageFlags.Overflow) == PageFlags.Overflow; }
         }
 
         public int OverflowSize
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return _header->OverflowSize; }
-            set { _header->OverflowSize = value; }
-         
+            get { return ((PageHeader*)Pointer)->OverflowSize; }
+            set { ((PageHeader*)Pointer)->OverflowSize = value; }         
         }
 
         public PageFlags Flags
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return _header->Flags; }
+            get { return ((PageHeader*)Pointer)->Flags; }
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            set { _header->Flags = value; }
+            set { ((PageHeader*)Pointer)->Flags = value; }
         }
 
         public TreePage ToTreePage()
