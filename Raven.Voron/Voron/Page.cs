@@ -1,11 +1,12 @@
 ﻿using System.Runtime.CompilerServices;
 using Voron.Data.BTrees;
+using Voron.Data.Compact;
 using Voron.Data.Fixed;
 using Voron.Impl.Paging;
 
 namespace Voron
 {
-    public unsafe class Page
+    public sealed unsafe class Page
     {
         public readonly byte* Pointer;
         public readonly IVirtualPager Source;
@@ -53,6 +54,11 @@ namespace Voron
         public FixedSizeTreePage ToFixedSizeTreePage()
         {
             return new FixedSizeTreePage(Pointer, Source.DebugInfo, Source.PageSize);
+        }
+
+        public PrefixTreePage ToPrefixTreePage()
+        {
+            return new PrefixTreePage(Pointer, Source.DebugInfo, Source.PageSize);
         }
     }
 }

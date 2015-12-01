@@ -165,7 +165,7 @@ namespace Sparrow.Binary
                 return pos;
         }
 
-        private static readonly int[] nextPowerOf2Table = new int[]
+        private static readonly int[] nextPowerOf2Table = 
         {
               0,   1,   2,   4,   4,   8,   8,   8,   8,  16,  16,  16,  16,  16,  16,  16, 
              16,  32,  32,  32,  32,  32,  32,  32,  32,  32,  32,  32,  32,  32,  32,  32,
@@ -187,7 +187,7 @@ namespace Sparrow.Binary
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static int NextPowerOf2(int v)
+        public static int NextPowerOf2(int v)
         {
             if (v < nextPowerOf2Table.Length)
             {

@@ -1,47 +1,51 @@
 ﻿using System;
 using System.IO;
+using Voron.Data.BTrees;
 using Voron.Impl;
 using Voron.Impl.FileHeaders;
+using static Voron.Data.Compact.PrefixTree;
 
 namespace Voron.Data.Compact
 {
-    public unsafe partial class PrefixTree
+    /// <summary>
+    /// In-Memory Dynamic Z-Fast TRIE supporting predecessor, successor using low linear additional space. 
+    /// "A dynamic z-fast trie is a compacted trie endowed with two additional pointers per internal node and with a 
+    /// dictionary. [...] it can be though of as an indexing structure built on a set of binary strings S. 
+    /// 
+    /// As described in "Dynamic Z-Fast Tries" by Belazzougui, Boldi and Vigna in String Processing and Information
+    /// Retrieval. Lecture notes on Computer Science. Volume 6393, 2010, pp 159-172 [1]
+    /// </summary>
+    public unsafe partial class PrefixTree<TValue>
     {
-        private readonly Transaction _tx;
-        private readonly PrefixTreeMutableState _state = new PrefixTreeMutableState();
+        private readonly LowLevelTransaction _tx;
+        private readonly Tree _parent;
+        private readonly Slice _treeName;
 
-        public PrefixTreeMutableState State
+        public Node* Root
         {
-            get { return _state; }
+            get { throw new NotImplementedException(); }
+        }
+
+        public long Count
+        {
+            get { throw new NotImplementedException(); }
+        }
+
+        internal InternalTable NodesTable
+        {
+            get { throw new NotImplementedException(); }
+        }
+
+        public PrefixTree(LowLevelTransaction tx, Tree parent, Slice treeName)
+        {
+            _tx = tx;
+            _parent = parent;
+            _treeName = treeName;
+
+            var header = (PrefixTreeRootHeader*)_parent.DirectRead(_treeName);
+            if (header == null)
+                return;            
         }        
-
-        private PrefixTree(Transaction tx, long root)
-        {
-            _tx = tx;
-            _state.RootPageNumber = root;
-        }
-
-        private PrefixTree(Transaction tx, PrefixTreeMutableState state)
-        {
-            _tx = tx;
-            _state = state;
-        }
-
-        public static PrefixTree Open(Transaction tx, TreeRootHeader* header)
-        {
-            return new PrefixTree(tx, header->RootPageNumber);
-        }
-
-        public static PrefixTree Create(Transaction tx, TreeFlags flags = TreeFlags.None)
-        {
-            throw new NotImplementedException();
-            //var newRootPage = tx.AllocatePage(1, TreePageFlags.Leaf);
-            
-            //var tree = new PrefixTree(tx, newRootPage.PageNumber);
-            //tree.State.RecordNewPage(newRootPage, 1);
-
-            //return tree;
-        }
 
         public void Add(Slice key, Stream value, ushort? version = null)
         {

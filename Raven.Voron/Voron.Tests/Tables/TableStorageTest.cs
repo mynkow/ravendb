@@ -19,7 +19,7 @@ namespace Voron.Tests.Tables
                                 .DefineIndex("By/Etag", x => x.Add(y => y.Etag))
                                 .DefineIndex("By/Etag&Collection", x => x.Add(y => y.Collection)
                                                                          .Add(y => y.Etag))
-                                .DefineKey( x => x.Add(y => y.Key));
+                                .DefineKey(x => x.Add(y => y.Key));
         }
 
         [Schema]

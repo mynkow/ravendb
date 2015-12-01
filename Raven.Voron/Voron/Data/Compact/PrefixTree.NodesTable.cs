@@ -1,36 +1,61 @@
+﻿using Bond;
+using Sparrow;
 using Sparrow.Binary;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Contracts;
-using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
+using static Voron.Data.Compact.PrefixTree;
 
-namespace Sparrow.Collections
+namespace Voron.Data.Compact
 {
-    partial class ZFastTrieSortedSet<TKey, TValue> where TKey : IEquatable<TKey>
+    partial class PrefixTree
     {
-        internal class ZFastNodesTable
+        [StructLayout(LayoutKind.Explicit, Pack = 1, Size = 16)]
+        internal unsafe struct Entry
         {
-            private readonly ZFastTrieSortedSet<TKey, TValue> owner;
+            [FieldOffset(0)]
+            public uint Hash;
+
+            [FieldOffset(4)]
+            public uint Signature;
+
+            [FieldOffset(8)]
+            public long NodePtr;
+
+            public Entry(uint hash, uint signature, long nodePtr)
+            {
+                this.Hash = hash;
+                this.Signature = signature;
+                this.NodePtr = nodePtr;
+            }
+        }
+    }
+
+    unsafe partial class PrefixTree<TValue>
+    {
+        internal sealed class InternalTable
+        {
+            private readonly PrefixTree<TValue> owner;
 
             public const int InvalidNodePosition = -1;
 
             private const uint kDeleted = 0xFFFFFFFE;
-            private const uint kUnused = 0xFFFFFFFF;            
+            private const uint kUnused = 0xFFFFFFFF;
+            private const long kInvalidNode = -1;
 
-            private const uint kHashMask = 0xFFFFFFFE;            
+            private const uint kHashMask = 0xFFFFFFFE;
             private const uint kSignatureMask = 0x7FFFFFFE;
             private const uint kDuplicatedMask = 0x80000000;
 
             /// <summary>
             /// By default, if you don't specify a hashtable size at construction-time, we use this size.  Must be a power of two, and at least kMinCapacity.
             /// </summary>
-            private const int kInitialCapacity = 64;            
+            private const int kInitialCapacity = 64;
 
             /// <summary>
             /// By default, if you don't specify a hashtable size at construction-time, we use this size.  Must be a power of two, and at least kMinCapacity.
@@ -43,22 +68,7 @@ namespace Sparrow.Collections
             // risk of collisions.
             private static int tLoadFactor = 6;
 
-            internal struct Entry
-            {
-                public uint Hash;
-                public uint Signature;
-                public Internal Node;
-
-                public Entry(uint hash, uint signature, Internal node)
-                {
-                    this.Hash = hash;
-                    this.Signature = signature;
-                    this.Node = node;
-                }
-            }
-
-            internal Entry[] _entries;
-
+            private Entry* _entries;
             private int _capacity;
 
             private int _initialCapacity; // This is the initial capacity of the dictionary, we will never shrink beyond this point.
@@ -77,11 +87,11 @@ namespace Sparrow.Collections
                 get { return _size; }
             }
 
-            public ZFastNodesTable(ZFastTrieSortedSet<TKey, TValue> owner)
+            public InternalTable(PrefixTree<TValue> owner)
                 : this(kInitialCapacity, owner)
-            {}
+            { }
 
-            public ZFastNodesTable(int initialBucketCount, ZFastTrieSortedSet<TKey, TValue> owner)
+            public InternalTable(int initialBucketCount, PrefixTree<TValue> owner)
             {
                 this.owner = owner;
 
@@ -92,8 +102,8 @@ namespace Sparrow.Collections
                 this._initialCapacity = newCapacity;
 
                 // Initialization
-                this._entries = new Entry[newCapacity];
-                BlockCopyMemoryHelper.Memset(this._entries, new Entry(kUnused, kUnused, default(Internal)));
+                this._entries = (Entry*) owner.AllocateMemory(this._initialCapacity * sizeof(Entry));
+                BlockCopyMemoryHelper.Memset(this._entries, this._initialCapacity, new Entry(kUnused, kUnused, kInvalidNode));
 
                 this._capacity = newCapacity;
 
@@ -104,10 +114,9 @@ namespace Sparrow.Collections
                 this._nextGrowthThreshold = _capacity * 4 / tLoadFactor;
             }
 
-
-            public void Add(Internal node, uint signature)
+            public void Add(long nodePtr, uint signature)
             {
-                ResizeIfNeeded();                
+                ResizeIfNeeded();
 
                 // We shrink the signature to the proper size (31 bits)
                 signature = signature & kSignatureMask;
@@ -143,10 +152,10 @@ namespace Sparrow.Collections
                 }
                 while (true);
 
-            SET:
+                SET:
                 this._entries[bucket].Hash = uhash;
                 this._entries[bucket].Signature = signature;
-                this._entries[bucket].Node = node;
+                this._entries[bucket].NodePtr = nodePtr;
 
 #if DETAILED_DEBUG_H
                 Console.WriteLine(string.Format("Add: {0}, Bucket: {1}, Signature: {2}", node.ToDebugString(this.owner), bucket, signature));
@@ -156,7 +165,7 @@ namespace Sparrow.Collections
 #endif
             }
 
-            public void Remove(Internal node, uint signature)
+            public void Remove(long nodePtr, uint signature)
             {
                 // We shrink the signature to the proper size (30 bits)
                 signature = signature & kSignatureMask;
@@ -174,7 +183,7 @@ namespace Sparrow.Collections
                     if ((entries[bucket].Signature & kSignatureMask) == signature)
                         lastDuplicated = bucket;
 
-                    if (entries[bucket].Node == node)
+                    if (entries[bucket].NodePtr == nodePtr)
                     {
                         // This is the last element and is not a duplicate, therefore the last one is not a duplicate anymore. 
                         if ((entries[bucket].Signature & kDuplicatedMask) == 0 && lastDuplicated != -1)
@@ -189,11 +198,11 @@ namespace Sparrow.Collections
 
                             entries[bucket].Hash = kDeleted;
                             entries[bucket].Signature = kUnused;
-                            entries[bucket].Node = default(Internal);
+                            entries[bucket].NodePtr = kInvalidNode;
 
                             _numberOfDeleted++;
                             _size--;
-                        }                        
+                        }
 
                         Contract.Assert(_numberOfDeleted >= Contract.OldValue<int>(_numberOfDeleted));
                         Contract.Assert(entries[bucket].Hash == kDeleted);
@@ -213,10 +222,10 @@ namespace Sparrow.Collections
 
                     Debug.Assert(numProbes < 100);
                 }
-                while (entries[bucket].Hash != kUnused);                
+                while (entries[bucket].Hash != kUnused);
             }
 
-            public void Replace(Internal oldNode, Internal newNode, uint signature)
+            public void Replace(long oldNodePtr, long newNodePtr, uint signature)
             {
                 // We shrink the signature to the proper size (30 bits)
                 signature = signature & kSignatureMask;
@@ -226,17 +235,15 @@ namespace Sparrow.Collections
 
                 int numProbes = 1;
 
-                while (this._entries[pos].Node != oldNode)
+                while (this._entries[pos].NodePtr != oldNodePtr)
                 {
                     pos = (pos + numProbes) % _capacity;
                     numProbes++;
                 }
 
-                Debug.Assert(this._entries[pos].Node != null);
-                Debug.Assert(this._entries[pos].Hash == (uint) hash );
-                Debug.Assert(this._entries[pos].Node.Handle(this.owner).CompareTo(newNode.Handle(this.owner)) == 0);
+                AssertReplace(pos, hash, newNodePtr);
 
-                this._entries[pos].Node = newNode;
+                this._entries[pos].NodePtr = newNodePtr;
 
 #if DETAILED_DEBUG_H
                 Console.WriteLine(string.Format("Old: {0}, Bucket: {1}, Signature: {2}", oldNode.ToDebugString(this.owner), pos, hash, signature));
@@ -249,25 +256,40 @@ namespace Sparrow.Collections
 
             }
 
+            [Conditional("DEBUG")]
+            public void AssertReplace(int pos, int hash, long newNodePtr)
+            {
+                Debug.Assert(this._entries[pos].NodePtr != kInvalidNode);
+                Debug.Assert(this._entries[pos].Hash == (uint)hash);
+
+                var node = (Node*)this.owner.ReadDirect(this._entries[pos].NodePtr);
+                var newNode = (Node*)this.owner.ReadDirect(newNodePtr);
+                Debug.Assert(this.owner.Handle(node).CompareTo(this.owner.Handle(newNode)) == 0);
+            }
+
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public int GetExactPosition(BitVector key, int prefixLength, uint signature)
             {
                 signature = signature & kSignatureMask;
 
                 int pos = (int)(signature & kHashMask) % _capacity;
-                
+
                 int numProbes = 1;
 
                 uint nSignature;
                 do
                 {
-                    nSignature = this._entries[pos].Signature;                    
+                    nSignature = this._entries[pos].Signature;
 
                     if ((nSignature & kSignatureMask) == signature)
                     {
-                        var node = this._entries[pos].Node;
-                        if (node.GetHandleLength(this.owner) == prefixLength && key.IsPrefix(node.ReferencePtr.Name(this.owner), prefixLength))
-                            return pos;
+                        Node* node = (Node*)this.owner.ReadDirect(this._entries[pos].NodePtr);
+                        if (this.owner.GetExtentLength(node) == prefixLength)
+                        {
+                            Node* referenceNodePtr = (Node*)this.owner.ReadDirect(node->ReferencePtr);
+                            if ( key.IsPrefix(this.owner.Name(referenceNodePtr), prefixLength))
+                                return pos;
+                        }                            
                     }
 
                     pos = (pos + numProbes) % _capacity;
@@ -279,7 +301,6 @@ namespace Sparrow.Collections
 
                 return -1;
             }
-
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public int GetPosition(BitVector key, int prefixLength, uint signature)
@@ -296,15 +317,20 @@ namespace Sparrow.Collections
                     nSignature = this._entries[pos].Signature;
 
                     if ((nSignature & kSignatureMask) == signature)
-                    {
-                        var node = this._entries[pos].Node;
-                        if ((nSignature & kDuplicatedMask) == 0 || (node.GetHandleLength(this.owner) == prefixLength && key.IsPrefix(node.ReferencePtr.Name(this.owner), prefixLength)))
-                        {                           
+                    {                        
+                        var node = (Node*)this.owner.ReadDirect(this._entries[pos].NodePtr);
+                        if ((nSignature & kDuplicatedMask) == 0) 
                             return pos;
+                        
+                        if (this.owner.GetExtentLength(node) == prefixLength)
+                        {
+                            Node* referenceNodePtr = (Node*)this.owner.ReadDirect(node->ReferencePtr);
+                            if (key.IsPrefix(this.owner.Name(referenceNodePtr), prefixLength))
+                                return pos;
                         }
-                            
+
                     }
-                       
+
                     pos = (pos + numProbes) % _capacity;
                     numProbes++;
 
@@ -315,61 +341,68 @@ namespace Sparrow.Collections
                 return -1;
             }
 
-            public Internal this[int position]
-            {                
+            public long this[int position]
+            {
                 get
                 {
-                    return this._entries[position].Node;
+                    return this._entries[position].NodePtr;
                 }
             }
 
-            [Conditional("DEBUG")]
-            public void DumpNodesTable(ZFastTrieSortedSet<TKey, TValue> tree, TextWriter writer)
+            internal string DumpNodesTable(PrefixTree<TValue> tree)
             {
+                var builder = new StringBuilder();
+
                 bool first = true;
-                writer.Write("After Insertion. NodesTable: {");
+                builder.Append("After Insertion. NodesTable: {");
                 foreach (var node in this.Values)
                 {
                     if (!first)
-                        writer.Write(", ");
+                        builder.Append(", ");
+                    
+                    var copyOfNode = (Node*)this.owner.ReadDirect( node );
 
-                    writer.Write(node.Handle(tree).ToDebugString());
-                    writer.Write(" => ");
-                    writer.Write(node.ToDebugString(tree));
+                    builder.Append(tree.Handle(copyOfNode).ToDebugString())
+                           .Append(" => ")
+                           .Append(tree.ToDebugString(copyOfNode));
 
                     first = false;
                 }
+                builder.Append("} Root: ")
+                       .Append(tree.ToDebugString( tree.Root ));
 
-                writer.Write("} Root: ");
-                writer.Write(tree.Root.ToDebugString(tree));
+                return builder.ToString();
             }
 
-            [Conditional("DEBUG")]
-            public void DumpTable(TextWriter writer)
+            internal string DumpTable()
             {
-                writer.WriteLine("NodesTable: {");
+                var builder = new StringBuilder();
 
-                for ( int i = 0; i < this._entries.Length; i++ )
-                {  
+                builder.AppendLine("NodesTable: {");
+
+                for (int i = 0; i < this._capacity; i++)
+                {
                     var entry = this._entries[i];
                     if (entry.Hash != kUnused)
                     {
-                        var node = entry.Node;
+                        var node = (Node*)this.owner.ReadDirect(entry.NodePtr);
 
-                        writer.Write("Signature:");
-                        writer.Write(entry.Signature & kSignatureMask);
-                        writer.Write((entry.Signature & kDuplicatedMask) != 0 ? "-dup" : string.Empty);
-                        writer.Write(" Hash: ");
-                        writer.Write(entry.Hash);
-                        writer.Write(" Node: ");
-                        writer.Write(node.Handle(this.owner).ToDebugString());
-                        writer.Write(" => ");
-                        writer.Write(node.ToDebugString(this.owner));
-                        writer.WriteLine();
+                        builder.Append("Signature:")
+                               .Append(entry.Signature & kSignatureMask)
+                               .Append((entry.Signature & kDuplicatedMask) != 0 ? "-dup" : string.Empty)
+                               .Append(" Hash: ")
+                               .Append(entry.Hash)
+                               .Append(" Node: ")
+                               .Append(this.owner.Handle(node).ToDebugString())
+                               .Append(" => ")
+                               .Append(this.owner.ToDebugString(node))
+                               .AppendLine();
                     }
                 }
 
-                writer.WriteLine("}");
+                builder.AppendLine("}");
+
+                return builder.ToString();
             }
 
             public KeyCollection Keys
@@ -401,10 +434,10 @@ namespace Sparrow.Collections
                 Contract.Requires(newCapacity >= _capacity);
                 Contract.Ensures((_capacity & (_capacity - 1)) == 0);
 
-                var entries = new Entry[newCapacity];
-                BlockCopyMemoryHelper.Memset(entries, new Entry(kUnused, kUnused, default(Internal)));
+                var entries = this.owner.AllocateMemory(newCapacity * sizeof(Entry));
+                BlockCopyMemoryHelper.Memset(entries, newCapacity, new Entry(kUnused, kUnused, kUnused));
 
-                Rehash(entries);
+                Rehash(entries, (uint)newCapacity);
             }
 
             private void Shrink(int newCapacity)
@@ -415,19 +448,17 @@ namespace Sparrow.Collections
                 // Calculate the next power of 2.
                 newCapacity = Math.Max(Bits.NextPowerOf2(newCapacity), _initialCapacity);
 
-                var entries = new Entry[newCapacity];
-                BlockCopyMemoryHelper.Memset(entries, new Entry(kUnused, kUnused, default(Internal)));
+                var entries = this.owner.AllocateMemory(newCapacity * sizeof(Entry));
+                BlockCopyMemoryHelper.Memset(entries, newCapacity, new Entry(kUnused, kUnused, kUnused));
 
-                Rehash(entries);
+                Rehash(entries, (uint)newCapacity);
             }
 
-            private void Rehash(Entry[] entries)
+            private void Rehash(Entry* entries, uint capacity)
             {
-                uint capacity = (uint)entries.Length;
-
                 var size = 0;
 
-                for (int it = 0; it < _entries.Length; it++)
+                for (int it = 0; it < capacity; it++)
                 {
                     uint hash = _entries[it].Hash;
                     if (hash >= kDeleted) // No interest for the process of rehashing, we are skipping it.
@@ -439,22 +470,22 @@ namespace Sparrow.Collections
 
                     uint numProbes = 1;
                     while (!(entries[bucket].Hash == kUnused))
-                    {                        
+                    {
                         if (entries[bucket].Signature == signature)
                             entries[bucket].Signature |= kDuplicatedMask;
-                       
+
                         bucket = (bucket + numProbes) % capacity;
                         numProbes++;
                     }
 
                     entries[bucket].Hash = hash;
                     entries[bucket].Signature = signature;
-                    entries[bucket].Node = _entries[it].Node;
+                    entries[bucket].NodePtr = _entries[it].NodePtr;
 
                     size++;
                 }
 
-                this._capacity = entries.Length;
+                this._capacity = (int)capacity;
                 this._size = size;
                 this._entries = entries;
 
@@ -467,9 +498,9 @@ namespace Sparrow.Collections
 
             public sealed class KeyCollection : IEnumerable<BitVector>, IEnumerable
             {
-                private ZFastNodesTable dictionary;
+                private InternalTable dictionary;
 
-                public KeyCollection(ZFastNodesTable dictionary)
+                public KeyCollection(InternalTable dictionary)
                 {
                     Contract.Requires(dictionary != null);
 
@@ -484,10 +515,10 @@ namespace Sparrow.Collections
                 public void CopyTo(BitVector[] array, int index)
                 {
                     if (array == null)
-                        throw new ArgumentNullException("The array cannot be null", "array");
+                        throw new ArgumentNullException(nameof(array), "The array cannot be null");
 
                     if (index < 0 || index > array.Length)
-                        throw new ArgumentOutOfRangeException("index");
+                        throw new ArgumentOutOfRangeException(nameof(index));
 
                     if (array.Length - index < dictionary.Count)
                         throw new ArgumentException("The array plus the offset is too small.");
@@ -498,7 +529,10 @@ namespace Sparrow.Collections
                     for (int i = 0; i < count; i++)
                     {
                         if (entries[i].Hash < kDeleted)
-                            array[index++] = entries[i].Node.Handle(dictionary.owner);
+                        {
+                            var node = (Node*)dictionary.owner.ReadDirect(entries[i].NodePtr);
+                            array[index++] = dictionary.owner.Handle(node);
+                        }                            
                     }
                 }
 
@@ -522,11 +556,11 @@ namespace Sparrow.Collections
                 [Serializable]
                 public struct Enumerator : IEnumerator<BitVector>, IEnumerator
                 {
-                    private ZFastNodesTable dictionary;
+                    private InternalTable dictionary;
                     private int index;
                     private BitVector currentKey;
 
-                    internal Enumerator(ZFastNodesTable dictionary)
+                    internal Enumerator(InternalTable dictionary)
                     {
                         this.dictionary = dictionary;
                         index = 0;
@@ -546,8 +580,10 @@ namespace Sparrow.Collections
                         {
                             if (entries[index].Hash < kDeleted)
                             {
-                                currentKey = entries[index].Node.Handle(dictionary.owner);
+                                var node = (Node*)dictionary.owner.ReadDirect(entries[index].NodePtr);
+                                currentKey = dictionary.owner.Handle(node);
                                 index++;
+
                                 return true;
                             }
                             index++;
@@ -587,11 +623,11 @@ namespace Sparrow.Collections
 
 
 
-            public sealed class ValueCollection : IEnumerable<Internal>, IEnumerable
+            public sealed class ValueCollection : IEnumerable<long>, IEnumerable
             {
-                private ZFastNodesTable dictionary;
+                private InternalTable dictionary;
 
-                public ValueCollection(ZFastNodesTable dictionary)
+                public ValueCollection(InternalTable dictionary)
                 {
                     Contract.Requires(dictionary != null);
 
@@ -603,13 +639,13 @@ namespace Sparrow.Collections
                     return new Enumerator(dictionary);
                 }
 
-                public void CopyTo(Internal[] array, int index)
+                public void CopyTo(long[] array, int index)
                 {
                     if (array == null)
-                        throw new ArgumentNullException("The array cannot be null", "array");
+                        throw new ArgumentNullException(nameof(array), "The array cannot be null");
 
                     if (index < 0 || index > array.Length)
-                        throw new ArgumentOutOfRangeException("index");
+                        throw new ArgumentOutOfRangeException(nameof(index));
 
                     if (array.Length - index < dictionary.Count)
                         throw new ArgumentException("The array plus the offset is too small.");
@@ -620,7 +656,7 @@ namespace Sparrow.Collections
                     for (int i = 0; i < count; i++)
                     {
                         if (entries[i].Hash < kDeleted)
-                            array[index++] = entries[i].Node;
+                            array[index++] = entries[i].NodePtr;
                     }
                 }
 
@@ -629,7 +665,7 @@ namespace Sparrow.Collections
                     get { return dictionary.Count; }
                 }
 
-                IEnumerator<Internal> IEnumerable<Internal>.GetEnumerator()
+                IEnumerator<long> IEnumerable<long>.GetEnumerator()
                 {
                     return new Enumerator(dictionary);
                 }
@@ -641,17 +677,17 @@ namespace Sparrow.Collections
 
 
                 [Serializable]
-                public struct Enumerator : IEnumerator<Internal>, IEnumerator
+                public struct Enumerator : IEnumerator<long>, IEnumerator
                 {
-                    private ZFastNodesTable dictionary;
+                    private InternalTable dictionary;
                     private int index;
-                    private Internal currentValue;
+                    private long currentValue;
 
-                    internal Enumerator(ZFastNodesTable dictionary)
+                    internal Enumerator(InternalTable dictionary)
                     {
                         this.dictionary = dictionary;
                         index = 0;
-                        currentValue = default(Internal);
+                        currentValue = kInvalidNode;
                     }
 
                     public void Dispose()
@@ -667,7 +703,7 @@ namespace Sparrow.Collections
                         {
                             if (entries[index].Hash < kDeleted)
                             {
-                                currentValue = entries[index].Node;
+                                currentValue = entries[index].NodePtr;
                                 index++;
                                 return true;
                             }
@@ -675,11 +711,11 @@ namespace Sparrow.Collections
                         }
 
                         index = count + 1;
-                        currentValue = default(Internal);
+                        currentValue = kInvalidNode;
                         return false;
                     }
 
-                    public Internal Current
+                    public long Current
                     {
                         get
                         {
@@ -700,7 +736,7 @@ namespace Sparrow.Collections
                     void IEnumerator.Reset()
                     {
                         index = 0;
-                        currentValue = default(Internal);
+                        currentValue = kInvalidNode;
                     }
                 }
             }
@@ -726,19 +762,19 @@ namespace Sparrow.Collections
                     {
                         uint hash = Hashing.Iterative.XXHash32.CalculateInline((byte*)bitsPtr, words * sizeof(ulong), state, lcp / BitVector.BitsPerByte);
 
-// #if ALTERNATIVE_HASHING
+                        // #if ALTERNATIVE_HASHING
                         remainingWord = ((remainingWord) >> shift) << shift;
                         ulong intermediate = Hashing.CombineInline(remainingWord, ((ulong)remaining) << 32 | (ulong)hash);
 
                         hash = (uint)intermediate ^ (uint)(intermediate >> 32);
-//#else
-//                        uint* combine = stackalloc uint[4];
-//                        ((ulong*)combine)[0] = ((remainingWord) >> shift) << shift;
-//                        combine[2] = (uint)remaining;
-//                        combine[3] = hash;
+                        //#else
+                        //                        uint* combine = stackalloc uint[4];
+                        //                        ((ulong*)combine)[0] = ((remainingWord) >> shift) << shift;
+                        //                        combine[2] = (uint)remaining;
+                        //                        combine[3] = hash;
 
-//                        hash = Hashing.XXHash32.CalculateInline((byte*)combine, 4 * sizeof(uint));
-//#endif
+                        //                        hash = Hashing.XXHash32.CalculateInline((byte*)combine, 4 * sizeof(uint));
+                        //#endif
 
 #if DETAILED_DEBUG_H
                         Console.WriteLine(string.Format("\tHash -> Hash: {0}, Remaining: {2}, Bits({1}), Vector:{3}", hash, remaining, remainingWord, vector.SubVector(0, length).ToBinaryString()));
@@ -750,27 +786,29 @@ namespace Sparrow.Collections
 
             private void Verify(Func<bool> action)
             {
-                
+
                 if (action() == false)
                     throw new Exception("Fail");
             }
 
-            internal void VerifyStructure ()
+            internal void VerifyStructure()
             {
                 int count = 0;
-                for ( int i = 0; i < this._entries.Length; i++ )
+                for (int i = 0; i < this._capacity; i++)
                 {
-                    if ( this._entries[i].Node != null )
+                    if (this._entries[i].NodePtr != kInvalidNode)
                     {
-                        var handle = this._entries[i].Node.Handle ( this.owner);                        
+                        var node = (Node*) this.owner.ReadDirect(this._entries[i].NodePtr);
+
+                        var handle = this.owner.Handle(node);
                         var hashState = Hashing.Iterative.XXHash32.Preprocess(handle.Bits);
-                        
-                        uint hash = CalculateHashForBits( handle, hashState );
+
+                        uint hash = CalculateHashForBits(handle, hashState);
 
                         int position = GetExactPosition(handle, handle.Count, hash & kSignatureMask);
 
                         Verify(() => position != -1);
-                        Verify(() => this._entries[i].Node == this._entries[position].Node);
+                        Verify(() => this._entries[i].NodePtr == this._entries[position].NodePtr);
                         Verify(() => this._entries[i].Hash == (hash & kHashMask & kSignatureMask));
                         Verify(() => i == position);
 
@@ -786,7 +824,7 @@ namespace Sparrow.Collections
                 var overallHashes = new HashSet<uint>();
                 int start = 0;
                 int first = -1;
-                while (this._entries[start].Node != null)
+                while (this._entries[start].NodePtr != kInvalidNode)
                 {
                     Verify(() => this._entries[start].Hash != kUnused || this._entries[start].Hash != kDeleted);
                     Verify(() => this._entries[start].Signature != kUnused);
@@ -796,7 +834,7 @@ namespace Sparrow.Collections
 
                 do
                 {
-                    while (this._entries[start].Node == null)
+                    while (this._entries[start].NodePtr == kInvalidNode)
                     {
                         Verify(() => this._entries[start].Hash == kUnused || this._entries[start].Hash == kDeleted);
                         Verify(() => this._entries[start].Signature == kUnused);
@@ -810,7 +848,7 @@ namespace Sparrow.Collections
                         break;
 
                     int end = start;
-                    while (this._entries[end].Node != null)
+                    while (this._entries[end].NodePtr != kInvalidNode)
                     {
                         Verify(() => this._entries[end].Hash != kUnused || this._entries[start].Hash != kDeleted);
                         Verify(() => this._entries[end].Signature != kUnused && this._entries[end].Signature != kDuplicatedMask);
@@ -821,7 +859,7 @@ namespace Sparrow.Collections
                     var hashesSeen = new HashSet<uint>();
                     var signaturesSeen = new HashSet<uint>();
 
-                    for ( int pos = end; pos != start; )
+                    for (int pos = end; pos != start;)
                     {
                         pos = (pos - 1) % _capacity;
                         if (pos < 0)
@@ -843,34 +881,46 @@ namespace Sparrow.Collections
                 while (true);
             }
 
-            private class BlockCopyMemoryHelper
+
+            private static class BlockCopyMemoryHelper
             {
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                public static void Memset(Entry[] array, Entry value)
+                public static void Memset(Entry* pointer, int entries, Entry value)
                 {
                     int block = 64, index = 0;
-                    int length = Math.Min(block, array.Length);
+                    int length = Math.Min(block, entries);
 
                     //Fill the initial array
                     while (index < length)
-                    {
-                        array[index++] = value;
-                    }
+                        pointer[index++] = value;
 
-                    length = array.Length;
+                    length = entries;
                     while (index < length)
                     {
-                        Array.Copy(array, 0, array, index, Math.Min(block, (length - index)));
-                        index += block;
+                        int bytesToCopy = Math.Min(block, (length - index)) * sizeof(Entry);
 
+                        Memory.Copy((byte*)(pointer + index), (byte*)pointer, bytesToCopy);
+
+                        index += block;
                         block *= 2;
                     }
                 }
             }
         }
 
+        internal byte* ReadDirect(long pointer)
+        {
+            throw new NotImplementedException();
+        }
 
+        private Entry* AllocateMemory(int _initialCapacity)
+        {
+            throw new NotImplementedException();
+        }
+
+        private void DeallocateMemory(Entry* entry)
+        {
+            throw new NotImplementedException();
+        }
     }
-
-
 }

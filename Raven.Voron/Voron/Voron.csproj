@@ -84,6 +84,12 @@
     <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Data\Compact\PrefixTree.Nodes.cs" />
+    <Compile Include="Data\Compact\PrefixTree.NodesTable.cs" />
+    <Compile Include="Data\Compact\PrefixTree.Constants.cs" />
+    <Compile Include="Data\Compact\PrefixTreePage.cs" />
+    <Compile Include="Data\Compact\PrefixTreePageHeader.cs" />
+    <Compile Include="Data\Compact\PrefixTreeTablePageHeader.cs" />
     <Compile Include="Data\Fixed\FixedSizeTreePageFlags.cs" />
     <Compile Include="Data\Fixed\FixedSizeTreePageHeader.cs" />
     <Compile Include="Data\RawData\ActiveRawDataSmallSection.cs" />
@@ -109,8 +115,6 @@
     <Compile Include="Page.cs" />
     <Compile Include="PageHeader.cs" />
     <Compile Include="Data\Compact\PrefixTree.cs" />
-    <Compile Include="Data\Compact\PrefixTreeFlags.cs" />
-    <Compile Include="Data\Compact\PrefixTreeMutableState.cs" />
     <Compile Include="Data\Compact\PrefixTreeRootHeader.cs" />
     <Compile Include="Data\Fixed\FixedSizeTree.cs" />
     <Compile Include="Data\Fixed\FixedSizeIterators.cs" />
@@ -131,6 +135,7 @@
     <Compile Include="Impl\Extensions\ConcurrentQueueExtensions.cs" />
     <Compile Include="Impl\Backup\IncrementalBackup.cs" />
     <Compile Include="PageFlags.cs" />
+    <Compile Include="PageLocationPtr.cs" />
     <Compile Include="Platform\Posix\AllowBuildOnWindows.cs" />
     <Compile Include="Platform\Posix\PosixHelper.cs" />
     <Compile Include="Platform\Posix\PosixJournalWriter.cs" />
