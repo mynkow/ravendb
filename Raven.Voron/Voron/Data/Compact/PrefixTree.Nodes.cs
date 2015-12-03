@@ -18,7 +18,6 @@ namespace Voron.Data.Compact
             Leaf = 1
         }
 
-
         [StructLayout(LayoutKind.Explicit, Pack = 1, Size = 48)]
         public struct Node
         {
@@ -88,32 +87,6 @@ namespace Voron.Data.Compact
 
             public bool IsLeaf => Type == NodeType.Leaf;
             public bool IsInternal => Type == NodeType.Leaf;
-
-            public override bool Equals(object obj)
-            {
-                if (obj is Node && ((Node)obj).IsInternal)
-                {                    
-                    var o = (Internal) obj;
-                    return o == this;
-                }
-
-                return false;
-            }
-
-            public override int GetHashCode()
-            {
-                throw new NotImplementedException();
-            }
-
-            public static bool operator ==(Internal c1, Internal c2)
-            {
-                throw new NotImplementedException();
-            }
-
-            public static bool operator !=(Internal c1, Internal c2)
-            {
-                return !(c1 == c2);
-            }
         }
 
 
@@ -221,38 +194,15 @@ namespace Voron.Data.Compact
         }
 
 
-        /// <summary>
-        /// The extent of a node, is the longest common prefix of the strings represented by the leaves that are descendants of it.
-        /// </summary>            
-        public static BitVector Extent<T>(this PrefixTree<T> tree, ref Node @this)
-        {
-            throw new NotImplementedException();
-        }
-
         public static int GetExtentLength<T>(this PrefixTree<T> tree, Node* @this)
         {
             throw new NotImplementedException();
         }
 
-        public static int GetExtentLength<T>(this PrefixTree<T> tree, ref Internal @this)
-        {
-            fixed (Internal* node = &@this)
-            {
-                return GetExtentLength(tree, (Node*)node);
-            }
-        }
 
         public static int GetJumpLength<T>(this PrefixTree<T> tree, Internal* @this)
         {
             throw new NotImplementedException();
-        }
-
-        public static int GetJumpLength<T>(this PrefixTree<T> tree, ref Internal @this)
-        {
-            fixed (Internal* node = &@this)
-            {
-                return GetJumpLength(tree, node);
-            }
         }
 
         public static bool IsExitNodeOf<T>(this PrefixTree<T> tree, Node* @this, int length, int lcpLength)
@@ -307,22 +257,6 @@ namespace Voron.Data.Compact
         public static string ToDebugString<T>(this PrefixTree<T> tree, Node* @this)
         {
             throw new NotImplementedException();
-        }
-
-        public static string ToDebugString<T>(this PrefixTree<T> tree, ref Node @this)
-        {
-            fixed (Node* node = &@this)
-            {
-                return ToDebugString(tree, node);
-            }
-        }
-
-        public static string ToDebugString<T>(this PrefixTree<T> tree, ref Internal @this)
-        {
-            fixed (Internal* node = &@this)
-            {
-                return ToDebugString(tree, (Node*) node);
-            }
         }
     }
 }

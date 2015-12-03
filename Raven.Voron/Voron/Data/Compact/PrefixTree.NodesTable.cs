@@ -66,52 +66,93 @@ namespace Voron.Data.Compact
             // when number of items == capacity. Default value of 6 means it grows when
             // number of items == capacity * 3/2 (6/4). Higher load == tighter maps, but bigger
             // risk of collisions.
-            private static int tLoadFactor = 6;
+            public const int LoadFactor = 6;
 
             private Entry* _entries;
-            private int _capacity;
 
-            private int _initialCapacity; // This is the initial capacity of the dictionary, we will never shrink beyond this point.
-            private int _size; // This is the real counter of how many items are in the hash-table (regardless of buckets)
-            private int _numberOfUsed; // How many used buckets. 
-            private int _numberOfDeleted; // how many occupied buckets are marked deleted
-            private int _nextGrowthThreshold;
+            private PrefixTreeTablePageHeader* _header;
 
+            /// <summary>
+            /// The current capacity of the dictionary
+            /// </summary>
             public int Capacity
             {
-                get { return _capacity; }
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get { return this._header->Capacity; }
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                set { this._header->Capacity = value; }
             }
 
+            /// <summary>
+            /// This is the real counter of how many items are in the hash-table (regardless of buckets)
+            /// </summary>
             public int Count
             {
-                get { return _size; }
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get { return this._header->Size; }
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                set { this._header->Size = value; }
             }
 
-            public InternalTable(PrefixTree<TValue> owner)
-                : this(kInitialCapacity, owner)
-            { }
+            /// <summary>
+            /// This is the initial capacity of the dictionary, we will never shrink beyond this point.
+            /// </summary>
+            private int InitialCapacity
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get { return this._header->InitialCapacity; }
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                set { this._header->InitialCapacity = value; }
+            }
 
-            public InternalTable(int initialBucketCount, PrefixTree<TValue> owner)
+            /// <summary>
+            /// How many used buckets. 
+            /// </summary>
+            private int NumberOfUsed
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get { return this._header->NumberOfUsed; }
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                set { this._header->NumberOfUsed = value; }
+            }
+
+            /// <summary>
+            /// How many occupied buckets are marked deleted
+            /// </summary>
+            private int NumberOfDeleted
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get { return this._header->NumberOfDeleted; }
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                set { this._header->NumberOfDeleted = value; }
+            }
+
+            /// <summary>
+            /// The next growth threshold. 
+            /// </summary>
+            private int NextGrowthThreshold
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get { return this._header->NextGrowthThreshold; }
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                set { this._header->NextGrowthThreshold = value; }
+            }
+
+            public InternalTable(PrefixTree<TValue> owner, int initialBucketCount = 256)
             {
                 this.owner = owner;
 
-                // Calculate the next power of 2.
                 int newCapacity = initialBucketCount >= kMinCapacity ? initialBucketCount : kMinCapacity;
-                newCapacity = Bits.NextPowerOf2(newCapacity);
+                this._header = this.owner.Initialize(newCapacity);
+                this._entries = this.owner.LoadEntries(_header);
+            }
 
-                this._initialCapacity = newCapacity;
+            public InternalTable(PrefixTree<TValue> owner, PrefixTreeTablePageHeader* header)
+            {
+                this.owner = owner;
 
-                // Initialization
-                this._entries = (Entry*) owner.AllocateMemory(this._initialCapacity * sizeof(Entry));
-                BlockCopyMemoryHelper.Memset(this._entries, this._initialCapacity, new Entry(kUnused, kUnused, kInvalidNode));
-
-                this._capacity = newCapacity;
-
-                this._numberOfUsed = 0;
-                this._numberOfDeleted = 0;
-                this._size = 0;
-
-                this._nextGrowthThreshold = _capacity * 4 / tLoadFactor;
+                this._header = header;
+                this._entries = owner.LoadEntries(_header);
             }
 
             public void Add(long nodePtr, uint signature)
@@ -122,7 +163,7 @@ namespace Voron.Data.Compact
                 signature = signature & kSignatureMask;
 
                 int hash = (int)(signature & kHashMask);
-                int bucket = hash % _capacity;
+                int bucket = hash % Capacity;
 
                 uint uhash = (uint)hash;
                 int numProbes = 1;
@@ -134,20 +175,20 @@ namespace Voron.Data.Compact
                     uint nHash = _entries[bucket].Hash;
                     if (nHash == kUnused)
                     {
-                        _numberOfUsed++;
-                        _size++;
+                        NumberOfUsed++;
+                        Count++;
 
                         goto SET;
                     }
                     else if (nHash == kDeleted)
                     {
-                        _numberOfDeleted--;
-                        _size++;
+                        NumberOfDeleted--;
+                        Count++;
 
                         goto SET;
                     }
 
-                    bucket = (bucket + numProbes) % _capacity;
+                    bucket = (bucket + numProbes) % Capacity;
                     numProbes++;
                 }
                 while (true);
@@ -171,7 +212,7 @@ namespace Voron.Data.Compact
                 signature = signature & kSignatureMask;
 
                 int hash = (int)(signature & kHashMask);
-                int bucket = hash % _capacity;
+                int bucket = hash % Capacity;
 
                 var entries = _entries;
 
@@ -200,24 +241,24 @@ namespace Voron.Data.Compact
                             entries[bucket].Signature = kUnused;
                             entries[bucket].NodePtr = kInvalidNode;
 
-                            _numberOfDeleted++;
-                            _size--;
+                            NumberOfDeleted++;
+                            Count--;
                         }
 
-                        Contract.Assert(_numberOfDeleted >= Contract.OldValue<int>(_numberOfDeleted));
+                        Contract.Assert(NumberOfDeleted >= Contract.OldValue<int>(NumberOfDeleted));
                         Contract.Assert(entries[bucket].Hash == kDeleted);
                         Contract.Assert(entries[bucket].Signature == kUnused);
 
-                        if (3 * this._numberOfDeleted / 2 > this._capacity - this._numberOfUsed)
+                        if (3 * this.NumberOfDeleted / 2 > this.Capacity - this.NumberOfUsed)
                         {
                             // We will force a rehash with the growth factor based on the current size.
-                            Shrink(Math.Max(_initialCapacity, _size * 2));
+                            Shrink(Math.Max(InitialCapacity, Count * 2));
                         }
 
                         return;
                     }
 
-                    bucket = (int)((bucket + numProbes) % _capacity);
+                    bucket = (int)((bucket + numProbes) % Capacity);
                     numProbes++;
 
                     Debug.Assert(numProbes < 100);
@@ -231,13 +272,13 @@ namespace Voron.Data.Compact
                 signature = signature & kSignatureMask;
 
                 int hash = (int)(signature & kHashMask);
-                int pos = hash % _capacity;
+                int pos = hash % Capacity;
 
                 int numProbes = 1;
 
                 while (this._entries[pos].NodePtr != oldNodePtr)
                 {
-                    pos = (pos + numProbes) % _capacity;
+                    pos = (pos + numProbes) % Capacity;
                     numProbes++;
                 }
 
@@ -272,7 +313,7 @@ namespace Voron.Data.Compact
             {
                 signature = signature & kSignatureMask;
 
-                int pos = (int)(signature & kHashMask) % _capacity;
+                int pos = (int)(signature & kHashMask) % Capacity;
 
                 int numProbes = 1;
 
@@ -292,7 +333,7 @@ namespace Voron.Data.Compact
                         }                            
                     }
 
-                    pos = (pos + numProbes) % _capacity;
+                    pos = (pos + numProbes) % Capacity;
                     numProbes++;
 
                     Debug.Assert(numProbes < 100);
@@ -307,7 +348,7 @@ namespace Voron.Data.Compact
             {
                 signature = signature & kSignatureMask;
 
-                int pos = (int)(signature & kHashMask) % _capacity;
+                int pos = (int)(signature & kHashMask) % Capacity;
 
                 int numProbes = 1;
 
@@ -331,7 +372,7 @@ namespace Voron.Data.Compact
 
                     }
 
-                    pos = (pos + numProbes) % _capacity;
+                    pos = (pos + numProbes) % Capacity;
                     numProbes++;
 
                     Debug.Assert(numProbes < 100);
@@ -380,7 +421,7 @@ namespace Voron.Data.Compact
 
                 builder.AppendLine("NodesTable: {");
 
-                for (int i = 0; i < this._capacity; i++)
+                for (int i = 0; i < this.Capacity; i++)
                 {
                     var entry = this._entries[i];
                     if (entry.Hash != kUnused)
@@ -423,41 +464,48 @@ namespace Voron.Data.Compact
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             private void ResizeIfNeeded()
             {
-                if (_size >= _nextGrowthThreshold)
+                if (Count >= NextGrowthThreshold)
                 {
-                    Grow(_capacity * 2);
+                    Grow(Capacity * 2);
                 }
             }
 
             private void Grow(int newCapacity)
             {
-                Contract.Requires(newCapacity >= _capacity);
-                Contract.Ensures((_capacity & (_capacity - 1)) == 0);
+                Contract.Requires(newCapacity >= Capacity);
+                Contract.Ensures((Capacity & (Capacity - 1)) == 0);
 
-                var entries = this.owner.AllocateMemory(newCapacity * sizeof(Entry));
-                BlockCopyMemoryHelper.Memset(entries, newCapacity, new Entry(kUnused, kUnused, kUnused));
+                var newHeader = this.owner.Initialize(newCapacity);
+                var newEntries = this.owner.LoadEntries(newHeader);
 
-                Rehash(entries, (uint)newCapacity);
+                Rehash(newHeader, newEntries);
+
+                this._header = newHeader;
+                this._entries = newEntries;
             }
 
             private void Shrink(int newCapacity)
             {
-                Contract.Requires(newCapacity > _size);
-                Contract.Ensures(this._numberOfUsed < this._capacity);
+                Contract.Requires(newCapacity > Count);
+                Contract.Ensures(this.NumberOfUsed < this.Capacity);
 
                 // Calculate the next power of 2.
-                newCapacity = Math.Max(Bits.NextPowerOf2(newCapacity), _initialCapacity);
+                newCapacity = Math.Max(Bits.NextPowerOf2(newCapacity), InitialCapacity);
 
-                var entries = this.owner.AllocateMemory(newCapacity * sizeof(Entry));
-                BlockCopyMemoryHelper.Memset(entries, newCapacity, new Entry(kUnused, kUnused, kUnused));
+                var newHeader = this.owner.Initialize(newCapacity);
+                var newEntries = this.owner.LoadEntries(newHeader);
 
-                Rehash(entries, (uint)newCapacity);
+                Rehash(newHeader, newEntries);
+
+                this._header = newHeader;
+                this._entries = newEntries;
             }
 
-            private void Rehash(Entry* entries, uint capacity)
+            private void Rehash(PrefixTreeTablePageHeader* header, Entry* entries)
             {
-                var size = 0;
+                uint capacity = (uint)header->Capacity;
 
+                var size = 0;                
                 for (int it = 0; it < capacity; it++)
                 {
                     uint hash = _entries[it].Hash;
@@ -485,14 +533,12 @@ namespace Voron.Data.Compact
                     size++;
                 }
 
-                this._capacity = (int)capacity;
-                this._size = size;
-                this._entries = entries;
+                header->Capacity = (int)capacity;
+                header->Size = size;
 
-                this._numberOfUsed = size;
-                this._numberOfDeleted = 0;
-
-                this._nextGrowthThreshold = _capacity * 4 / tLoadFactor;
+                header->NumberOfUsed = size;
+                header->NumberOfDeleted = 0;
+                header->NextGrowthThreshold = (int)capacity * 4 / LoadFactor;
             }
 
 
@@ -523,7 +569,7 @@ namespace Voron.Data.Compact
                     if (array.Length - index < dictionary.Count)
                         throw new ArgumentException("The array plus the offset is too small.");
 
-                    int count = dictionary._capacity;
+                    int count = dictionary.Capacity;
                     var entries = dictionary._entries;
 
                     for (int i = 0; i < count; i++)
@@ -573,7 +619,7 @@ namespace Voron.Data.Compact
 
                     public bool MoveNext()
                     {
-                        var count = dictionary._capacity;
+                        var count = dictionary.Capacity;
 
                         var entries = dictionary._entries;
                         while (index < count)
@@ -650,7 +696,7 @@ namespace Voron.Data.Compact
                     if (array.Length - index < dictionary.Count)
                         throw new ArgumentException("The array plus the offset is too small.");
 
-                    int count = dictionary._capacity;
+                    int count = dictionary.Capacity;
 
                     var entries = dictionary._entries;
                     for (int i = 0; i < count; i++)
@@ -696,7 +742,7 @@ namespace Voron.Data.Compact
 
                     public bool MoveNext()
                     {
-                        var count = dictionary._capacity;
+                        var count = dictionary.Capacity;
 
                         var entries = dictionary._entries;
                         while (index < count)
@@ -794,7 +840,7 @@ namespace Voron.Data.Compact
             internal void VerifyStructure()
             {
                 int count = 0;
-                for (int i = 0; i < this._capacity; i++)
+                for (int i = 0; i < this.Capacity; i++)
                 {
                     if (this._entries[i].NodePtr != kInvalidNode)
                     {
@@ -829,7 +875,7 @@ namespace Voron.Data.Compact
                     Verify(() => this._entries[start].Hash != kUnused || this._entries[start].Hash != kDeleted);
                     Verify(() => this._entries[start].Signature != kUnused);
 
-                    start = (start + 1) % _capacity;
+                    start = (start + 1) % Capacity;
                 }
 
                 do
@@ -839,7 +885,7 @@ namespace Voron.Data.Compact
                         Verify(() => this._entries[start].Hash == kUnused || this._entries[start].Hash == kDeleted);
                         Verify(() => this._entries[start].Signature == kUnused);
 
-                        start = (start + 1) % _capacity;
+                        start = (start + 1) % Capacity;
                     }
 
                     if (first == -1)
@@ -853,7 +899,7 @@ namespace Voron.Data.Compact
                         Verify(() => this._entries[end].Hash != kUnused || this._entries[start].Hash != kDeleted);
                         Verify(() => this._entries[end].Signature != kUnused && this._entries[end].Signature != kDuplicatedMask);
 
-                        end = (end + 1) % _capacity;
+                        end = (end + 1) % Capacity;
                     }
 
                     var hashesSeen = new HashSet<uint>();
@@ -861,7 +907,7 @@ namespace Voron.Data.Compact
 
                     for (int pos = end; pos != start;)
                     {
-                        pos = (pos - 1) % _capacity;
+                        pos = (pos - 1) % Capacity;
                         if (pos < 0)
                             break;
 
@@ -908,17 +954,30 @@ namespace Voron.Data.Compact
             }
         }
 
+        private Entry* LoadEntries(PrefixTreeTablePageHeader* header)
+        {
+            throw new NotImplementedException();
+        }
+
+        private PrefixTreeTablePageHeader* Initialize(int newCapacity)
+        {
+            // Calculate the next power of 2.
+            newCapacity = Bits.NextPowerOf2(newCapacity);
+
+            PrefixTreeTablePageHeader* tableHeader = null;
+
+            throw new NotImplementedException();
+
+            tableHeader->Capacity = newCapacity;
+            tableHeader->NumberOfUsed = 0;
+            tableHeader->NumberOfDeleted = 0;
+            tableHeader->Size = 0;
+            tableHeader->NextGrowthThreshold = newCapacity * 4 / InternalTable.LoadFactor;
+
+            return tableHeader;
+        }
+
         internal byte* ReadDirect(long pointer)
-        {
-            throw new NotImplementedException();
-        }
-
-        private Entry* AllocateMemory(int _initialCapacity)
-        {
-            throw new NotImplementedException();
-        }
-
-        private void DeallocateMemory(Entry* entry)
         {
             throw new NotImplementedException();
         }
