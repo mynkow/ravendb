@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Contracts;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -42,7 +43,7 @@ namespace Sparrow.Collections
             // risk of collisions.
             private static int tLoadFactor = 6;
 
-            private struct Entry
+            internal struct Entry
             {
                 public uint Hash;
                 public uint Signature;
@@ -56,7 +57,7 @@ namespace Sparrow.Collections
                 }
             }
 
-            private Entry[] _entries;
+            internal Entry[] _entries;
 
             private int _capacity;
 
@@ -322,34 +323,31 @@ namespace Sparrow.Collections
                 }
             }
 
-            internal string DumpNodesTable(ZFastTrieSortedSet<TKey, TValue> tree)
+            [Conditional("DEBUG")]
+            public void DumpNodesTable(ZFastTrieSortedSet<TKey, TValue> tree, TextWriter writer)
             {
-                var builder = new StringBuilder();
-
                 bool first = true;
-                builder.Append("After Insertion. NodesTable: {");
+                writer.Write("After Insertion. NodesTable: {");
                 foreach (var node in this.Values)
                 {
                     if (!first)
-                        builder.Append(", ");
+                        writer.Write(", ");
 
-                    builder.Append(node.Handle(tree).ToDebugString())
-                           .Append(" => ")
-                           .Append(node.ToDebugString(tree));
+                    writer.Write(node.Handle(tree).ToDebugString());
+                    writer.Write(" => ");
+                    writer.Write(node.ToDebugString(tree));
 
                     first = false;
                 }
-                builder.Append("} Root: ")
-                       .Append(tree.Root.ToDebugString(tree));
 
-                return builder.ToString();
+                writer.Write("} Root: ");
+                writer.Write(tree.Root.ToDebugString(tree));
             }
 
-            internal string DumpTable()
+            [Conditional("DEBUG")]
+            public void DumpTable(TextWriter writer)
             {
-                var builder = new StringBuilder();
-
-                builder.AppendLine("NodesTable: {");
+                writer.WriteLine("NodesTable: {");
 
                 for ( int i = 0; i < this._entries.Length; i++ )
                 {  
@@ -358,22 +356,20 @@ namespace Sparrow.Collections
                     {
                         var node = entry.Node;
 
-                        builder.Append("Signature:")
-                               .Append(entry.Signature & kSignatureMask)
-                               .Append((entry.Signature & kDuplicatedMask) != 0 ? "-dup" : string.Empty)
-                               .Append(" Hash: ")
-                               .Append(entry.Hash)
-                               .Append(" Node: ")
-                               .Append(node.Handle(this.owner).ToDebugString())
-                               .Append(" => ")
-                               .Append(node.ToDebugString(this.owner))
-                               .AppendLine();
+                        writer.Write("Signature:");
+                        writer.Write(entry.Signature & kSignatureMask);
+                        writer.Write((entry.Signature & kDuplicatedMask) != 0 ? "-dup" : string.Empty);
+                        writer.Write(" Hash: ");
+                        writer.Write(entry.Hash);
+                        writer.Write(" Node: ");
+                        writer.Write(node.Handle(this.owner).ToDebugString());
+                        writer.Write(" => ");
+                        writer.Write(node.ToDebugString(this.owner));
+                        writer.WriteLine();
                     }
                 }
 
-                builder.AppendLine("}");
-
-                return builder.ToString();
+                writer.WriteLine("}");
             }
 
             public KeyCollection Keys

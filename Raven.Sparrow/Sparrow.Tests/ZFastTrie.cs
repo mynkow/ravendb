@@ -366,9 +366,9 @@ namespace Sparrow.Tests
             tree.Add("E", "Fs");
             tree.Add("Lr", "LD");
             tree.Add("L5", "MU");
-
+            
             Console.WriteLine();
-            Console.WriteLine(tree.NodesTable.DumpTable());
+            tree.NodesTable.DumpTable(Console.Out);
             Console.WriteLine();
             ZFastTrieDebugHelpers.DumpKeys(tree);
             Console.WriteLine();
@@ -597,7 +597,6 @@ namespace Sparrow.Tests
                 return 1;
             }
         }
-
 
         public static void StructuralVerify<T, W>(ZFastTrieSortedSet<T, W> tree) where T : IEquatable<T>
         {

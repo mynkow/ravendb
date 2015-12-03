@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Sparrow;
+using Sparrow.Collections;
+using System;
 using System.Diagnostics;
 using System.IO;
 using Voron.Data.BTrees;
@@ -137,8 +139,8 @@ namespace Voron.Debugging
 				var ptr = tree.DirectRead(name);
 				if (ptr == null)
 				{
-					writer.WriteLine("<p>empty fixed size tree</p>");
-				}
+                    writer.WriteLine("<p>empty fixed size tree</p>");
+                }
 				else if (((FixedSizeTreeHeader.Embedded*)ptr)->RootObjectType == RootObjectType.EmbeddedFixedSizeTree)
 				{
 					var header = ((FixedSizeTreeHeader.Embedded*)ptr);
@@ -184,7 +186,7 @@ namespace Voron.Debugging
 		}
 
 		private unsafe static void RenderFixedSizeTreePage(LowLevelTransaction tx, FixedSizeTreePage page, TextWriter sw, FixedSizeTreeHeader.Large* header, string text, bool open)
-		{
+        {
 			sw.WriteLine(
                 "<ul><li><input type='checkbox' id='page-{0}' {3} /><label for='page-{0}'>{4}: Page {0:#,#;;0} - {1} - {2:#,#;;0} entries from {5}</label><ul>",
                 page.PageNumber, page.IsLeaf ? "Leaf" : "Branch", page.NumberOfEntries, open ? "checked" : "", text, page.Source);
@@ -214,29 +216,29 @@ namespace Voron.Debugging
 			sw.WriteLine("</ul></li></ul>");
 		}
 
-		[Conditional("DEBUG")]
-		public static void RenderAndShow(Tree tree)
-		{
-			var headerData = string.Format("<p>{0}</p>", tree.State);
-			RenderAndShowTree(tree.Llt, tree.State.RootPageNumber, headerData);
-		}
+        [Conditional("DEBUG")]
+        public static void RenderAndShow(Tree tree)
+        {
+            var headerData = string.Format("<p>{0}</p>", tree.State);
+            RenderAndShowTree(tree.Llt, tree.State.RootPageNumber, headerData);
+        }
 
-		[Conditional("DEBUG")]
+        [Conditional("DEBUG")]
 		public static void RenderAndShowTree(LowLevelTransaction tx, long startPageNumber, string headerData = null)
 		{
-			RenderHtmlTreeView(writer =>
-			{
-				if (headerData != null)
-					writer.WriteLine(headerData);
-				writer.WriteLine("<div class='css-treeview'><ul>");
+            RenderHtmlTreeView(writer =>
+            {
+                if (headerData != null)
+                    writer.WriteLine(headerData);
+                writer.WriteLine("<div class='css-treeview'><ul>");
 
-				var page = tx.GetReadOnlyTreePage(startPageNumber);
-				RenderPage(tx, page, writer, "Root", true);
+                var page = tx.GetReadOnlyTreePage(startPageNumber);
+                RenderPage(tx, page, writer, "Root", true);
 
-				writer.WriteLine("</ul></div>");
-			});
+                writer.WriteLine("</ul></div>");
+            });
 
-		}
+        }
 
 		public static void DumpTreeToStream(Tree tree, Stream stream)
 		{
@@ -290,5 +292,112 @@ namespace Voron.Debugging
 			}
 			sw.WriteLine("</ul></li></ul>");
 		}
-	}
+
+        [Conditional("DEBUG")]
+        public static void RenderAndShow<TKey, TValue>(ZFastTrieSortedSet<TKey, TValue> tree) where TKey : IEquatable<TKey>
+        {
+            //var headerData = $"<p>{tree.Count}</p>";
+
+            RenderHtmlTreeView(writer =>
+            {
+                //if (headerData != null)
+                //    writer.WriteLine(headerData);
+
+                writer.WriteLine("<div class='css-treeview'><ul>");
+
+                DumpTree(writer, tree);
+
+                writer.WriteLine("</ul></div>");
+
+
+                writer.WriteLine($"<p>NodesTable Capacity:{tree.NodesTable.Capacity} Values:{tree.NodesTable.Count}</p>");
+                writer.WriteLine("<div class='css-treeview'><ul>");
+
+                DumpTable(writer, tree);
+
+                writer.WriteLine("</ul></div>");
+            });
+
+        }
+
+        private static void DumpTable<T, W>(TextWriter writer, ZFastTrieSortedSet<T, W> tree) where T : IEquatable<T>
+        {
+            var _entries = tree.NodesTable._entries;
+
+            for (int i = 0; i < _entries.Length; i++)
+            {
+                var entry = _entries[i];
+                if (entry.Hash != 0xFFFFFFFF)
+                {
+                    var node = entry.Node;
+
+                    uint nodeId = Hashing.XXHash32.CalculateRaw(node.Extent(tree).ToString());
+
+                    var signature = entry.Signature & 0x7FFFFFFE;
+                    string duplicate = (entry.Signature & 0x80000000) != 0 ? "is duplicate" : "";
+
+                    writer.Write($"<ul><li><input type='checkbox' id='node-{nodeId}' />");
+                    writer.WriteLine($"{i} - Signature: {signature} Hash: {entry.Hash} Node: {node.Handle(tree).ToDebugString()} => {node.ToDebugString(tree)} {duplicate} ");
+                    writer.WriteLine("</ul></li></ul>");
+                }
+            }
+        }
+
+        public static void DumpTree<T, W>(TextWriter writer, ZFastTrieSortedSet<T, W> tree) where T : IEquatable<T>
+        {
+            if (tree.Count == 0)
+            {
+                writer.WriteLine("<p>empty zfast tree</p>");
+            }
+            else
+            {
+                DumpNodes(writer, tree, tree.Root, null, 0, 0, true);
+            }
+        }
+
+        private static int DumpNodes<T, W>(TextWriter writer, ZFastTrieSortedSet<T, W> tree, ZFastTrieSortedSet<T, W>.Node node, ZFastTrieSortedSet<T, W>.Node parent, int nameLength, int depth, bool open) where T : IEquatable<T>
+        {
+            if (node == null)
+                return 0;
+
+            string nodeType = node.IsLeaf ? "Leaf" : "Branch";
+            uint nodeId = Hashing.XXHash32.CalculateRaw(node.Extent(tree).ToString());
+
+            string checkedStatus = open ? "checked" : "";
+            writer.Write($"<ul><li><input type='checkbox' id='node-{nodeId}' {checkedStatus} />");
+
+            try
+            {
+                if (node is ZFastTrieSortedSet<T, W>.Internal)
+                {
+                    var internalNode = node as ZFastTrieSortedSet<T, W>.Internal;
+
+                    var jumpLeft = internalNode.JumpLeftPtr;
+                    var jumpRight = internalNode.JumpRightPtr;
+
+                    var jumpLeftType = jumpLeft.IsLeaf ? "Leaf" : "Branch";
+                    var jumpRightType = jumpRight.IsLeaf ? "Leaf" : "Branch";
+
+                    var data = string.Format($"{nodeType} {node.ToDebugString(tree)} (name length: {nameLength}) Jump left: {jumpLeftType}-{jumpLeft.ToDebugString(tree)} Jump right: {jumpRightType}-{jumpRight.ToDebugString(tree)}");
+                    writer.WriteLine($"<label for='node-{nodeId}'>{data}</label><ul>");
+
+                    return 1 + DumpNodes(writer, tree, internalNode.Left, internalNode, internalNode.ExtentLength + 1, depth + 1, false)
+                             + DumpNodes(writer, tree, internalNode.Right, internalNode, internalNode.ExtentLength + 1, depth + 1, false);
+                }
+                else
+                {
+                    var leaf = (ZFastTrieSortedSet<T, W>.Leaf) node;
+                    var data = $"{nodeType} {node.ToDebugString(tree)} (name length: {nameLength}, key: {leaf.Key.ToString()}, data: {leaf.Value.ToString()})";
+                    writer.WriteLine($"<label for='node-{nodeId}'>{data}</label><ul>");
+
+                    return 1;
+                }
+            }
+            finally
+            {
+                writer.WriteLine("</ul></li></ul>");
+            }
+
+        }
+    }
 }
