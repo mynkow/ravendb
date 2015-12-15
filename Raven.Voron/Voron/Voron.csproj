@@ -89,7 +89,9 @@
     <Compile Include="Data\Compact\PrefixTree.Constants.cs" />
     <Compile Include="Data\Compact\PrefixTreePage.cs" />
     <Compile Include="Data\Compact\PrefixTreePageHeader.cs" />
+    <Compile Include="Data\Compact\PrefixTreeRootMutableState.cs" />
     <Compile Include="Data\Compact\PrefixTreeTablePageHeader.cs" />
+    <Compile Include="Data\Compact\PrefixTreeTablePageMutableState.cs" />
     <Compile Include="Data\Fixed\FixedSizeTreePageFlags.cs" />
     <Compile Include="Data\Fixed\FixedSizeTreePageHeader.cs" />
     <Compile Include="Data\RawData\ActiveRawDataSmallSection.cs" />

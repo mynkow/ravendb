@@ -9,6 +9,7 @@ using System.Diagnostics.Contracts;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using Voron.Impl;
 using static Voron.Data.Compact.PrefixTree;
 
 namespace Voron.Data.Compact
@@ -40,9 +41,7 @@ namespace Voron.Data.Compact
     {
         internal sealed class InternalTable
         {
-            private readonly PrefixTree<TValue> owner;
-
-            public const int InvalidNodePosition = -1;
+            private const int InitialCapacity = 64;
 
             private const uint kDeleted = 0xFFFFFFFE;
             private const uint kUnused = 0xFFFFFFFF;
@@ -62,15 +61,21 @@ namespace Voron.Data.Compact
             /// </summary>
             private const int kMinCapacity = 4;
 
-            // TLoadFactor4 - controls hash map load. 4 means 100% load, ie. hashmap will grow
-            // when number of items == capacity. Default value of 6 means it grows when
-            // number of items == capacity * 3/2 (6/4). Higher load == tighter maps, but bigger
-            // risk of collisions.
+            /// <summary>
+            /// LoadFactor - controls hash map load. 4 means 100% load, ie. hashmap will grow
+            /// when number of items == capacity. Default value of 6 means it grows when
+            /// number of items == capacity * 3/2 (6/4). Higher load == tighter maps, but bigger
+            /// risk of collisions.
+            /// </summary>
             public const int LoadFactor = 6;
 
-            private Entry* _entries;
+            private readonly PrefixTree<TValue> owner;
+            private readonly LowLevelTransaction _tx;
+            private readonly PrefixTreeRootMutableState _root;
+            private readonly int _entriesPerPage;
 
             private PrefixTreeTablePageHeader* _header;
+            private PrefixTreeTablePageMutableState _state;
 
             /// <summary>
             /// The current capacity of the dictionary
@@ -78,9 +83,7 @@ namespace Voron.Data.Compact
             public int Capacity
             {
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                get { return this._header->Capacity; }
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                set { this._header->Capacity = value; }
+                get { return this._state.Capacity; }
             }
 
             /// <summary>
@@ -89,20 +92,9 @@ namespace Voron.Data.Compact
             public int Count
             {
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                get { return this._header->Size; }
+                get { return this._state.Size; }
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                set { this._header->Size = value; }
-            }
-
-            /// <summary>
-            /// This is the initial capacity of the dictionary, we will never shrink beyond this point.
-            /// </summary>
-            private int InitialCapacity
-            {
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                get { return this._header->InitialCapacity; }
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                set { this._header->InitialCapacity = value; }
+                set { this._state.Size = value; }
             }
 
             /// <summary>
@@ -111,9 +103,9 @@ namespace Voron.Data.Compact
             private int NumberOfUsed
             {
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                get { return this._header->NumberOfUsed; }
+                get { return this._state.NumberOfUsed; }
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                set { this._header->NumberOfUsed = value; }
+                set { this._state.NumberOfUsed = value; }
             }
 
             /// <summary>
@@ -122,9 +114,9 @@ namespace Voron.Data.Compact
             private int NumberOfDeleted
             {
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                get { return this._header->NumberOfDeleted; }
+                get { return this._state.NumberOfDeleted; }
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                set { this._header->NumberOfDeleted = value; }
+                set { this._state.NumberOfDeleted = value; }
             }
 
             /// <summary>
@@ -133,26 +125,69 @@ namespace Voron.Data.Compact
             private int NextGrowthThreshold
             {
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                get { return this._header->NextGrowthThreshold; }
+                get { return this._state.NextGrowthThreshold; }
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                set { this._header->NextGrowthThreshold = value; }
+                set { this._state.NextGrowthThreshold = value; }
             }
 
-            public InternalTable(PrefixTree<TValue> owner, int initialBucketCount = 256)
+            public InternalTable(PrefixTree<TValue> owner, LowLevelTransaction tx, PrefixTreeRootMutableState root)
             {
                 this.owner = owner;
 
-                int newCapacity = initialBucketCount >= kMinCapacity ? initialBucketCount : kMinCapacity;
-                this._header = this.owner.Initialize(newCapacity);
-                this._entries = this.owner.LoadEntries(_header);
-            }
+                this._tx = tx;
+                this._root = root;
+                this._entriesPerPage = tx.DataPager.PageMaxSpace / sizeof(Entry);
 
-            public InternalTable(PrefixTree<TValue> owner, PrefixTreeTablePageHeader* header)
+                Page page;
+                if ( root.IsAllocated )
+                {
+                    page =  tx.GetPage(root.Table);
+                }
+                else
+                {
+                    page = Allocate(tx, root);
+                    root.Table = page.PageNumber;
+                }                
+
+                this._header = (PrefixTreeTablePageHeader*)page.Pointer;
+                this._state = new PrefixTreeTablePageMutableState(tx, page);                
+            }            
+
+            private Page Allocate(LowLevelTransaction tx, PrefixTreeRootMutableState root, int newCapacity = InitialCapacity)
             {
-                this.owner = owner;
+                // Calculate the next power of 2.
+                newCapacity = Bits.NextPowerOf2(newCapacity);
 
-                this._header = header;
-                this._entries = owner.LoadEntries(_header);
+                // This is the ammount of pages required to allocate the whole table in contiguous disk space.
+                int pages = newCapacity / _entriesPerPage;
+
+                var page = tx.AllocatePage(pages + 1);
+                tx.BreakLargeAllocationToSeparatePages(page.PageNumber);
+
+                var tableHeader = (PrefixTreeTablePageHeader*)page.Pointer;
+                tableHeader->Capacity = newCapacity;
+                tableHeader->NumberOfUsed = 0;
+                tableHeader->NumberOfDeleted = 0;
+                tableHeader->Size = 0;
+                tableHeader->NextGrowthThreshold = newCapacity * 4 / InternalTable.LoadFactor;
+
+                // Initialize the whole memory block with the initial values. 
+                var firstEntriesPage = tx.GetPage(page.PageNumber + 1);                
+                byte* srcPtr = firstEntriesPage.Pointer + sizeof(PageHeader);
+                BlockCopyMemoryHelper.Memset((Entry*)srcPtr, this._entriesPerPage, new Entry(kUnused, kUnused, kInvalidNode));
+
+                // Initialize using a copy trick. Because we are using 4K pages,
+                // the source page will usually be L1 cached improving performance.
+                int length = tx.DataPager.PageMaxSpace;
+                for ( int i = 2; i < pages; i++ )
+                {
+                    var dataPage = tx.GetPage(page.PageNumber + i);
+                    byte* destPtr = dataPage.Pointer + sizeof(PageHeader);
+
+                    Memory.Copy(destPtr, srcPtr, length);
+                }
+                
+                return page;
             }
 
             public void Add(long nodePtr, uint signature)
@@ -169,10 +204,11 @@ namespace Voron.Data.Compact
                 int numProbes = 1;
                 do
                 {
-                    if (_entries[bucket].Signature == signature)
-                        _entries[bucket].Signature |= kDuplicatedMask;
+                    var entry = ReadEntry(bucket);
+                    if (entry->Signature == signature)
+                        entry->Signature |= kDuplicatedMask;
 
-                    uint nHash = _entries[bucket].Hash;
+                    uint nHash = entry->Hash;
                     if (nHash == kUnused)
                     {
                         NumberOfUsed++;
@@ -194,9 +230,7 @@ namespace Voron.Data.Compact
                 while (true);
 
                 SET:
-                this._entries[bucket].Hash = uhash;
-                this._entries[bucket].Signature = signature;
-                this._entries[bucket].NodePtr = nodePtr;
+                WriteEntry(bucket, uhash, signature, nodePtr);
 
 #if DETAILED_DEBUG_H
                 Console.WriteLine(string.Format("Add: {0}, Bucket: {1}, Signature: {2}", node.ToDebugString(this.owner), bucket, signature));
@@ -204,6 +238,46 @@ namespace Voron.Data.Compact
 #if VERIFY
                 VerifyStructure();
 #endif
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private Entry* ReadEntry(int bucket)
+            {
+                return ReadEntry(bucket, this._root.Table);
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private Entry* ReadEntry(int bucket, long tablePage)
+            {
+                int pageNumber = bucket / _entriesPerPage;
+                int entryNumber = bucket % _entriesPerPage;
+
+                Page page = _tx.GetPage(tablePage + pageNumber + 1);
+                var entry = (Entry*)(page.Pointer + sizeof(PageHeader));
+
+                return entry + entryNumber;
+            }
+
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private void WriteEntry(int bucket, uint uhash, uint signature, long nodePtr)
+            {
+                WriteEntry(bucket, this._root.Table, uhash, signature, nodePtr);
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private void WriteEntry(int bucket, long tablePage, uint uhash, uint signature, long nodePtr)
+            {
+                int pageNumber = bucket / _entriesPerPage;
+                int entryNumber = bucket % _entriesPerPage;
+
+                Page page = _tx.GetPage(tablePage + pageNumber + 1);
+                var entry = (Entry*)(page.Pointer + sizeof(PageHeader));
+
+                entry = entry + entryNumber;
+                entry->Hash = kDeleted;
+                entry->Signature = kUnused;
+                entry->NodePtr = kInvalidNode;
             }
 
             public void Remove(long nodePtr, uint signature)
@@ -214,40 +288,34 @@ namespace Voron.Data.Compact
                 int hash = (int)(signature & kHashMask);
                 int bucket = hash % Capacity;
 
-                var entries = _entries;
-
                 int lastDuplicated = -1;
                 uint numProbes = 1; // how many times we've probed
 
+                var entry = ReadEntry(bucket);
                 do
                 {
-                    if ((entries[bucket].Signature & kSignatureMask) == signature)
+                    if ((entry->Signature & kSignatureMask) == signature)
                         lastDuplicated = bucket;
 
-                    if (entries[bucket].NodePtr == nodePtr)
+                    if (entry->NodePtr == nodePtr)
                     {
                         // This is the last element and is not a duplicate, therefore the last one is not a duplicate anymore. 
-                        if ((entries[bucket].Signature & kDuplicatedMask) == 0 && lastDuplicated != -1)
-                            entries[bucket].Signature &= kSignatureMask;
+                        if ((entry->Signature & kDuplicatedMask) == 0 && lastDuplicated != -1)
+                            entry->Signature &= kSignatureMask;
 
-                        if (entries[bucket].Hash < kDeleted)
+                        if (entry->Hash < kDeleted)
                         {
 
 #if DETAILED_DEBUG_H
                             Console.WriteLine(string.Format("Remove: {0}, Bucket: {1}, Signature: {2}", node.ToDebugString(this.owner), bucket, signature));
 #endif
-
-                            entries[bucket].Hash = kDeleted;
-                            entries[bucket].Signature = kUnused;
-                            entries[bucket].NodePtr = kInvalidNode;
+                            WriteEntry(bucket, kDeleted, kUnused, kInvalidNode);
 
                             NumberOfDeleted++;
                             Count--;
                         }
 
                         Contract.Assert(NumberOfDeleted >= Contract.OldValue<int>(NumberOfDeleted));
-                        Contract.Assert(entries[bucket].Hash == kDeleted);
-                        Contract.Assert(entries[bucket].Signature == kUnused);
 
                         if (3 * this.NumberOfDeleted / 2 > this.Capacity - this.NumberOfUsed)
                         {
@@ -259,11 +327,13 @@ namespace Voron.Data.Compact
                     }
 
                     bucket = (int)((bucket + numProbes) % Capacity);
-                    numProbes++;
+                    numProbes++;                    
 
                     Debug.Assert(numProbes < 100);
+
+                    entry = ReadEntry(bucket);
                 }
-                while (entries[bucket].Hash != kUnused);
+                while (entry->Hash != kUnused);
             }
 
             public void Replace(long oldNodePtr, long newNodePtr, uint signature)
@@ -276,15 +346,18 @@ namespace Voron.Data.Compact
 
                 int numProbes = 1;
 
-                while (this._entries[pos].NodePtr != oldNodePtr)
+                var entry = ReadEntry(pos);
+                while (entry->NodePtr != oldNodePtr)
                 {
                     pos = (pos + numProbes) % Capacity;
                     numProbes++;
+
+                    entry = ReadEntry(pos);
                 }
 
                 AssertReplace(pos, hash, newNodePtr);
 
-                this._entries[pos].NodePtr = newNodePtr;
+                WriteEntry(pos, entry->Hash, entry->Signature, newNodePtr);
 
 #if DETAILED_DEBUG_H
                 Console.WriteLine(string.Format("Old: {0}, Bucket: {1}, Signature: {2}", oldNode.ToDebugString(this.owner), pos, hash, signature));
@@ -300,10 +373,12 @@ namespace Voron.Data.Compact
             [Conditional("DEBUG")]
             public void AssertReplace(int pos, int hash, long newNodePtr)
             {
-                Debug.Assert(this._entries[pos].NodePtr != kInvalidNode);
-                Debug.Assert(this._entries[pos].Hash == (uint)hash);
+                var entry = ReadEntry(pos);
 
-                var node = (Node*)this.owner.ReadDirect(this._entries[pos].NodePtr);
+                Debug.Assert(entry->NodePtr != kInvalidNode);
+                Debug.Assert(entry->Hash == (uint)hash);
+
+                var node = (Node*)this.owner.ReadDirect(entry->NodePtr);
                 var newNode = (Node*)this.owner.ReadDirect(newNodePtr);
                 Debug.Assert(this.owner.Handle(node).CompareTo(this.owner.Handle(newNode)) == 0);
             }
@@ -317,14 +392,16 @@ namespace Voron.Data.Compact
 
                 int numProbes = 1;
 
+                var entry = ReadEntry(pos);
+
                 uint nSignature;
                 do
                 {
-                    nSignature = this._entries[pos].Signature;
+                    nSignature = entry->Signature;
 
                     if ((nSignature & kSignatureMask) == signature)
                     {
-                        Node* node = (Node*)this.owner.ReadDirect(this._entries[pos].NodePtr);
+                        Node* node = (Node*)this.owner.ReadDirect(entry->NodePtr);
                         if (this.owner.GetExtentLength(node) == prefixLength)
                         {
                             Node* referenceNodePtr = (Node*)this.owner.ReadDirect(node->ReferencePtr);
@@ -337,8 +414,10 @@ namespace Voron.Data.Compact
                     numProbes++;
 
                     Debug.Assert(numProbes < 100);
+
+                    entry = ReadEntry(pos);
                 }
-                while (this._entries[pos].Hash != kUnused);
+                while (entry->Hash != kUnused);
 
                 return -1;
             }
@@ -352,14 +431,16 @@ namespace Voron.Data.Compact
 
                 int numProbes = 1;
 
+                var entry = ReadEntry(pos);
+
                 uint nSignature;
                 do
                 {
-                    nSignature = this._entries[pos].Signature;
+                    nSignature = entry->Signature;
 
                     if ((nSignature & kSignatureMask) == signature)
                     {                        
-                        var node = (Node*)this.owner.ReadDirect(this._entries[pos].NodePtr);
+                        var node = (Node*)this.owner.ReadDirect(entry->NodePtr);
                         if ((nSignature & kDuplicatedMask) == 0) 
                             return pos;
                         
@@ -376,8 +457,10 @@ namespace Voron.Data.Compact
                     numProbes++;
 
                     Debug.Assert(numProbes < 100);
+
+                    entry = ReadEntry(pos);
                 }
-                while (this._entries[pos].Hash != kUnused);
+                while (entry->Hash != kUnused);
 
                 return -1;
             }
@@ -386,7 +469,7 @@ namespace Voron.Data.Compact
             {
                 get
                 {
-                    return this._entries[position].NodePtr;
+                    return ReadEntry(position)->NodePtr;
                 }
             }
 
@@ -423,16 +506,16 @@ namespace Voron.Data.Compact
 
                 for (int i = 0; i < this.Capacity; i++)
                 {
-                    var entry = this._entries[i];
-                    if (entry.Hash != kUnused)
+                    var entry = ReadEntry(i);
+                    if (entry->Hash != kUnused)
                     {
-                        var node = (Node*)this.owner.ReadDirect(entry.NodePtr);
+                        var node = (Node*)this.owner.ReadDirect(entry->NodePtr);
 
                         builder.Append("Signature:")
-                               .Append(entry.Signature & kSignatureMask)
-                               .Append((entry.Signature & kDuplicatedMask) != 0 ? "-dup" : string.Empty)
+                               .Append(entry->Signature & kSignatureMask)
+                               .Append((entry->Signature & kDuplicatedMask) != 0 ? "-dup" : string.Empty)
                                .Append(" Hash: ")
-                               .Append(entry.Hash)
+                               .Append(entry->Hash)
                                .Append(" Node: ")
                                .Append(this.owner.Handle(node).ToDebugString())
                                .Append(" => ")
@@ -456,11 +539,6 @@ namespace Voron.Data.Compact
                 get { return new ValueCollection(this); }
             }
 
-            public void Clear()
-            {
-                throw new NotImplementedException();
-            }
-
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             private void ResizeIfNeeded()
             {
@@ -475,13 +553,10 @@ namespace Voron.Data.Compact
                 Contract.Requires(newCapacity >= Capacity);
                 Contract.Ensures((Capacity & (Capacity - 1)) == 0);
 
-                var newHeader = this.owner.Initialize(newCapacity);
-                var newEntries = this.owner.LoadEntries(newHeader);
+                var newPage = Allocate(_tx, _root, newCapacity);
+                Rehash(newPage, newCapacity);
 
-                Rehash(newHeader, newEntries);
-
-                this._header = newHeader;
-                this._entries = newEntries;
+                _root.Table = newPage.PageNumber;
             }
 
             private void Shrink(int newCapacity)
@@ -492,53 +567,55 @@ namespace Voron.Data.Compact
                 // Calculate the next power of 2.
                 newCapacity = Math.Max(Bits.NextPowerOf2(newCapacity), InitialCapacity);
 
-                var newHeader = this.owner.Initialize(newCapacity);
-                var newEntries = this.owner.LoadEntries(newHeader);
+                var newPage = Allocate(_tx, _root, newCapacity);
+                Rehash(newPage, newCapacity);
 
-                Rehash(newHeader, newEntries);
-
-                this._header = newHeader;
-                this._entries = newEntries;
+                _root.Table = newPage.PageNumber;
             }
 
-            private void Rehash(PrefixTreeTablePageHeader* header, Entry* entries)
+            private void Rehash(Page newTable, int newCapacity)
             {
-                uint capacity = (uint)header->Capacity;
+                uint capacity = (uint)newCapacity;
 
-                var size = 0;                
+                var size = 0;
                 for (int it = 0; it < capacity; it++)
                 {
-                    uint hash = _entries[it].Hash;
+                    var currentEntry = this.ReadEntry(it);
+                    uint hash = currentEntry->Hash;
                     if (hash >= kDeleted) // No interest for the process of rehashing, we are skipping it.
                         continue;
 
-                    uint signature = _entries[it].Signature & kSignatureMask;
-
-                    uint bucket = hash % capacity;
+                    uint signature = currentEntry->Signature & kSignatureMask;
 
                     uint numProbes = 1;
-                    while (!(entries[bucket].Hash == kUnused))
+                    uint bucket = hash % capacity;
+
+                    var newEntry = this.ReadEntry((int)bucket, newTable.PageNumber);
+                    while (!(newEntry->Hash == kUnused))
                     {
-                        if (entries[bucket].Signature == signature)
-                            entries[bucket].Signature |= kDuplicatedMask;
+                        if (newEntry->Signature == signature)
+                            newEntry->Signature |= kDuplicatedMask;
 
                         bucket = (bucket + numProbes) % capacity;
+                        newEntry = this.ReadEntry((int)bucket, newTable.PageNumber);
+
                         numProbes++;
                     }
 
-                    entries[bucket].Hash = hash;
-                    entries[bucket].Signature = signature;
-                    entries[bucket].NodePtr = _entries[it].NodePtr;
+                    newEntry->Hash = hash;
+                    newEntry->Signature = signature;
+                    newEntry->NodePtr = currentEntry->NodePtr;
 
                     size++;
                 }
 
-                header->Capacity = (int)capacity;
-                header->Size = size;
+                var newHeader = (PrefixTreeTablePageHeader*)(newTable.Pointer + sizeof(PageHeader));
+                newHeader->Capacity = newCapacity;
+                newHeader->Size = size;
 
-                header->NumberOfUsed = size;
-                header->NumberOfDeleted = 0;
-                header->NextGrowthThreshold = (int)capacity * 4 / LoadFactor;
+                newHeader->NumberOfUsed = size;
+                newHeader->NumberOfDeleted = 0;
+                newHeader->NextGrowthThreshold = newCapacity * 4 / LoadFactor;
             }
 
 
@@ -570,13 +647,13 @@ namespace Voron.Data.Compact
                         throw new ArgumentException("The array plus the offset is too small.");
 
                     int count = dictionary.Capacity;
-                    var entries = dictionary._entries;
 
                     for (int i = 0; i < count; i++)
                     {
-                        if (entries[i].Hash < kDeleted)
+                        var entry = dictionary.ReadEntry(i);
+                        if (entry->Hash < kDeleted)
                         {
-                            var node = (Node*)dictionary.owner.ReadDirect(entries[i].NodePtr);
+                            var node = (Node*)dictionary.owner.ReadDirect(entry->NodePtr);
                             array[index++] = dictionary.owner.Handle(node);
                         }                            
                     }
@@ -621,12 +698,12 @@ namespace Voron.Data.Compact
                     {
                         var count = dictionary.Capacity;
 
-                        var entries = dictionary._entries;
                         while (index < count)
                         {
-                            if (entries[index].Hash < kDeleted)
+                            var entry = dictionary.ReadEntry(index);
+                            if (entry->Hash < kDeleted)
                             {
-                                var node = (Node*)dictionary.owner.ReadDirect(entries[index].NodePtr);
+                                var node = (Node*)dictionary.owner.ReadDirect(entry->NodePtr);
                                 currentKey = dictionary.owner.Handle(node);
                                 index++;
 
@@ -697,12 +774,12 @@ namespace Voron.Data.Compact
                         throw new ArgumentException("The array plus the offset is too small.");
 
                     int count = dictionary.Capacity;
-
-                    var entries = dictionary._entries;
+                   
                     for (int i = 0; i < count; i++)
                     {
-                        if (entries[i].Hash < kDeleted)
-                            array[index++] = entries[i].NodePtr;
+                        var entry = dictionary.ReadEntry(index);
+                        if (entry->Hash < kDeleted)
+                            array[index++] = entry->NodePtr;
                     }
                 }
 
@@ -743,13 +820,13 @@ namespace Voron.Data.Compact
                     public bool MoveNext()
                     {
                         var count = dictionary.Capacity;
-
-                        var entries = dictionary._entries;
+                                               
                         while (index < count)
                         {
-                            if (entries[index].Hash < kDeleted)
+                            var entry = dictionary.ReadEntry(index);
+                            if (entry->Hash < kDeleted)
                             {
-                                currentValue = entries[index].NodePtr;
+                                currentValue = entry->NodePtr;
                                 index++;
                                 return true;
                             }
@@ -808,19 +885,10 @@ namespace Voron.Data.Compact
                     {
                         uint hash = Hashing.Iterative.XXHash32.CalculateInline((byte*)bitsPtr, words * sizeof(ulong), state, lcp / BitVector.BitsPerByte);
 
-                        // #if ALTERNATIVE_HASHING
                         remainingWord = ((remainingWord) >> shift) << shift;
                         ulong intermediate = Hashing.CombineInline(remainingWord, ((ulong)remaining) << 32 | (ulong)hash);
 
                         hash = (uint)intermediate ^ (uint)(intermediate >> 32);
-                        //#else
-                        //                        uint* combine = stackalloc uint[4];
-                        //                        ((ulong*)combine)[0] = ((remainingWord) >> shift) << shift;
-                        //                        combine[2] = (uint)remaining;
-                        //                        combine[3] = hash;
-
-                        //                        hash = Hashing.XXHash32.CalculateInline((byte*)combine, 4 * sizeof(uint));
-                        //#endif
 
 #if DETAILED_DEBUG_H
                         Console.WriteLine(string.Format("\tHash -> Hash: {0}, Remaining: {2}, Bits({1}), Vector:{3}", hash, remaining, remainingWord, vector.SubVector(0, length).ToBinaryString()));
@@ -840,11 +908,14 @@ namespace Voron.Data.Compact
             internal void VerifyStructure()
             {
                 int count = 0;
+                Entry* entry;
+
                 for (int i = 0; i < this.Capacity; i++)
                 {
-                    if (this._entries[i].NodePtr != kInvalidNode)
+                    entry = ReadEntry(i);
+                    if (entry->NodePtr != kInvalidNode)
                     {
-                        var node = (Node*) this.owner.ReadDirect(this._entries[i].NodePtr);
+                        var node = (Node*) this.owner.ReadDirect(entry->NodePtr);
 
                         var handle = this.owner.Handle(node);
                         var hashState = Hashing.Iterative.XXHash32.Preprocess(handle.Bits);
@@ -853,9 +924,11 @@ namespace Voron.Data.Compact
 
                         int position = GetExactPosition(handle, handle.Count, hash & kSignatureMask);
 
+                        var entryAtPosition = ReadEntry(position);
+
                         Verify(() => position != -1);
-                        Verify(() => this._entries[i].NodePtr == this._entries[position].NodePtr);
-                        Verify(() => this._entries[i].Hash == (hash & kHashMask & kSignatureMask));
+                        Verify(() => entry->NodePtr == entryAtPosition->NodePtr);
+                        Verify(() => entry->Hash == (hash & kHashMask & kSignatureMask));
                         Verify(() => i == position);
 
                         count++;
@@ -870,22 +943,27 @@ namespace Voron.Data.Compact
                 var overallHashes = new HashSet<uint>();
                 int start = 0;
                 int first = -1;
-                while (this._entries[start].NodePtr != kInvalidNode)
+
+                entry = ReadEntry(start);
+                while (entry->NodePtr != kInvalidNode)
                 {
-                    Verify(() => this._entries[start].Hash != kUnused || this._entries[start].Hash != kDeleted);
-                    Verify(() => this._entries[start].Signature != kUnused);
+                    Verify(() => entry->Hash != kUnused || entry->Hash != kDeleted);
+                    Verify(() => entry->Signature != kUnused);
 
                     start = (start + 1) % Capacity;
+                    entry = ReadEntry(start);
                 }
 
                 do
                 {
-                    while (this._entries[start].NodePtr == kInvalidNode)
+                    entry = ReadEntry(start);
+                    while (entry->NodePtr == kInvalidNode)
                     {
-                        Verify(() => this._entries[start].Hash == kUnused || this._entries[start].Hash == kDeleted);
-                        Verify(() => this._entries[start].Signature == kUnused);
+                        Verify(() => entry->Hash == kUnused || entry->Hash == kDeleted);
+                        Verify(() => entry->Signature == kUnused);
 
                         start = (start + 1) % Capacity;
+                        entry = ReadEntry(start);
                     }
 
                     if (first == -1)
@@ -894,12 +972,15 @@ namespace Voron.Data.Compact
                         break;
 
                     int end = start;
-                    while (this._entries[end].NodePtr != kInvalidNode)
+
+                    entry = ReadEntry(end);
+                    while (entry->NodePtr != kInvalidNode)
                     {
-                        Verify(() => this._entries[end].Hash != kUnused || this._entries[start].Hash != kDeleted);
-                        Verify(() => this._entries[end].Signature != kUnused && this._entries[end].Signature != kDuplicatedMask);
+                        Verify(() => entry->Hash != kUnused || entry->Hash != kDeleted);
+                        Verify(() => entry->Signature != kUnused && entry->Signature != kDuplicatedMask);
 
                         end = (end + 1) % Capacity;
+                        entry = ReadEntry(end);
                     }
 
                     var hashesSeen = new HashSet<uint>();
@@ -911,9 +992,10 @@ namespace Voron.Data.Compact
                         if (pos < 0)
                             break;
 
-                        bool newSignature = signaturesSeen.Add(this._entries[pos].Signature & kSignatureMask);
-                        Verify(() => newSignature != ((this._entries[pos].Signature & kDuplicatedMask) != 0));
-                        hashesSeen.Add(this._entries[pos].Hash);
+                        entry = ReadEntry(pos);
+                        bool newSignature = signaturesSeen.Add(entry->Signature & kSignatureMask);
+                        Verify(() => newSignature != ((entry->Signature & kDuplicatedMask) != 0));
+                        hashesSeen.Add(entry->Hash);
                     }
 
                     foreach (var hash in hashesSeen)
@@ -952,29 +1034,6 @@ namespace Voron.Data.Compact
                     }
                 }
             }
-        }
-
-        private Entry* LoadEntries(PrefixTreeTablePageHeader* header)
-        {
-            throw new NotImplementedException();
-        }
-
-        private PrefixTreeTablePageHeader* Initialize(int newCapacity)
-        {
-            // Calculate the next power of 2.
-            newCapacity = Bits.NextPowerOf2(newCapacity);
-
-            PrefixTreeTablePageHeader* tableHeader = null;
-
-            throw new NotImplementedException();
-
-            tableHeader->Capacity = newCapacity;
-            tableHeader->NumberOfUsed = 0;
-            tableHeader->NumberOfDeleted = 0;
-            tableHeader->Size = 0;
-            tableHeader->NextGrowthThreshold = newCapacity * 4 / InternalTable.LoadFactor;
-
-            return tableHeader;
         }
 
         internal byte* ReadDirect(long pointer)

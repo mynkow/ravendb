@@ -7,8 +7,14 @@ namespace Voron.Data.Compact
     [StructLayout(LayoutKind.Sequential)]
     public struct PrefixTreeRootHeader
     {
+        /// <summary>
+        /// The root header page for the tree. 
+        /// </summary>
         public long Root;
-        public long Table;
-        public int Depth;
+
+        /// <summary>
+        /// The table header page for the tree.
+        /// </summary>
+        public long Table;       
     }
 }

@@ -18,11 +18,6 @@ namespace Voron.Data.Compact
         public int Capacity;
 
         /// <summary>
-        /// This is the initial capacity of the dictionary, we will never shrink beyond this point.
-        /// </summary>
-        public int InitialCapacity;
-
-        /// <summary>
         /// This is the real counter of how many items are in the hash-table (regardless of buckets)
         /// </summary>
         public int Size;
