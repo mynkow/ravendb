@@ -106,8 +106,8 @@ namespace Voron.Data.Compact
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
             {
-                // if (_inWriteTransaction == false)
-                //    throw new InvalidOperationException("Invalid operation outside of a write transaction");
+                if (_tx.Flags != TransactionFlags.ReadWrite)
+                    throw new InvalidOperationException("Invalid operation outside of a write transaction");
                 _isModified = value;
             }
         }
