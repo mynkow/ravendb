@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace Voron.Data.Compact
 {
-    public unsafe static partial class PrefixTree
+    public unsafe partial class PrefixTree
     {
         public enum NodeType : byte
         {
@@ -130,133 +130,6 @@ namespace Voron.Data.Compact
 
             public bool IsLeaf => Type == NodeType.Leaf;
             public bool IsInternal => Type == NodeType.Leaf;
-        }
-
-        /// <summary>
-        /// The name of a node, is the string deprived of the string stored at it. Page 163 of [1]
-        /// </summary>
-        public static BitVector Name<T>(this PrefixTree<T> tree, Node* @this)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// The handle of a node is the prefix of the name whose length is 2-fattest number in the skip interval of it. If the
-        /// skip interval is empty (which can only happen at the root) we define the handle to be the empty string/vector.
-        /// </summary>
-        public static BitVector Handle<T>(this PrefixTree<T> tree, Node* @this)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// The handle of a node is the prefix of the name whose length is 2-fattest number in the skip interval of it. If the
-        /// skip interval is empty (which can only happen at the root) we define the handle to be the empty string/vector.
-        /// </summary>
-        public static BitVector Handle<T>(this PrefixTree<T> tree, ref Node @this)
-        {
-            fixed (Node* node = &@this)
-            {
-                return Handle(tree, node);
-            }
-        }
-
-        /// <summary>
-        /// The handle of a node is the prefix of the name whose length is 2-fattest number in the skip interval of it. If the
-        /// skip interval is empty (which can only happen at the root) we define the handle to be the empty string/vector.
-        /// </summary>
-        public static BitVector Handle<T>(this PrefixTree<T> tree, ref Internal @this)
-        {
-            fixed (Internal* node = &@this)
-            {
-                return Handle(tree, (Node*)node);
-            }
-        }
-
-        /// <summary>
-        /// The handle of a node is the prefix of the name whose length is 2-fattest number in the skip interval of it. If the
-        /// skip interval is empty (which can only happen at the root) we define the handle to be the empty string/vector.
-        /// </summary>
-        public static BitVector Handle<T>(this PrefixTree<T> tree, ref Leaf @this)
-        {
-            fixed (Leaf* node = &@this)
-            {
-                return Handle(tree, (Node*)node);
-            }
-        }
-
-        /// <summary>
-        /// The extent of a node, is the longest common prefix of the strings represented by the leaves that are descendants of it.
-        /// </summary>            
-        public static BitVector Extent<T>(this PrefixTree<T> tree, Node* @this)
-        {
-            throw new NotImplementedException();
-        }
-
-
-        public static int GetExtentLength<T>(this PrefixTree<T> tree, Node* @this)
-        {
-            throw new NotImplementedException();
-        }
-
-
-        public static int GetJumpLength<T>(this PrefixTree<T> tree, Internal* @this)
-        {
-            throw new NotImplementedException();
-        }
-
-        public static bool IsExitNodeOf<T>(this PrefixTree<T> tree, Node* @this, int length, int lcpLength)
-        {
-            return @this->NameLength <= lcpLength && (lcpLength < tree.GetExtentLength(@this) || lcpLength == length);
-        }
-
-        public static Leaf* GetRightLeaf<T>(this PrefixTree<T> tree, Node* @this)
-        {
-            if (@this->IsLeaf)
-                return (Leaf*)@this;
-
-            Node* node = @this;
-            do
-            {
-                node = (Node*)tree.ReadDirect(((Internal*)node)->JumpRightPtr);
-            }
-            while (node->IsInternal);
-
-            return (Leaf*)node;
-        }
-
-        public static Leaf* GetLeftLeaf<T>(PrefixTree<T> tree, Node* @this )
-        {
-            if (@this->IsLeaf)
-                return (Leaf*)@this;
-
-            Node* node = @this;
-            do
-            {
-                node = (Node*)tree.ReadDirect(((Internal*)node)->JumpLeftPtr);
-            }
-            while (node->IsInternal);
-
-            return (Leaf*)node;
-        }
-
-        public static bool Intersects(Node* @this, int x)
-        {
-            if (@this->IsInternal)
-                return x >= @this->NameLength && x <= ((Internal*)@this)->ExtentLength;
-            
-            return x >= @this->NameLength;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int TwoFattest(int a, int b)
-        {
-            return -1 << Bits.MostSignificantBit(a ^ b) & b;
-        }
-
-        public static string ToDebugString<T>(this PrefixTree<T> tree, Node* @this)
-        {
-            throw new NotImplementedException();
-        }
+        }        
     }
 }

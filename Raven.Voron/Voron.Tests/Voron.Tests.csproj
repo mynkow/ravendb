@@ -151,7 +151,8 @@
     <Compile Include="MultiTreeSize.cs" />
     <Compile Include="MultiValueTree.cs" />
     <Compile Include="Optimizations\Writes.cs" />
-    <Compile Include="PrefixTree\PrefixTreeStorageTests.cs" />
+    <Compile Include="PrefixTree\NodesTable.cs" />
+    <Compile Include="PrefixTree\PrefixTreeStorage.cs" />
     <Compile Include="PrefixTree\SimplePrefixTree.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RawData\SmallDataSection.cs" />

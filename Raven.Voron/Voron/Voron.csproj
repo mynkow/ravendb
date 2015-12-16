@@ -87,6 +87,7 @@
     <Compile Include="Data\Compact\PrefixTree.Nodes.cs" />
     <Compile Include="Data\Compact\PrefixTree.NodesTable.cs" />
     <Compile Include="Data\Compact\PrefixTree.Constants.cs" />
+    <Compile Include="Data\Compact\PrefixTreeOperations.cs" />
     <Compile Include="Data\Compact\PrefixTreePage.cs" />
     <Compile Include="Data\Compact\PrefixTreePageHeader.cs" />
     <Compile Include="Data\Compact\PrefixTreeRootMutableState.cs" />

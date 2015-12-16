@@ -17,14 +17,14 @@ namespace Voron.Data.Compact.Tests
         {
             using (var tx = Env.WriteTransaction())
             {
-                var tree = tx.PrefixTreeFor<SampleData>(Name);
+                var tree = tx.PrefixTreeFor(Name);
 
                 tx.Commit();
             }
 
             using (var tx = Env.ReadTransaction())
             {
-                var tree = tx.PrefixTreeFor<SampleData>(Name);
+                var tree = tx.PrefixTreeFor(Name);
 
                 Assert.Equal(0, tree.Count);
                 Assert.Null(tree.FirstKeyOrDefault());

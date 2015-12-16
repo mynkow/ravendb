@@ -14,7 +14,7 @@ using static Voron.Data.Compact.PrefixTree;
 
 namespace Voron.Data.Compact
 {
-    partial class PrefixTree
+    unsafe partial class PrefixTree
     {
         [StructLayout(LayoutKind.Explicit, Pack = 1, Size = 16)]
         internal unsafe struct Entry
@@ -35,10 +35,7 @@ namespace Voron.Data.Compact
                 this.NodePtr = nodePtr;
             }
         }
-    }
 
-    unsafe partial class PrefixTree<TValue>
-    {
         internal sealed class InternalTable
         {
             private const int InitialCapacity = 64;
@@ -69,7 +66,7 @@ namespace Voron.Data.Compact
             /// </summary>
             public const int LoadFactor = 6;
 
-            private readonly PrefixTree<TValue> owner;
+            private readonly PrefixTree owner;
             private readonly LowLevelTransaction _tx;
             private readonly PrefixTreeRootMutableState _root;
             private readonly int _entriesPerPage;
@@ -130,7 +127,7 @@ namespace Voron.Data.Compact
                 set { this._state.NextGrowthThreshold = value; }
             }
 
-            public InternalTable(PrefixTree<TValue> owner, LowLevelTransaction tx, PrefixTreeRootMutableState root)
+            public InternalTable(PrefixTree owner, LowLevelTransaction tx, PrefixTreeRootMutableState root)
             {
                 this.owner = owner;
 
@@ -473,7 +470,7 @@ namespace Voron.Data.Compact
                 }
             }
 
-            internal string DumpNodesTable(PrefixTree<TValue> tree)
+            internal string DumpNodesTable(PrefixTree tree)
             {
                 var builder = new StringBuilder();
 

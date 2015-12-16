@@ -30,7 +30,7 @@ namespace Voron.Data.Compact.Tests
         }
 
 
-        public static void DumpKeys<T>(PrefixTree<T> tree) where T : IEquatable<T>
+        public static void DumpKeys(PrefixTree tree)
         {
             Console.WriteLine("Tree stored order");
 
@@ -44,7 +44,7 @@ namespace Voron.Data.Compact.Tests
             //}
         }
 
-        public static void DumpTree<T>(PrefixTree<T> tree) where T : IEquatable<T>
+        public static void DumpTree(PrefixTree tree)
         {
             if (tree.Count == 0)
             {
@@ -56,7 +56,7 @@ namespace Voron.Data.Compact.Tests
             }
         }
 
-        private static int DumpNodes<T>(PrefixTree<T> tree, PrefixTree.Node* node, PrefixTree.Node* parent, int nameLength, int depth) where T : IEquatable<T>
+        private static int DumpNodes(PrefixTree tree, PrefixTree.Node* node, PrefixTree.Node* parent, int nameLength, int depth)
         {
             if (node == null)
                 return 0;
@@ -88,7 +88,7 @@ namespace Voron.Data.Compact.Tests
         }
 
 
-        public static void StructuralVerify<T>(PrefixTree<T> tree) where T : IEquatable<T>
+        public static void StructuralVerify(PrefixTree tree) 
         {
             throw new NotImplementedException();
 
@@ -172,11 +172,11 @@ namespace Voron.Data.Compact.Tests
             //Assert.DoesNotThrow(() => tree.NodesTable.VerifyStructure());
         }
 
-        private static int VisitNodes<T>(PrefixTree<T> tree, PrefixTree.Node* node,
+        private static int VisitNodes(PrefixTree tree, PrefixTree.Node* node,
                                      PrefixTree.Node* parent, int nameLength,
                                      HashSet<long> nodes,
                                      HashSet<long> leaves,
-                                     HashSet<long> references) where T : IEquatable<T>
+                                     HashSet<long> references) 
         {
             if (node == null)
                 return 0;

@@ -15,18 +15,16 @@ namespace Voron.Data.Compact
     /// As described in "Dynamic Z-Fast Tries" by Belazzougui, Boldi and Vigna in String Processing and Information
     /// Retrieval. Lecture notes on Computer Science. Volume 6393, 2010, pp 159-172 [1]
     /// </summary>
-    public unsafe partial class PrefixTree<TValue>
+    public unsafe partial class PrefixTree
     {
         private readonly LowLevelTransaction _tx;
-        private readonly Tree _parent;
-        private readonly Slice _treeName;
+        private readonly Tree _parent;        
 
-        public Node* Root
-        {
-            get { throw new NotImplementedException(); }
-        }
+        private PrefixTreeRootMutableState _state;
 
-        public long Count
+        public string Name { get; set; }
+
+        internal Node* Root
         {
             get { throw new NotImplementedException(); }
         }
@@ -36,16 +34,32 @@ namespace Voron.Data.Compact
             get { throw new NotImplementedException(); }
         }
 
+        public long Count
+        {
+            get { throw new NotImplementedException(); }
+        }
+
+
         public PrefixTree(LowLevelTransaction tx, Tree parent, Slice treeName)
         {
             _tx = tx;
             _parent = parent;
-            _treeName = treeName;
+            Name = treeName.ToString();
 
-            var header = (PrefixTreeRootHeader*)_parent.DirectRead(_treeName);
-            if (header == null)
-                return;            
-        }        
+            var header = (PrefixTreeRootHeader*)parent.DirectRead(treeName);
+            _state = new PrefixTreeRootMutableState(tx, header);
+        }
+
+        public static PrefixTree Create(LowLevelTransaction tx)
+        {
+            throw new NotImplementedException();
+        }
+
+        public static PrefixTree Open( LowLevelTransaction tx, PrefixTreeRootHeader* header )
+        {
+            throw new NotImplementedException();
+        }
+
 
         public void Add(Slice key, Stream value, ushort? version = null)
         {
@@ -56,6 +70,17 @@ namespace Voron.Data.Compact
         {
             throw new NotImplementedException();
         }
+
+        public void Add(Slice key, byte[] value, ushort? version = null)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Add<TValue> (Slice key, TValue value, ushort? version = null )
+        {
+            throw new NotImplementedException();
+        }
+
 
         public void Delete(Slice key, ushort? version = null)
         {

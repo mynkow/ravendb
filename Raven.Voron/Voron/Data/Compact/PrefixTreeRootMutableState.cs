@@ -16,19 +16,13 @@ namespace Voron.Data.Compact
 
         private bool _isModified;
 
-        public PrefixTreeRootMutableState(LowLevelTransaction tx, Page page)
+        public PrefixTreeRootMutableState(LowLevelTransaction tx, PrefixTreeRootHeader* header)
         {
             Debug.Assert(tx != null);
-            Debug.Assert(page != null);
-            Debug.Assert(page.Pointer != null);
 
             this._tx = tx;
-            this._header = (PrefixTreeRootHeader*)(page.Pointer + sizeof(PageHeader));
-
-            this.PageNumber = page.PageNumber;
+            this._header = header;
         }
-
-        public long PageNumber { get; private set; }
 
         /// <summary>
         /// The root header page for the tree. 
