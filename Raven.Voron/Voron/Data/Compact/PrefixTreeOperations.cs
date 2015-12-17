@@ -79,6 +79,12 @@ namespace Voron.Data.Compact
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetHandleLength(this PrefixTree tree, Node* @this)
+        {
+            throw new NotImplementedException();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int GetExtentLength(this PrefixTree tree, Node* @this)
         {
             throw new NotImplementedException();

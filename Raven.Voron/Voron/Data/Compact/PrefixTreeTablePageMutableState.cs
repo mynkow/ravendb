@@ -23,7 +23,7 @@ namespace Voron.Data.Compact
             Debug.Assert(page.Pointer != null);
 
             this._tx = tx;
-            this._header = (PrefixTreeTablePageHeader*)(page.Pointer + sizeof(PageHeader));
+            this._header = (PrefixTreeTablePageHeader*)page.Pointer;
 
             this.PageNumber = page.PageNumber;
         }

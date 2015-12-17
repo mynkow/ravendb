@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Sparrow;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using Voron.Data.BTrees;
 using Voron.Impl;
@@ -17,9 +19,11 @@ namespace Voron.Data.Compact
     /// </summary>
     public unsafe partial class PrefixTree
     {
-        private readonly LowLevelTransaction _tx;
-        private readonly Tree _parent;        
+        private readonly static ObjectPool<Stack<long>> nodesStackPool = new ObjectPool<Stack<long>>(() => new Stack<long>());
 
+        private readonly LowLevelTransaction _tx;
+        private readonly Tree _parent;
+        
         private PrefixTreeRootMutableState _state;
 
         public string Name { get; set; }

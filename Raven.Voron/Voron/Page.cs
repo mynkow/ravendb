@@ -17,6 +17,12 @@ namespace Voron
             Source = source;
         }
 
+        public byte* DataPointer
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return Pointer + sizeof(PageHeader); }
+        }
+
         public long PageNumber
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -70,9 +70,7 @@ namespace Voron.Data.Compact
             private readonly LowLevelTransaction _tx;
             private readonly PrefixTreeRootMutableState _root;
             private readonly int _entriesPerPage;
-
-            private PrefixTreeTablePageHeader* _header;
-            private PrefixTreeTablePageMutableState _state;
+            private readonly PrefixTreeTablePageMutableState _state;
 
             /// <summary>
             /// The current capacity of the dictionary
@@ -146,7 +144,6 @@ namespace Voron.Data.Compact
                     root.Table = page.PageNumber;
                 }                
 
-                this._header = (PrefixTreeTablePageHeader*)page.Pointer;
                 this._state = new PrefixTreeTablePageMutableState(tx, page);                
             }            
 
@@ -170,7 +167,7 @@ namespace Voron.Data.Compact
 
                 // Initialize the whole memory block with the initial values. 
                 var firstEntriesPage = tx.GetPage(page.PageNumber + 1);                
-                byte* srcPtr = firstEntriesPage.Pointer + sizeof(PageHeader);
+                byte* srcPtr = firstEntriesPage.DataPointer;
                 BlockCopyMemoryHelper.Memset((Entry*)srcPtr, this._entriesPerPage, new Entry(kUnused, kUnused, kInvalidNode));
 
                 // Initialize using a copy trick. Because we are using 4K pages,
@@ -179,7 +176,7 @@ namespace Voron.Data.Compact
                 for ( int i = 2; i < pages; i++ )
                 {
                     var dataPage = tx.GetPage(page.PageNumber + i);
-                    byte* destPtr = dataPage.Pointer + sizeof(PageHeader);
+                    byte* destPtr = dataPage.DataPointer + sizeof(PageHeader);
 
                     Memory.Copy(destPtr, srcPtr, length);
                 }
@@ -250,7 +247,7 @@ namespace Voron.Data.Compact
                 int entryNumber = bucket % _entriesPerPage;
 
                 Page page = _tx.GetPage(tablePage + pageNumber + 1);
-                var entry = (Entry*)(page.Pointer + sizeof(PageHeader));
+                var entry = (Entry*)page.DataPointer;
 
                 return entry + entryNumber;
             }
@@ -269,7 +266,7 @@ namespace Voron.Data.Compact
                 int entryNumber = bucket % _entriesPerPage;
 
                 Page page = _tx.GetPage(tablePage + pageNumber + 1);
-                var entry = (Entry*)(page.Pointer + sizeof(PageHeader));
+                var entry = (Entry*)page.Pointer;
 
                 entry = entry + entryNumber;
                 entry->Hash = kDeleted;
@@ -606,7 +603,7 @@ namespace Voron.Data.Compact
                     size++;
                 }
 
-                var newHeader = (PrefixTreeTablePageHeader*)(newTable.Pointer + sizeof(PageHeader));
+                var newHeader = (PrefixTreeTablePageHeader*)newTable.Pointer;
                 newHeader->Capacity = newCapacity;
                 newHeader->Size = size;
 

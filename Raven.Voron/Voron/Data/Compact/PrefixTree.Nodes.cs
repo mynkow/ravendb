@@ -14,8 +14,8 @@ namespace Voron.Data.Compact
     {
         public enum NodeType : byte
         {
-            Internal = 0,
-            Leaf = 1
+            Internal = 1,
+            Leaf = 2
         }
 
         [StructLayout(LayoutKind.Explicit, Pack = 1, Size = 48)]
@@ -33,6 +33,9 @@ namespace Voron.Data.Compact
             /// </summary>
             [FieldOffset(4)]
             public long ReferencePtr;
+
+            [FieldOffset(12)]
+            public fixed byte Padding[36]; // to 48 bytes
 
             public bool IsLeaf => Type == NodeType.Leaf;
             public bool IsInternal => Type == NodeType.Leaf;
@@ -85,6 +88,9 @@ namespace Voron.Data.Compact
             [FieldOffset(44)]
             public short ExtentLength;
 
+            [FieldOffset(46)]
+            public fixed byte Padding[2]; // to 48 bytes
+
             public bool IsLeaf => Type == NodeType.Leaf;
             public bool IsInternal => Type == NodeType.Leaf;
         }
@@ -127,6 +133,9 @@ namespace Voron.Data.Compact
             /// </summary>
             [FieldOffset(32)]
             public long DataPtr;
+
+            [FieldOffset(40)]
+            public fixed byte Padding[8]; // to 48 bytes
 
             public bool IsLeaf => Type == NodeType.Leaf;
             public bool IsInternal => Type == NodeType.Leaf;

@@ -222,9 +222,9 @@ namespace Voron.Impl
             return new FixedSizeTree(LowLevelTransaction, LowLevelTransaction.RootObjects, treeName, valSize);
         }
 
-        public PrefixTree<T> PrefixTreeFor<T>(Slice treeName)
+        public PrefixTree PrefixTreeFor(Slice treeName)
         {
-            return new PrefixTree<T>(LowLevelTransaction, LowLevelTransaction.RootObjects, treeName);
+            return new PrefixTree(LowLevelTransaction, LowLevelTransaction.RootObjects, treeName);
         }
 
 
@@ -238,6 +238,7 @@ namespace Voron.Impl
         }
     }
 
+    [Obsolete("Use the new extension methods instead.")]
     public static class TransactionLegacyExtensions
     {
         public static TreePage GetReadOnlyTreePage(this LowLevelTransaction tx, long pageNumber)

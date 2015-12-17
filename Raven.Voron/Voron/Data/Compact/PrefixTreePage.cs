@@ -26,17 +26,17 @@ namespace Voron.Data.Compact
             PageSize = pageSize;
         }
 
-        public long PhysicalPage
+        public long PageNumber
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return Header->PhysicalPage; }
+            get { return Header->PageNumber; }
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            set { Header->PhysicalPage = value; }
+            set { Header->PageNumber = value; }
         }
 
         public override string ToString()
         {
-            return $"#{PhysicalPage}";
+            return $"#{PageNumber}";
         }
     }
 }

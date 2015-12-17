@@ -84,6 +84,7 @@
     <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Data\Compact\PrefixTree.InternalTypes.cs" />
     <Compile Include="Data\Compact\PrefixTree.Nodes.cs" />
     <Compile Include="Data\Compact\PrefixTree.NodesTable.cs" />
     <Compile Include="Data\Compact\PrefixTree.Constants.cs" />
@@ -198,7 +199,6 @@
     <Compile Include="Data\BTrees\TreePageSplitter.cs" />
     <Compile Include="Data\BTrees\Tree.cs" />
     <Compile Include="Impl\SizeOf.cs" />
-    <Compile Include="Data\BTrees\TreeDataInTransaction.cs" />
     <Compile Include="Data\BTrees\TreeMutableState.cs" />
     <Compile Include="Data\BTrees\TreeRebalancer.cs" />
     <Compile Include="Util\AsyncManualResetEvent.cs" />
