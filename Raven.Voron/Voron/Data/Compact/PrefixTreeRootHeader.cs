@@ -8,13 +8,28 @@ namespace Voron.Data.Compact
     public struct PrefixTreeRootHeader
     {
         /// <summary>
-        /// The root header page for the tree. 
+        /// The root page for the tree. The first element in the root page is the actual Root Node.
         /// </summary>
-        public long Root;
+        public long RootPage;
+
+        /// <summary>
+        /// The head node pointer for the tree. 
+        /// </summary>
+        public long Head;
+
+        /// <summary>
+        /// The tail node pointer for the tree. 
+        /// </summary>
+        public long Tail;
 
         /// <summary>
         /// The table header page for the tree.
         /// </summary>
-        public long Table;       
+        public long Table;
+
+        /// <summary>
+        /// This is the amount of elements already stored in the tree. 
+        /// </summary>
+        public long Items;
     }
 }

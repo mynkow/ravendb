@@ -12,7 +12,7 @@ namespace Voron.Data.Compact
         /// <summary>
         /// The cutpoint for a string x with respect to the trie is the length of the longest common prefix between x and exit(x).
         /// </summary>
-        private unsafe class CutPoint
+        private sealed unsafe class CutPoint
         {
             /// <summary>
             /// Longest Common Prefix (or LCP) between the Exit(x) and x
@@ -43,15 +43,9 @@ namespace Voron.Data.Compact
                 this.SearchKey = searchKey;
             }
 
-            /// <summary>
-            /// There are two cases. We say that x cuts high if the cutpoint is strictly smaller than |handle(exit(x))|, cuts low otherwise. Page 165 of [1]
-            /// </summary>
-            /// <remarks>Only when the cut is low, the handle(exit(x)) is a prefix of x.</remarks>
             public bool IsCutLow(PrefixTree owner)
             {
-                // Theorem 3: Page 165 of [1]
-                var handleLength = owner.GetHandleLength(this.Exit);
-                return this.LongestPrefix >= handleLength;
+                return owner.IsCutLow(this.Exit, this.LongestPrefix);
             }
 
             public bool IsRightChild
@@ -60,7 +54,7 @@ namespace Voron.Data.Compact
             }
         }
 
-        private unsafe class ExitNode
+        private sealed unsafe class ExitNode
         {
             /// <summary>
             /// Longest Common Prefix (or LCP) between the Exit(x) and x
@@ -79,11 +73,6 @@ namespace Voron.Data.Compact
                 this.LongestPrefix = lcp;
                 this.Exit = exit;
                 this.SearchKey = v;
-            }
-
-            public bool IsLeaf
-            {
-                get { return this.Exit->IsLeaf; }
             }
         }
     }

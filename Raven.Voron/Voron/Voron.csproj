@@ -23,7 +23,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>TRACE;DEBUG</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;DETAILED_DEBUG</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
@@ -88,6 +88,7 @@
     <Compile Include="Data\Compact\PrefixTree.Nodes.cs" />
     <Compile Include="Data\Compact\PrefixTree.NodesTable.cs" />
     <Compile Include="Data\Compact\PrefixTree.Constants.cs" />
+    <Compile Include="Data\Compact\PrefixTreeDataHeader.cs" />
     <Compile Include="Data\Compact\PrefixTreeOperations.cs" />
     <Compile Include="Data\Compact\PrefixTreePage.cs" />
     <Compile Include="Data\Compact\PrefixTreePageHeader.cs" />

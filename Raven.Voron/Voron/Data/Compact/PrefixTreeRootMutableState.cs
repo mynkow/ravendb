@@ -27,14 +27,14 @@ namespace Voron.Data.Compact
         /// <summary>
         /// The root header page for the tree. 
         /// </summary>
-        public long Root
+        public long RootPage
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return _header->Root; }
+            get { return _header->RootPage; }
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
             {
-                _header->Root = value;
+                _header->RootPage = value;
                 IsModified = true;
             }
         }
@@ -54,6 +54,51 @@ namespace Voron.Data.Compact
             }
         }
 
+        /// <summary>
+        /// The head node pointer for the tree. 
+        /// </summary>
+        public long Head
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return _header->Head; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set
+            {
+                _header->Head = value;
+                IsModified = true;
+            }
+        }
+
+        /// <summary>
+        /// The tail node pointer for the tree. 
+        /// </summary>
+        public long Tail
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return _header->Tail; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set
+            {
+                _header->Tail = value;
+                IsModified = true;
+            }
+        }
+
+        /// <summary>
+        /// This is the amount of elements already stored in the tree. 
+        /// </summary>
+        public long Items
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return _header->Items; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set
+            {
+                _header->Items = value;
+                IsModified = true;
+            }
+        }
+
         public bool IsModified
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -66,7 +111,5 @@ namespace Voron.Data.Compact
                 _isModified = value;
             }
         }
-
-        public bool IsAllocated => Root <= 0 && Table <= 0;
     }
 }

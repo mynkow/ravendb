@@ -17,7 +17,17 @@ namespace Voron.Data.Compact
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static BitVector Name(this PrefixTree tree, Node* @this)
         {
-            throw new NotImplementedException();
+            if (@this->IsInternal)
+            {
+                var refNode = tree.ReadNodeByName(((Internal*)@this)->ReferencePtr);
+                return tree.Name(refNode);
+            }
+            else
+            {
+                var ptr = (Leaf*)@this;
+                Slice key = tree.ReadKey(ptr->DataPtr);
+                return key.ToBitVector();
+            }
         }
 
         /// <summary>
@@ -27,45 +37,15 @@ namespace Voron.Data.Compact
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static BitVector Handle(this PrefixTree tree, Node* @this)
         {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// The handle of a node is the prefix of the name whose length is 2-fattest number in the skip interval of it. If the
-        /// skip interval is empty (which can only happen at the root) we define the handle to be the empty string/vector.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static BitVector Handle(this PrefixTree tree, ref Node @this)
-        {
-            fixed (Node* node = &@this)
+            var refNode = tree.ReadNodeByName(@this->ReferencePtr);
+            if (@this->IsInternal)
             {
-                return Handle(tree, node);
+                int handleLength = tree.GetHandleLength(@this);
+                return tree.Handle(refNode).SubVector(0, handleLength);
             }
-        }
-
-        /// <summary>
-        /// The handle of a node is the prefix of the name whose length is 2-fattest number in the skip interval of it. If the
-        /// skip interval is empty (which can only happen at the root) we define the handle to be the empty string/vector.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static BitVector Handle(this PrefixTree tree, ref Internal @this)
-        {
-            fixed (Internal* node = &@this)
+            else
             {
-                return Handle(tree, (Node*)node);
-            }
-        }
-
-        /// <summary>
-        /// The handle of a node is the prefix of the name whose length is 2-fattest number in the skip interval of it. If the
-        /// skip interval is empty (which can only happen at the root) we define the handle to be the empty string/vector.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static BitVector Handle(this PrefixTree tree, ref Leaf @this)
-        {
-            fixed (Leaf* node = &@this)
-            {
-                return Handle(tree, (Node*)node);
+                return tree.Name(refNode).SubVector(0, tree.GetHandleLength(@this));
             }
         }
 
@@ -75,25 +55,63 @@ namespace Voron.Data.Compact
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static BitVector Extent(this PrefixTree tree, Node* @this)
         {
-            throw new NotImplementedException();
+            var refNode = tree.ReadNodeByName(@this->ReferencePtr);
+            var refName = tree.Name(refNode);
+            if (@this->IsInternal)
+            {
+                return refName.SubVector(0, ((Internal*)@this)->ExtentLength);
+            }
+            else
+            {
+                return refName;
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int GetHandleLength(this PrefixTree tree, Node* @this)
         {
-            throw new NotImplementedException();
+            return TwoFattest(@this->NameLength - 1, tree.GetExtentLength(@this));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetHandleLength(this PrefixTree tree, Internal* @this)
+        {
+            return TwoFattest(@this->NameLength - 1, @this->ExtentLength);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int GetExtentLength(this PrefixTree tree, Node* @this)
         {
-            throw new NotImplementedException();
+            if (@this->IsInternal)
+            {
+                return ((Internal*)@this)->ExtentLength;
+            }
+            else
+            {
+                return tree.GetKeySize(((Leaf*)@this)->DataPtr);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int GetJumpLength(this PrefixTree tree, Internal* @this)
         {
-            throw new NotImplementedException();
+            int handleLength = tree.GetHandleLength(@this);
+            if (handleLength == 0)
+                return int.MaxValue;
+
+            return handleLength + (handleLength & -handleLength);
+        }
+
+        /// <summary>
+        /// There are two cases. We say that x cuts high if the cutpoint is strictly smaller than |handle(exit(x))|, cuts low otherwise. Page 165 of [1]
+        /// </summary>
+        /// <remarks>Only when the cut is low, the handle(exit(x)) is a prefix of x.</remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsCutLow(this PrefixTree owner, Node* node, long prefix)
+        {
+            // Theorem 3: Page 165 of [1]
+            var handleLength = owner.GetHandleLength(node);
+            return prefix >= handleLength;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -111,7 +129,7 @@ namespace Voron.Data.Compact
             Node* node = @this;
             do
             {
-                node = (Node*)tree.ReadDirect(((Internal*)node)->JumpRightPtr);
+                node = tree.ReadNodeByName(((Internal*)node)->JumpRightPtr);
             }
             while (node->IsInternal);
 
@@ -127,7 +145,7 @@ namespace Voron.Data.Compact
             Node* node = @this;
             do
             {
-                node = (Node*)tree.ReadDirect(((Internal*)node)->JumpLeftPtr);
+                node = tree.ReadNodeByName(((Internal*)node)->JumpLeftPtr);
             }
             while (node->IsInternal);
 

@@ -10,6 +10,7 @@ namespace Voron.Data.Compact
     {
         public unsafe static class Constants
         {
+            public const long InvalidNode = -1;
             public const int L1CacheSize = 16 * 1024;
 
             public static int NodesPerPage = 4096 * 1024 / sizeof(PrefixTree.Node);

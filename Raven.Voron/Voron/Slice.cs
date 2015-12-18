@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using Voron.Util;
 using Sparrow;
 using Voron.Data.BTrees;
+using Sparrow.Binary;
 
 namespace Voron
 {
@@ -39,7 +40,12 @@ namespace Voron
             this.KeyLength = size;
         }
 
-	    private Slice(SliceOptions options, ushort size, ushort keyLength)
+        internal BitVector ToBitVector()
+        {
+            throw new NotImplementedException();
+        }
+
+        private Slice(SliceOptions options, ushort size, ushort keyLength)
         {
             this.Options = options;
             this.Size = size;
