@@ -80,6 +80,12 @@ namespace Voron.Data.Compact
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetExtentLength(this PrefixTree tree, Internal* @this)
+        {
+            return @this->ExtentLength;  
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int GetExtentLength(this PrefixTree tree, Node* @this)
         {
             if (@this->IsInternal)
@@ -121,6 +127,12 @@ namespace Voron.Data.Compact
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsExitNodeOf(this PrefixTree tree, Internal* @this, int length, int lcpLength)
+        {
+            return @this->NameLength <= lcpLength && (lcpLength < tree.GetExtentLength(@this) || lcpLength == length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Leaf* GetRightLeaf(this PrefixTree tree, Node* @this)
         {
             if (@this->IsLeaf)
@@ -137,7 +149,7 @@ namespace Voron.Data.Compact
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Leaf* GetLeftLeaf(PrefixTree tree, Node* @this)
+        public static Leaf* GetLeftLeaf(this PrefixTree tree, Node* @this)
         {
             if (@this->IsLeaf)
                 return (Leaf*)@this;
