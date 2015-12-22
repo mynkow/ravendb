@@ -155,7 +155,7 @@ namespace Voron.Data.Compact
                 tableHeader->NumberOfUsed = 0;
                 tableHeader->NumberOfDeleted = 0;
                 tableHeader->Size = 0;
-                tableHeader->NextGrowthThreshold = newCapacity * 4 / InternalTable.LoadFactor;
+                tableHeader->NextGrowthThreshold = newCapacity * 4 / LoadFactor;
 
                 // Initialize the whole memory block with the initial values. 
                 var firstEntriesPage = tx.GetPage(page.PageNumber + 1);                
@@ -300,8 +300,6 @@ namespace Voron.Data.Compact
                             NumberOfDeleted++;
                             Count--;
                         }
-
-                        Contract.Assert(NumberOfDeleted >= Contract.OldValue<int>(NumberOfDeleted));
 
                         if (3 * this.NumberOfDeleted / 2 > this.Capacity - this.NumberOfUsed)
                         {
@@ -994,7 +992,6 @@ namespace Voron.Data.Compact
                 }
                 while (true);
             }
-
 
             private static class BlockCopyMemoryHelper
             {

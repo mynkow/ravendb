@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Text;
 using Voron.Data.BTrees;
 using Voron.Impl;
 
@@ -20,7 +21,7 @@ namespace Voron.Data.Compact
     /// </summary>
     public unsafe partial class PrefixTree
     {
-        private readonly static ObjectPool<Stack<long>> nodesStackPool = new ObjectPool<Stack<long>>(() => new Stack<long>());
+        private readonly static ObjectPool<Stack<IntPtr>> nodesStackPool = new ObjectPool<Stack<IntPtr>>(() => new Stack<IntPtr>());
 
         private readonly LowLevelTransaction _tx;
         private readonly Tree _parent;
@@ -43,9 +44,9 @@ namespace Voron.Data.Compact
         {
             var rootPage = tx.AllocatePage(1);
 
-            var header = (PrefixTreeRootHeader*)parent.DirectAdd(treeName, sizeof(PrefixTreeRootHeader));            
-            var state = new PrefixTreeRootMutableState(tx, header);
+            var header = (PrefixTreeRootHeader*)parent.DirectAdd(treeName, sizeof(PrefixTreeRootHeader));
 
+            var state = new PrefixTreeRootMutableState(tx, header);
             state.RootPage = rootPage.PageNumber;
             state.Head = new Leaf { PreviousPtr = Constants.InvalidNode, NextPtr = Constants.InvalidNode };
             state.Tail = new Leaf { PreviousPtr = Constants.InvalidNode, NextPtr = Constants.InvalidNode };
@@ -113,28 +114,143 @@ namespace Voron.Data.Compact
             var hashState = Hashing.Iterative.XXHash32.Preprocess(searchKey.Bits);
 
             // We look for the parent of the exit node for the key.
+            var stack = nodesStackPool.Allocate();
+            try
+            {
+                var cutPoint = FindParentExitNode(searchKey, hashState, stack);
 
-            // If the exit node is a leaf and the key is equal to the LCP 
-            // Then we are done (we found the key already).
+                var exitNode = cutPoint.Exit;
 
-            // Is the exit node internal?
-            // Compute the exit direction from the LCP.  
-            // Is this cut point low or high?
+#if DETAILED_DEBUG        
+                Console.WriteLine(string.Format("Parex Node: {0}, Exit Node: {1}, LCP: {2}", cutPoint.Parent != null ? this.ToDebugString((Node*)cutPoint.Parent) : "null", this.ToDebugString(cutPoint.Exit), cutPoint.LongestPrefix));
+#endif
+
+                // If the exit node is a leaf and the key is equal to the LCP 
+                // Then we are done (we found the key already).
+
+                // Is the exit node internal?
+                // Compute the exit direction from the LCP.  
+                // Is this cut point low or high?
 
 
-            // Create a new internal node that will hold the new leaf.  
-            // Link the internal and the leaf according to its exit direction.
+                // Create a new internal node that will hold the new leaf.  
+                // Link the internal and the leaf according to its exit direction.
 
-            // Ensure that the right leaf has a 1 in position and the left one has a 0. (TRIE Property).
+                // Ensure that the right leaf has a 1 in position and the left one has a 0. (TRIE Property).
 
-            // If the exit node is the root
-            // Then update the root
-            // Else update the parent exit node.
+                // If the exit node is the root
+                // Then update the root
+                // Else update the parent exit node.
 
-            // Update the jump table after the insertion.
-            // Link the new leaf with it's predecessor and successor.
+                // Update the jump table after the insertion.
+                // Link the new leaf with it's predecessor and successor.                
 
-            throw new NotImplementedException();
+                throw new NotImplementedException();
+            }
+            finally
+            {
+                stack.Clear();
+                nodesStackPool.Free(stack);
+            }
+        }
+
+        private CutPoint FindParentExitNode(BitVector searchKey, Hashing.Iterative.XXHash32Block state, Stack<IntPtr> stack)
+        {
+#if DETAILED_DEBUG
+            Console.WriteLine(string.Format("FindParentExitNode({0})", searchKey.ToBinaryString()));
+#endif
+            // If there is only a single element, then the exit point is the root.
+            if (_state.Items == 1)
+                return new CutPoint(searchKey.LongestCommonPrefixLength(this.Extent(this.Root)), null, Root, searchKey);
+
+            int length = searchKey.Count;
+
+            // Find parex(key), exit(key) or fail spectacularly (with very low probability). 
+            Internal* parexOrExitNode = FatBinarySearch(searchKey, state, stack, -1, length, isExact: false);
+
+            // Check if the node is either the parex(key) and/or exit(key). 
+            Node* candidateNode;
+            if (parexOrExitNode->ExtentLength < length && searchKey[parexOrExitNode->ExtentLength])
+                candidateNode = ReadNodeByName(parexOrExitNode->RightPtr);
+            else
+                candidateNode = ReadNodeByName(parexOrExitNode->LeftPtr);
+
+            int lcpLength = searchKey.LongestCommonPrefixLength(this.Extent(candidateNode));
+
+            // Fat Binary Search just worked with high probability and gave use the parex(key) node. 
+            if (this.IsExitNodeOf(candidateNode, searchKey.Count, lcpLength))
+                return new CutPoint(lcpLength, parexOrExitNode, candidateNode, searchKey);
+
+            // We need to find the length of the longest common prefix between the key and the extent of the parex(key).
+            lcpLength = Math.Min(parexOrExitNode->ExtentLength, lcpLength);
+
+            Debug.Assert(lcpLength == searchKey.LongestCommonPrefixLength(this.Extent((Node*)parexOrExitNode)));
+
+
+            Internal* stackTopNode;
+            int startPoint;
+            if (this.IsExitNodeOf(parexOrExitNode, length, lcpLength))
+            {
+                // We have the correct exit node, we then must pop it and probably restart the search to find the parent.
+                stack.Pop();
+
+                // If the exit node is the root, there is obviously no parent to be found.
+                if (parexOrExitNode == this.Root)
+                    return new CutPoint(lcpLength, null, (Node*)parexOrExitNode, searchKey);
+
+                stackTopNode = (Internal*)stack.Peek().ToPointer();
+                startPoint = stackTopNode->ExtentLength;
+                if (startPoint == parexOrExitNode->NameLength - 1)
+                    return new CutPoint(lcpLength, stackTopNode, (Node*)parexOrExitNode, searchKey);
+
+                // Find parex(key) or fail spectacularly (with very low probability). 
+                int stackSize = stack.Count;
+
+                Internal* parexNode = FatBinarySearch(searchKey, state, stack, startPoint, parexOrExitNode->NameLength, isExact: false);
+
+                var parexLeft = ReadNodeByName(parexNode->LeftPtr);
+                var parexRight = ReadNodeByName(parexNode->RightPtr);
+
+                if (parexLeft == parexOrExitNode || parexRight == parexOrExitNode)
+                    return new CutPoint(lcpLength, parexNode, (Node*)parexOrExitNode, searchKey);
+
+                // It seems we just failed and found an unrelated node, we should restart in exact mode and also clear the stack of what we added during the last search.
+                while (stack.Count > stackSize)
+                    stack.Pop();
+
+                parexNode = FatBinarySearch(searchKey, state, stack, startPoint, parexOrExitNode->NameLength, isExact: true);
+
+                return new CutPoint(lcpLength, parexNode, (Node*)parexOrExitNode, searchKey);
+            }
+
+            // The search process failed with very low probability.
+            stack.Clear();
+            parexOrExitNode = FatBinarySearch(searchKey, state, stack, -1, length, isExact: true);
+
+            if (parexOrExitNode->ExtentLength < length && searchKey[parexOrExitNode->ExtentLength])
+                candidateNode = ReadNodeByName(parexOrExitNode->RightPtr);
+            else
+                candidateNode = ReadNodeByName(parexOrExitNode->LeftPtr);
+
+            lcpLength = searchKey.LongestCommonPrefixLength(this.Extent(candidateNode));
+
+            // Fat Binary Search just worked with high probability and gave use the parex(key) node. 
+            if (this.IsExitNodeOf(candidateNode, searchKey.Count, lcpLength))
+                return new CutPoint(lcpLength, parexOrExitNode, candidateNode, searchKey);
+
+            stack.Pop();
+
+            // If the exit node is the root, there is obviously no parent to be found.
+            if (parexOrExitNode == this.Root)
+                return new CutPoint(lcpLength, null, (Node*)parexOrExitNode, searchKey);
+
+            stackTopNode = (Internal*)stack.Peek().ToPointer();
+            startPoint = stackTopNode->ExtentLength;
+            if (startPoint == parexOrExitNode->NameLength - 1)
+                return new CutPoint(lcpLength, stackTopNode, (Node*)parexOrExitNode, searchKey);
+
+            Internal* parentNode = FatBinarySearch(searchKey, state, stack, startPoint, parexOrExitNode->NameLength, isExact: true);
+            return new CutPoint(lcpLength, parentNode, (Node*)parexOrExitNode, searchKey);
         }
 
         private long AddAfterHead(Slice key, byte* value, int length, ushort? version)
@@ -142,7 +258,7 @@ namespace Voron.Data.Compact
             throw new NotImplementedException();
         }
 
-        public bool Add<TValue> (Slice key, TValue value, ushort? version = null )
+        public bool Add<TValue>(Slice key, TValue value, ushort? version = null )
         { 
             /// For now output the data to a buffer then send the proper Add(key, byte*, length)
             throw new NotImplementedException();
@@ -447,6 +563,120 @@ namespace Voron.Data.Compact
             return new ExitNode(searchKey.LongestCommonPrefixLength(this.Extent(candidateNode)), candidateNode, searchKey);
         }
 
+        private unsafe Internal* FatBinarySearch(BitVector searchKey, Hashing.Iterative.XXHash32Block state, Stack<IntPtr> stack, int startBit, int endBit, bool isExact)
+        {
+            Debug.Assert(searchKey != null);
+            Debug.Assert(state != null);
+            Debug.Assert(startBit < endBit - 1);
+            Debug.Assert(stack != null);
+  
+#if DETAILED_DEBUG
+            Console.WriteLine(string.Format("FatBinarySearch({0},{1},({2}..{3})", searchKey.ToDebugString(), DumpStack(stack), startBit, endBit));
+#endif
+            endBit--;
+
+            Internal* top = null;
+            if (stack.Count != 0)
+                top = (Internal*)(stack.Peek().ToPointer());
+            
+
+            if (startBit == -1)
+            {
+                Debug.Assert(this.Root->IsInternal);
+
+                top = (Internal*)this.Root;
+                stack.Push(new IntPtr(top));
+                startBit = top->ExtentLength;
+            }
+
+            var nodesTable = this.NodesTable;
+
+            uint checkMask = (uint)(-1 << Bits.CeilLog2(endBit - startBit));
+            while (endBit - startBit > 0)
+            {
+                Debug.Assert(checkMask != 0);
+
+#if DETAILED_DEBUG
+                Console.WriteLine(string.Format("({0}..{1})", startBit, endBit + 1));
+#endif
+                int current = endBit & (int)checkMask;
+                if ((startBit & checkMask) != current)
+                {
+#if DETAILED_DEBUG
+                    Console.WriteLine(string.Format("Inquiring with key {0} ({1})", searchKey.SubVector(0, current).ToBinaryString(), current));
+#endif
+                    // We calculate the hash up to the word it makes sense. 
+                    uint hash = InternalTable.CalculateHashForBits(searchKey, state, current);
+
+                    int position = isExact ? nodesTable.GetExactPosition(searchKey, current, hash)
+                                           : nodesTable.GetPosition(searchKey, current, hash);
+
+                    long itemPtr = position != -1 ? nodesTable[position] : Constants.InvalidNode;
+                    if (itemPtr == Constants.InvalidNode)
+                    {
+#if DETAILED_DEBUG
+                        Console.WriteLine("Missing " + ((isExact) ? "exact" : "non exact"));
+#endif
+                        endBit = current - 1;
+                    }
+                    else
+                    {
+
+                        Internal* item = (Internal*)ReadNodeByName(itemPtr);
+                        Debug.Assert(item->IsInternal); // Make sure there are only internal nodes there. 
+
+                        if (item->ExtentLength < current)
+                        {
+#if DETAILED_DEBUG
+                            Console.WriteLine("Missing " + ((isExact) ? "exact" : "non exact"));
+#endif
+                            endBit = current - 1;
+                        }
+                        else
+                        {
+#if DETAILED_DEBUG
+                            Console.WriteLine("Found " + ((isExact) ? "exact" : "non exact") + " extent of length " + item->ExtentLength + " with GetExtentLength of " + this.GetExtentLength(item));
+#endif
+                            // Add it to the stack, update search and continue
+                            top = item;
+                            stack.Push(new IntPtr(top));
+
+                            startBit = item->ExtentLength;
+                        }
+                    }
+                }
+
+                checkMask >>= 1;
+            }
+
+#if DETAILED_DEBUG
+            Console.WriteLine(string.Format("Final interval: ({0}..{1}); Top: {2}; Stack: {3}", startBit, endBit + 1, this.ToDebugString((Node*)top), DumpStack(stack)));
+#endif
+            return top;
+        }
+
+        private string DumpStack(Stack<IntPtr> stack)
+        {
+            var builder = new StringBuilder();
+            builder.Append("[");
+
+            bool first = true;
+            foreach (var nodePtr in stack)
+            {
+                var node = (Node*)nodePtr.ToPointer();
+                if (!first)
+                    builder.Append(", ");
+
+                builder.Append(this.ToDebugString(node));
+
+                first = false;
+            }
+
+            builder.Append("] ");
+
+            return builder.ToString();
+        }
+
         private unsafe Internal* FatBinarySearch(BitVector searchKey, Hashing.Iterative.XXHash32Block state, int startBit, int endBit, bool isExact)
         {
             Debug.Assert(searchKey != null);
@@ -489,7 +719,7 @@ namespace Voron.Data.Compact
 
                     int position = isExact ? nodesTable.GetExactPosition(searchKey, current, hash)
                                            : nodesTable.GetPosition(searchKey, current, hash);
-                    
+
 
                     long itemPtr = position != -1 ? nodesTable[position] : Constants.InvalidNode;
                     if (itemPtr == Constants.InvalidNode)
@@ -499,7 +729,7 @@ namespace Voron.Data.Compact
 #endif
                         endBit = current - 1;
                     }
-                    else 
+                    else
                     {
                         Internal* item = (Internal*)ReadNodeByName(itemPtr);
                         Debug.Assert(item->IsInternal); // Make sure there are only internal nodes there. 
