@@ -91,6 +91,18 @@ namespace Voron.Data.Compact
             [FieldOffset(46)]
             public fixed byte Padding[2]; // to 48 bytes
 
+            public Internal(short nameLength = 0, short extentLength = 0)
+            {
+                this.Type = NodeType.Leaf;
+                this.ReferencePtr = Constants.InvalidNode;
+                this.RightPtr = Constants.InvalidNode;
+                this.JumpLeftPtr = Constants.InvalidNode;
+                this.JumpRightPtr = Constants.InvalidNode;
+                this.LeftPtr = Constants.InvalidNode;
+                this.NameLength = nameLength;
+                this.ExtentLength = extentLength;                
+            }
+
             public bool IsLeaf => Type == NodeType.Leaf;
             public bool IsInternal => Type == NodeType.Leaf;
         }
@@ -136,6 +148,16 @@ namespace Voron.Data.Compact
 
             [FieldOffset(40)]
             public fixed byte Padding[8]; // to 48 bytes
+
+            public Leaf(long previousPtr = Constants.InvalidNode, long nextPtr = Constants.InvalidNode)
+            {
+                this.Type = NodeType.Leaf;
+                this.NextPtr = nextPtr;
+                this.PreviousPtr = previousPtr;
+                this.NameLength = 0;
+                this.ReferencePtr = 0;
+                this.DataPtr = 0;
+            }
 
             public bool IsLeaf => Type == NodeType.Leaf;
             public bool IsInternal => Type == NodeType.Leaf;

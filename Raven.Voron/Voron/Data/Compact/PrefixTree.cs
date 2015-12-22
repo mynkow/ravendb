@@ -7,8 +7,6 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using Voron.Data.BTrees;
 using Voron.Impl;
-using Voron.Impl.FileHeaders;
-using static Voron.Data.Compact.PrefixTree;
 
 namespace Voron.Data.Compact
 {
@@ -48,9 +46,9 @@ namespace Voron.Data.Compact
             var header = (PrefixTreeRootHeader*)parent.DirectAdd(treeName, sizeof(PrefixTreeRootHeader));            
             var state = new PrefixTreeRootMutableState(tx, header);
 
-            state.RootPage = rootPage.PageNumber;            
-            state.Head = Constants.InvalidNode;
-            state.Tail = Constants.InvalidNode;
+            state.RootPage = rootPage.PageNumber;
+            state.Head = new Leaf { PreviousPtr = Constants.InvalidNode, NextPtr = Constants.InvalidNode };
+            state.Tail = new Leaf { PreviousPtr = Constants.InvalidNode, NextPtr = Constants.InvalidNode };
             state.Items = 0;
 
             var tablePage = InternalTable.Allocate(tx, state);
@@ -67,7 +65,7 @@ namespace Voron.Data.Compact
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Add(Slice key, Slice value, ushort? version = null)
+        public bool Add(Slice key, Slice value, ushort? version = null)
         {
             if (value.Array != null )
             {
@@ -75,27 +73,27 @@ namespace Voron.Data.Compact
                 // managed memory. So we are aggresively inlining this one.
                 fixed (byte* ptr = value.Array)
                 {
-                    Add(key, ptr, value.Array.Length, version);
+                    return Add(key, ptr, value.Array.Length, version);
                 }
             }
             else
             {
-                Add(key, value.Pointer, value.Size, version);
+                return Add(key, value.Pointer, value.Size, version);
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Add(Slice key, byte[] value, ushort? version = null)
+        public bool Add(Slice key, byte[] value, ushort? version = null)
         {
             // We dont want this to show up in the stack, but it is a very convenient way when we are dealing with
             // managed memory. So we are aggresively inlining this one.
             fixed (byte* ptr = value)
             {
-                Add(key, ptr, value.Length, version);
+                return Add(key, ptr, value.Length, version);
             }
         }
 
-        public void Add(Slice key, byte* value, int length, ushort? version = null)
+        public bool Add(Slice key, byte* value, int length, ushort? version = null)
         {
             // We prepare the signature to compute incrementally. 
             BitVector searchKey = key.ToBitVector();
@@ -105,10 +103,11 @@ namespace Voron.Data.Compact
 #endif
             if (Count == 0)
             {
-                // We set the root of the current key to the new leaf.
                 // We add the leaf after the head.  
+                _state.RootPage = AddAfterHead(key, value, length, version);
+                _state.Items++;
 
-                throw new NotImplementedException();
+                return true;
             }
 
             var hashState = Hashing.Iterative.XXHash32.Preprocess(searchKey.Bits);
@@ -138,7 +137,12 @@ namespace Voron.Data.Compact
             throw new NotImplementedException();
         }
 
-        public void Add<TValue> (Slice key, TValue value, ushort? version = null )
+        private long AddAfterHead(Slice key, byte* value, int length, ushort? version)
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool Add<TValue> (Slice key, TValue value, ushort? version = null )
         { 
             /// For now output the data to a buffer then send the proper Add(key, byte*, length)
             throw new NotImplementedException();
@@ -286,11 +290,12 @@ namespace Voron.Data.Compact
             if (Count == 0)
                 throw new KeyNotFoundException();
 
-            Debug.Assert(_state.Head != Constants.InvalidNode);
+            Debug.Assert(_state.Head.PreviousPtr == Constants.InvalidNode);
+            Debug.Assert(_state.Head.NextPtr != Constants.InvalidNode);
 
-            var headRef = this.Head;
-            Debug.Assert(headRef->IsLeaf); // Linked list elements are always leaves.
-            return this.ReadKey(((Leaf*)headRef)->DataPtr);
+            var refHead = (Leaf*)ReadNodeByName(_state.Head.NextPtr);
+            Debug.Assert(refHead->IsLeaf); // Linked list elements are always leaves.
+            return this.ReadKey(refHead->DataPtr);
         }
 
         public Slice FirstKeyOrDefault()
@@ -298,11 +303,12 @@ namespace Voron.Data.Compact
             if (Count == 0)
                 return Slice.BeforeAllKeys;
 
-            Debug.Assert(_state.Head != Constants.InvalidNode);
+            Debug.Assert(_state.Head.PreviousPtr == Constants.InvalidNode);
+            Debug.Assert(_state.Head.NextPtr != Constants.InvalidNode);
 
-            var headRef = this.Head;
-            Debug.Assert(headRef->IsLeaf); // Linked list elements are always leaves.
-            return this.ReadKey(((Leaf*)headRef)->DataPtr);
+            var refHead = (Leaf*)ReadNodeByName(_state.Head.NextPtr);
+            Debug.Assert(refHead->IsLeaf); // Linked list elements are always leaves.
+            return this.ReadKey(refHead->DataPtr);
         }
 
         public Slice LastKey()
@@ -310,11 +316,12 @@ namespace Voron.Data.Compact
             if (Count == 0)
                 throw new KeyNotFoundException();
 
-            Debug.Assert(_state.Tail != Constants.InvalidNode);
+            Debug.Assert(_state.Tail.PreviousPtr != Constants.InvalidNode);
+            Debug.Assert(_state.Tail.NextPtr == Constants.InvalidNode);
 
-            var tailRef = this.Tail;
-            Debug.Assert(tailRef->IsLeaf); // Linked list elements are always leaves.
-            return this.ReadKey(((Leaf*)tailRef)->DataPtr);
+            var refTail = (Leaf*)ReadNodeByName(_state.Tail.PreviousPtr);
+            Debug.Assert(refTail->IsLeaf); // Linked list elements are always leaves.
+            return this.ReadKey(refTail->DataPtr);
         }
 
         public Slice LastKeyOrDefault()
@@ -322,18 +329,17 @@ namespace Voron.Data.Compact
             if (Count == 0)
                 return Slice.AfterAllKeys;
 
-            Debug.Assert(_state.Tail != Constants.InvalidNode);
+            Debug.Assert(_state.Tail.PreviousPtr != Constants.InvalidNode);
+            Debug.Assert(_state.Tail.NextPtr == Constants.InvalidNode);
 
-            var tailRef = this.Tail;
-            Debug.Assert(tailRef->IsLeaf); // Linked list elements are always leaves.
-            return this.ReadKey(((Leaf*)tailRef)->DataPtr);
+            var refTail = (Leaf*)ReadNodeByName(_state.Tail.PreviousPtr);
+            Debug.Assert(refTail->IsLeaf); // Linked list elements are always leaves.
+            return this.ReadKey(refTail->DataPtr);
         }
 
         public long Count => _state.Items;
 
         internal Node* Root => this.ReadNodeByName(0);
-        internal Node* Tail => this.ReadNodeByName(_state.Tail);
-        internal Node* Head => this.ReadNodeByName(_state.Head);
         internal InternalTable NodesTable => this._table;
 
 

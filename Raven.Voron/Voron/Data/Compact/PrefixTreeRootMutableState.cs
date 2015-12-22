@@ -57,7 +57,7 @@ namespace Voron.Data.Compact
         /// <summary>
         /// The head node pointer for the tree. 
         /// </summary>
-        public long Head
+        public PrefixTree.Leaf Head
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return _header->Head; }
@@ -72,7 +72,7 @@ namespace Voron.Data.Compact
         /// <summary>
         /// The tail node pointer for the tree. 
         /// </summary>
-        public long Tail
+        public PrefixTree.Leaf Tail
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return _header->Tail; }

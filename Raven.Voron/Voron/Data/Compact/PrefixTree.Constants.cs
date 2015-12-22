@@ -10,6 +10,7 @@ namespace Voron.Data.Compact
     {
         public unsafe static class Constants
         {
+            public const long TombstoneNode = -2;
             public const long InvalidNode = -1;
             public const int L1CacheSize = 16 * 1024;
 
