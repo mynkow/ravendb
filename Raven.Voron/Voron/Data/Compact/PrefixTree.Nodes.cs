@@ -64,12 +64,16 @@ namespace Voron.Data.Compact
             /// <summary>
             /// The right subtrie.
             /// </summary>
+            // TODO: Given that we are using an implicit representation is this necessary?
+            //       Wouldnt be the same naming the current node and save 4 bytes per node?
             [FieldOffset(12)]
             public long RightPtr;
 
             /// <summary>
             /// The left subtrie.
             /// </summary>
+            // TODO: Given that we are using an implicit representation is this necessary?
+            //       Wouldnt be the same naming the current node and save 4 bytes per node?
             [FieldOffset(20)]
             public long LeftPtr;
 
@@ -97,11 +101,11 @@ namespace Voron.Data.Compact
                 this.NameLength = nameLength;
                 this.ExtentLength = extentLength;
 
-                this.ReferencePtr = Constants.InvalidNode;
-                this.RightPtr = Constants.InvalidNode;
-                this.JumpLeftPtr = Constants.InvalidNode;
-                this.JumpRightPtr = Constants.InvalidNode;
-                this.LeftPtr = Constants.InvalidNode;              
+                this.ReferencePtr = Constants.InvalidNodeName;
+                this.RightPtr = Constants.InvalidNodeName;
+                this.JumpLeftPtr = Constants.InvalidNodeName;
+                this.JumpRightPtr = Constants.InvalidNodeName;
+                this.LeftPtr = Constants.InvalidNodeName;              
             }
 
             public bool IsLeaf => Type == NodeType.Leaf;
@@ -150,15 +154,15 @@ namespace Voron.Data.Compact
             [FieldOffset(40)]
             public fixed byte Padding[8]; // to 48 bytes
 
-            public Leaf(long previousPtr = Constants.InvalidNode, long nextPtr = Constants.InvalidNode)
+            public Leaf(long previousPtr = Constants.InvalidNodeName, long nextPtr = Constants.InvalidNodeName)
             {
                 this.Type = NodeType.Leaf;
                 this.NameLength = 0;
 
                 this.NextPtr = nextPtr;
                 this.PreviousPtr = previousPtr;
-                this.ReferencePtr = Constants.InvalidNode;
-                this.DataPtr = Constants.InvalidNode;
+                this.ReferencePtr = Constants.InvalidNodeName;
+                this.DataPtr = Constants.InvalidNodeName;
             }
 
             public bool IsLeaf => Type == NodeType.Leaf;
