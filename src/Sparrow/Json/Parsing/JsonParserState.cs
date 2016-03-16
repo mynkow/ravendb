@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Raven.Server.Utils;
 
-namespace Sparrow.Json.Parsing
+namespace Raven.Server.Json.Parsing
 {
     public unsafe class JsonParserState
     {
@@ -86,7 +87,7 @@ namespace Sparrow.Json.Parsing
                 int offset = start + lastEscape;
                 foreach (var escapeChar in EscapeChars)
                 {
-                    curEscape = Array.IndexOf(buffer, escapeChar, start + offset, count - offset);
+                    curEscape = Array.IndexOf(buffer, escapeChar, start + offset, count - offset);                    
                     if (curEscape != -1)
                         break;
                 }
