@@ -27,7 +27,7 @@ namespace Corax.Benchmark
             Console.WriteLine("Corax Benchmark");
             Console.WriteLine();
 
-            Benchmark.Time(nameof(Insert), sw => Insert(sw), this, delete: false);
+            Benchmark.Time(nameof(Insert), sw => Insert(sw), this, delete: true);
             Benchmark.Time(nameof(QuerySimple), sw => QuerySimple(sw), this, delete: false);
 
             Console.WriteLine();
