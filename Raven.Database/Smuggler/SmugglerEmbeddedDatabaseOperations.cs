@@ -262,12 +262,10 @@ namespace Raven.Database.Smuggler
             databaseOptions.BatchSize = Math.Min(current, maxNumberOfItemsToProcessInSingleBatch);
         }
 
-        public Task SeedIdentityFor(string identityName, long identityValue)
+        public void SeedIdentityFor(string identityName, long identityValue)
         {
             if (identityName != null)
                 database.TransactionalStorage.Batch(accessor => accessor.General.SetIdentityValue(identityName, identityValue));
-
-            return new CompletedTask();
         }
 
         public Task<IAsyncEnumerator<RavenJObject>> ExportItems(ItemType types, OperationState state)

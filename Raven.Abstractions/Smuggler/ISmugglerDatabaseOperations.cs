@@ -72,7 +72,7 @@ namespace Raven.Abstractions.Smuggler
 
         void Configure(SmugglerDatabaseOptions options);
 
-        Task SeedIdentityFor(string identityName, long identityValue);
+        void SeedIdentityFor(string identityName, long identityValue);
 
         Task<IAsyncEnumerator<RavenJObject>> ExportItems(ItemType types, OperationState state);
 

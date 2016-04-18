@@ -310,17 +310,14 @@ namespace Raven.Smuggler
 
                 throw;
             }
-        }
+        }        
 
-        public Task SeedIdentityFor(string identityName, long identityValue)
+        public void SeedIdentityFor(string identityName, long identityValue)
         {
             if (isIdentitiesSmugglingSupported() == false)
-                return new CompletedTask();
+                return;
 
-            if (identityName != null)
-                return Store.AsyncDatabaseCommands.SeedIdentityForAsync(identityName, identityValue);
-
-            return new CompletedTask();
+            Store.DatabaseCommands.SeedIdentityFor(identityName, identityValue);
         }
 
         public Task<IAsyncEnumerator<RavenJObject>> ExportItems(ItemType types, OperationState state)

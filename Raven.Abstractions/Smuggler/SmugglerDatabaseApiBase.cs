@@ -1088,7 +1088,7 @@ namespace Raven.Abstractions.Smuggler
 
                 try
                 {
-                    await Operations.SeedIdentityFor(identityName, identity.Value<long>("Value"));
+                    Operations.SeedIdentityFor(identityName, identity.Value<long>("Value"));
                 }
                 catch (Exception e)
                 {
@@ -1102,7 +1102,7 @@ namespace Raven.Abstractions.Smuggler
                 count++;
             }
 
-            await Operations.SeedIdentityFor(null, -1); // force flush
+            Operations.SeedIdentityFor(null, -1); // force flush
 
             return count;
         }
