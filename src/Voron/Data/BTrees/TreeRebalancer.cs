@@ -343,7 +343,7 @@ namespace Voron.Data.BTrees
         {
             node = page.GetNode(pos);
             var key = page.GetNodeKey(node);
-            while (key.KeyLength == 0)
+            while (key.Size == 0)
             {
                 Debug.Assert(page.IsBranch);
                 page = _tx.GetReadOnlyTreePage(node->PageNumber);
