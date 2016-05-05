@@ -25,8 +25,8 @@ namespace Voron
             Debug.Assert(x.Options == SliceOptions.Key);
             Debug.Assert(y.Options == SliceOptions.Key);
 
-            var srcKey = x.KeyLength;
-            var otherKey = y.KeyLength;
+            var srcKey = x.Size;
+            var otherKey = y.Size;
             var size = srcKey <= otherKey ? srcKey : otherKey;
 
             int r = 0;
@@ -78,8 +78,8 @@ namespace Voron
             Debug.Assert(x.Options == SliceOptions.Key);
             Debug.Assert(y.Options == SliceOptions.Key);
 
-            var srcKey = x.KeyLength;
-            var otherKey = y.KeyLength;
+            var srcKey = x.Size;
+            var otherKey = y.Size;
             if (srcKey != otherKey)
                 return false;
 

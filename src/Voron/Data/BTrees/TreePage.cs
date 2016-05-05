@@ -261,7 +261,7 @@ namespace Voron.Data.BTrees
         private TreeNodeHeader* CreateNode(int index, Slice key, TreeNodeFlags flags, int len, ushort previousNodeVersion)
         {
             Debug.Assert(index <= NumberOfEntries && index >= 0);
-            Debug.Assert(IsBranch == false || index != 0 || key.KeyLength == 0);// branch page's first item must be the implicit ref
+            Debug.Assert(IsBranch == false || index != 0 || key.Size == 0);// branch page's first item must be the implicit ref
             if (HasSpaceFor(key, len) == false)
                 throw new InvalidOperationException(string.Format("The page is full and cannot add an entry, this is probably a bug. Key: {0}, data length: {1}, size left: {2}", key, len, SizeLeft));
 
@@ -297,7 +297,7 @@ namespace Voron.Data.BTrees
 
             var nodeSize = TreeSizeOf.NodeEntryWithAnotherKey(other, key);
 
-            Debug.Assert(IsBranch == false || index != 0 || key.KeyLength == 0);// branch page's first item must be the implicit ref
+            Debug.Assert(IsBranch == false || index != 0 || key.Size == 0);// branch page's first item must be the implicit ref
 
             var nodeVersion = other->Version; // every time new node is allocated the version is increased, but in this case we do not want to increase it
             if (nodeVersion > 0)

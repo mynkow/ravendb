@@ -22,9 +22,7 @@ namespace Voron
         internal byte* Pointer;
 
         public ushort Size;
-        public ushort KeyLength;
         public SliceOptions Options;
-
 
         private Slice()
         { }
@@ -38,14 +36,6 @@ namespace Voron
         {
             this.Options = options;
             this.Size = size;
-            this.KeyLength = size;
-        }
-
-        private Slice(SliceOptions options, ushort size, ushort keyLength)
-        {
-            this.Options = options;
-            this.Size = size;
-            this.KeyLength = keyLength;
         }
 
         internal BitVector ToBitVector()
@@ -57,7 +47,7 @@ namespace Voron
             }
             else
             {
-                bitVector = BitVector.Of(true, this.Pointer, this.KeyLength);
+                bitVector = BitVector.Of(true, this.Pointer, this.Size);
             }
 
             ValidateBitVectorIsPrefixFree(bitVector);
@@ -79,7 +69,7 @@ namespace Voron
         }
 
         public Slice(byte* key, ushort size) 
-            : this( SliceOptions.Key, size, size )
+            : this( SliceOptions.Key, size )
         {
             this.Pointer = key;
         }
@@ -91,14 +81,14 @@ namespace Voron
         }
 
         public Slice(Slice other, ushort size) 
-            : this( other.Options, size, size )
+            : this( other.Options, size )
         {
             Array = other.Array;
             Pointer = other.Pointer;
         }
 
         public Slice(byte[] key, ushort size) 
-            : this( SliceOptions.Key, size, size )
+            : this( SliceOptions.Key, size )
         {
             Debug.Assert(key != null);
             Array = key;
@@ -374,20 +364,10 @@ namespace Voron
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Set(byte* p, ushort size)
-        {
-            Pointer = p;
-            Size = size;
-            KeyLength = size;
-            Array = null;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void SetInline(Slice slice, TreeNodeHeader* node)
         {
             slice.Pointer = (byte*)node + Constants.NodeHeaderSize;
             slice.Size = node->KeySize;
-            slice.KeyLength = node->KeySize;
             slice.Array = null;
         }
         
@@ -401,8 +381,8 @@ namespace Voron
             Debug.Assert(Options == SliceOptions.Key);
             Debug.Assert(other.Options == SliceOptions.Key);
 
-            var srcKey = this.KeyLength;
-            var otherKey = other.KeyLength;
+            var srcKey = this.Size;
+            var otherKey = other.Size;
             var length = srcKey <= otherKey ? srcKey : otherKey;
 
             var r = CompareData(other, length);
@@ -414,10 +394,10 @@ namespace Voron
 
         public bool StartsWith(Slice other)
         {
-            if (KeyLength < other.KeyLength)
+            if (Size < other.Size)
                 return false;
 
-            return CompareData(other, other.KeyLength) == 0;
+            return CompareData(other, other.Size) == 0;
         }
 
     }
