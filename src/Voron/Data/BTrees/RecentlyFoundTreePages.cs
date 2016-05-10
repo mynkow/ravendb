@@ -14,11 +14,11 @@ namespace Voron.Data.BTrees
         {
             public readonly long Number;
             public TreePage Page;
-            public readonly Slice FirstKey;
-            public readonly Slice LastKey;
+            public readonly SliceArray FirstKey;
+            public readonly SliceArray LastKey;
             public readonly long[] CursorPath;
 
-            public FoundTreePage(long number, TreePage page, Slice firstKey, Slice lastKey, long[] cursorPath)
+            public FoundTreePage(long number, TreePage page, SliceArray firstKey, SliceArray lastKey, long[] cursorPath)
             {
                 Number = number;
                 Page = page;
@@ -62,7 +62,8 @@ namespace Voron.Data.BTrees
             _cache[current] = page;
         }
 
-        public FoundTreePage Find(Slice key)
+        public FoundTreePage Find<T>(T key)
+            where T : ISlice
         {
             int position = current;
 
@@ -84,9 +85,9 @@ namespace Voron.Data.BTrees
                 switch (key.Options)
                 {
                     case SliceOptions.Key:
-                        if ((first.Options != SliceOptions.BeforeAllKeys && key.Compare(first) < 0))
+                        if ((first.Options != SliceOptions.BeforeAllKeys && SliceComparer.Compare(key, first) < 0))
                             break;
-                        if (last.Options != SliceOptions.AfterAllKeys && key.Compare(last) > 0)
+                        if (last.Options != SliceOptions.AfterAllKeys && SliceComparer.Compare(key, last) > 0)
                             break;
                         return page;
                     case SliceOptions.BeforeAllKeys:

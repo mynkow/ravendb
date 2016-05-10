@@ -131,7 +131,7 @@ namespace Raven.Server.Indexing.Corax
                     AddEntry(tx, entries, entry, lastEntryId++);
                     entry.Dispose();
                 }
-                options.Add("LastEntryId", new Slice((byte*)&lastEntryId, sizeof(long)));
+                options.Add((SliceArray)"LastEntryId", new SlicePointer((byte*)&lastEntryId, sizeof(long)));
                 tx.Commit();
             }
             _size = 0;
@@ -150,7 +150,7 @@ namespace Raven.Server.Indexing.Corax
                 var entryId = it.CurrentKey;
                 var bigEndianEntryId = IPAddress.HostToNetworkOrder(entryId);
 
-                var tvr = entries.ReadByKey(new Slice((byte*)&bigEndianEntryId, sizeof(long)));
+                var tvr = entries.ReadByKey(new SlicePointer((byte*)&bigEndianEntryId, sizeof(long)));
 
                 int size;
                 var entry = new BlittableJsonReaderObject(tvr.Read(1, out size), size, _context);
@@ -197,13 +197,13 @@ namespace Raven.Server.Indexing.Corax
 
                 foreach (var slice in GetValuesFor(propertyByIndex.Item2))
                 {
-                    var fst = new FixedSizeTree(tx.LowLevelTransaction, fieldTree, slice.Clone(), 0);
+                    var fst = new FixedSizeTree(tx.LowLevelTransaction, fieldTree, slice, 0);
                     fst.Add(entryId);
                 }
             }
         }
 
-        private unsafe Slice[] GetValuesFor(object obj)
+        private unsafe ISlice[] GetValuesFor(object obj)
         {
             //TODO: right now only supporting strings
             var stringValue = obj as LazyStringValue;
@@ -213,8 +213,8 @@ namespace Raven.Server.Indexing.Corax
                 if (value.Size > byte.MaxValue)
                     throw new InvalidOperationException("Field value cannot exceed 255 bytes");
 
-                var valueSlice = new Slice(value.Buffer, (ushort)value.Size);
-                return new[] { valueSlice };
+                var valueSlice = new SlicePointer(value.Buffer, (ushort)value.Size);
+                return new ISlice[] { valueSlice };
             }
             var csv = obj as LazyCompressedStringValue;
             if (csv != null)
@@ -223,7 +223,7 @@ namespace Raven.Server.Indexing.Corax
             var array = obj as BlittableJsonReaderArray;
             if (array != null)
             {
-                var list = new List<Slice>(array.Length);
+                var list = new List<ISlice>(array.Length);
                 for (int i = 0; i < array.Length; i++)
                 {
                     list.AddRange(GetValuesFor(array[i]));

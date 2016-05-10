@@ -1,4 +1,5 @@
 ﻿using System;
+using Voron;
 using Voron.Data.Fixed;
 
 namespace Raven.Server.Indexing.Corax.Queries
@@ -26,7 +27,7 @@ namespace Raven.Server.Indexing.Corax.Queries
                 return Array.Empty<QueryMatch>();
 
 
-            var fixedSizeTree = new FixedSizeTree(Context.Transaction.InnerTransaction.LowLevelTransaction, property, _term, 0);
+            var fixedSizeTree = new FixedSizeTree(Context.Transaction.InnerTransaction.LowLevelTransaction, property, (SliceArray)_term, 0);
             using (var it = fixedSizeTree.Iterate())
             {
                 if (it.Seek(long.MinValue) == false)

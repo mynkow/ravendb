@@ -63,14 +63,10 @@ namespace Voron.Benchmark
                     continue;
                 }
 
-                var slice = o as Slice;
-                if (slice != null)
+                if (o is SliceArray)
                 {
-                    if (slice.Array == null)
-                        throw new NotSupportedException();
-
-                    gcHandle = GCHandle.Alloc(slice.Array, GCHandleType.Pinned);
-                    builder.Add((byte*)gcHandle.AddrOfPinnedObject(), slice.Array.Length);
+                    gcHandle = GCHandle.Alloc(((SliceArray)o).Value, GCHandleType.Pinned);
+                    builder.Add((byte*)gcHandle.AddrOfPinnedObject(), ((SliceArray)o).Value.Length);
                     handles1.Add(gcHandle);
 
                     continue;
@@ -397,7 +393,7 @@ namespace Voron.Benchmark
                         {
                             var docs = new Table(docsSchema, "docs", tx);
 
-                            foreach (var reader in docs.SeekByPrimaryKey(Slice.BeforeAllKeys) )
+                            foreach (var reader in docs.SeekByPrimaryKey(Slices.GetBeforeAllKeys<SliceArray>()) )
                             {
                                 int size;
                                 reader.Read(0, out size);

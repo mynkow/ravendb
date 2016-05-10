@@ -5,6 +5,7 @@ using System.Threading;
 using Lucene.Net.Store;
 using Raven.Abstractions.Extensions;
 using Voron;
+using Voron.Data;
 using Voron.Impl;
 
 namespace Raven.Server.Indexing
@@ -38,7 +39,7 @@ namespace Raven.Server.Indexing
             var filesTree = _currentTransaction.Value.ReadTree("Files");
             using (var it = filesTree.Iterate())
             {
-                if (it.Seek(Slice.BeforeAllKeys))
+                if (it.Seek(Slices.GetBeforeAllKeys<SliceArray>()))
                 {
                     do
                     {
@@ -52,7 +53,7 @@ namespace Raven.Server.Indexing
         public override long FileModified(string name)
         {
             var filesTree = _currentTransaction.Value.ReadTree("Files");
-            var readResult = filesTree.Read(name);
+            var readResult = filesTree.Read<SliceArray>(name);
             if (readResult == null)
                 throw new FileNotFoundException("Could not find file", name);
             return readResult.Version;
@@ -61,7 +62,7 @@ namespace Raven.Server.Indexing
         public override unsafe void TouchFile(string name)
         {
             var filesTree = _currentTransaction.Value.ReadTree("Files");
-            Slice key = name;
+            SliceArray key = name;
             var readResult = filesTree.Read(key);
             if (readResult == null)
                 throw new FileNotFoundException("Could not find file", name);
@@ -71,7 +72,7 @@ namespace Raven.Server.Indexing
         public override long FileLength(string name)
         {
             var filesTree = _currentTransaction.Value.ReadTree("Files");
-            Slice key = name;
+            SliceArray key = name;
             var readResult = filesTree.Read(key);
             if (readResult == null)
                 throw new FileNotFoundException("Could not find file", name);
@@ -83,7 +84,7 @@ namespace Raven.Server.Indexing
         public override void DeleteFile(string name)
         {
             var filesTree = _currentTransaction.Value.ReadTree("Files");
-            Slice key = name;
+            SliceArray key = name;
             var readResult = filesTree.Read(key);
             if (readResult == null)
                 throw new FileNotFoundException("Could not find file", name);

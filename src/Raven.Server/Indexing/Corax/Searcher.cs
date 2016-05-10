@@ -42,7 +42,7 @@ namespace Raven.Server.Indexing.Corax
             }
 
             var entryId = 0L;
-            var entryKey = new Slice((byte*)&entryId, sizeof(long));
+            var entryKey = new SlicePointer((byte*)&entryId, sizeof(long));
             var results = new string[Math.Min(queryMatches.Length, qd.Take)];
             for (int i = 0; i < results.Length; i++)
             {
@@ -80,8 +80,8 @@ namespace Raven.Server.Indexing.Corax
         {
             var xEntryId = IPAddress.HostToNetworkOrder(x.DocumentId);
             var yEntryId = IPAddress.HostToNetworkOrder(y.DocumentId);
-            var xKey = new Slice((byte*)&xEntryId, sizeof(long));
-            var yKey = new Slice((byte*)&yEntryId, sizeof(long));
+            var xKey = new SlicePointer((byte*)&xEntryId, sizeof(long));
+            var yKey = new SlicePointer((byte*)&yEntryId, sizeof(long));
 
             var xReader = _entries.ReadByKey(xKey);
             var yReader = _entries.ReadByKey(yKey);

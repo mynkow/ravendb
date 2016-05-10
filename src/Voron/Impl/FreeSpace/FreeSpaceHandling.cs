@@ -6,7 +6,7 @@ namespace Voron.Impl.FreeSpace
 {
     public class FreeSpaceHandling : IFreeSpaceHandling
     {
-        private static readonly Slice FreeSpaceKey = "$free-space";
+        private static readonly SliceArray FreeSpaceKey = "$free-space";
 
         private readonly FreeSpaceHandlingDisabler _disableStatus = new FreeSpaceHandlingDisabler();
 
@@ -101,7 +101,7 @@ namespace Voron.Impl.FreeSpace
 
                     var nextSectionId = currentSectionId + 1;
                     var read = freeSpaceTree.Read(nextSectionId);
-                    if (read == null)
+                    if (!read.HasValue)
                     {
                         //not a following next section
                         info.Clear();
@@ -244,7 +244,7 @@ namespace Voron.Impl.FreeSpace
             var nextSectionId = currentSectionId + 1;
 
             var read = freeSpacetree.Read(nextSectionId);
-            if (read == null)
+            if (!read.HasValue)
                 return false;
 
             var next = new StreamBitArray(read.CreateReader());
@@ -324,7 +324,7 @@ namespace Voron.Impl.FreeSpace
 
                 var section = pageNumber/NumberOfPagesInSection;
                 var result = freeSpaceTree.Read(section);
-                var sba = result == null ? new StreamBitArray() : new StreamBitArray(result.CreateReader());
+                var sba = !result.HasValue ? new StreamBitArray() : new StreamBitArray(result.CreateReader());
                 sba.Set((int)(pageNumber%NumberOfPagesInSection), true);
                 freeSpaceTree.Add(section, sba.ToSlice());
 

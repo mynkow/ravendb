@@ -84,7 +84,7 @@ namespace Raven.Server.Documents.Indexes.MapReduce
 
             var storageId = mapEntry.StorageId;
  
-            state.Tree.Delete(new Slice((byte*)&storageId, sizeof(long)));
+            state.Tree.Delete(new SlicePointer((byte*)&storageId, sizeof(long)));
             _mapReduceWorkContext.MapEntriesTable.Delete(mapEntry.StorageId);
         }
 
@@ -222,23 +222,22 @@ namespace Raven.Server.Documents.Indexes.MapReduce
 
                 storageId = existingEntry.StorageId;
 
-                previousState.Tree.Delete(new Slice((byte*)&storageId, sizeof(long)));
+                previousState.Tree.Delete(new SlicePointer((byte*)&storageId, sizeof(long)));
 
                 storageId = _mapReduceWorkContext.MapEntriesTable.Update(existingEntry.StorageId, tvb);
             }
 
-            var pos = state.Tree.DirectAdd(new Slice((byte*)&storageId, sizeof(long)), mappedResult.Size);
+            var pos = state.Tree.DirectAdd(new SlicePointer((byte*)&storageId, sizeof(long)), mappedResult.Size);
 
             mappedResult.CopyTo(pos);
         }
 
         public unsafe MapEntry GetMapEntryForDocument(LazyStringValue documentKey)
         {
-            var documentKeySlice = new Slice(documentKey.Buffer, (ushort) documentKey.Size);
+            var documentKeySlice = new SlicePointer(documentKey.Buffer, (ushort) documentKey.Size);
 
             var seek = _mapReduceWorkContext.MapEntriesTable.SeekForwardFrom(_mapResultsSchema.Indexes["DocumentKeys"], documentKeySlice).FirstOrDefault();
-
-            if (seek?.Key.Compare(documentKeySlice) != 0)
+            if (seek == null || !SliceComparer.EqualsInline(seek.Key, documentKeySlice))
                 return null;
 
             var tvr = seek.Results.Single();

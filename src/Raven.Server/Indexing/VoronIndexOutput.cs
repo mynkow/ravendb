@@ -2,12 +2,13 @@
 using System.IO;
 using Lucene.Net.Store;
 using Voron.Impl;
+using Voron;
 
 namespace Raven.Server.Indexing
 {
     public class VoronIndexOutput : BufferedIndexOutput
     {
-        private readonly string _name;
+        private readonly SliceArray _name;
         private readonly Transaction _tx;
         private readonly FileStream _file;
 
@@ -46,7 +47,7 @@ namespace Raven.Server.Indexing
             base.Dispose(disposing);
             var tree = _tx.CreateTree("Files");
             _file.Seek(0, SeekOrigin.Begin);
-            tree.Add(_name, _file);
+            tree.Add<SliceArray>(_name, _file);
         }
     }
 }

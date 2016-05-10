@@ -16,10 +16,10 @@ namespace Voron.Data.Tables
 
     public unsafe class TableSchema
     {
-        public static readonly Slice ActiveSectionSlice = "Active-Section";
-        public static readonly Slice InactiveSectionSlice = "Inactive-Section";
-        public static readonly Slice ActiveCandidateSection = "Active-Candidate-Section";
-        public static readonly Slice StatsSlice = "Stats";
+        public static readonly SliceArray ActiveSectionSlice = "Active-Section";
+        public static readonly SliceArray InactiveSectionSlice = "Inactive-Section";
+        public static readonly SliceArray ActiveCandidateSection = "Active-Candidate-Section";
+        public static readonly SliceArray StatsSlice = "Stats";
 
         public SchemaIndexDef Key => _pk;
 
@@ -37,12 +37,12 @@ namespace Voron.Data.Tables
             /// </summary>
             public int StartIndex = -1;
             public int Count = -1;
-            public Slice NameAsSlice;
+            public SliceArray NameAsSlice;
             public string Name;
 
             public bool IsGlobal;                        
 
-            public Slice GetSlice(TableValueReader value)
+            public SlicePointer GetSlice(TableValueReader value)
             {
                 int totalSize;
                 var ptr = value.Read(StartIndex, out totalSize);
@@ -66,14 +66,14 @@ namespace Voron.Data.Tables
                 if (totalSize > ushort.MaxValue)
                     throw new ArgumentOutOfRangeException(nameof(totalSize), "Reading a slice that too big to be a slice");
 #endif
-                return new Slice(ptr, (ushort)totalSize);
+                return new SlicePointer(ptr, (ushort)totalSize);
             }
         }
 
         public class FixedSizeSchemaIndexDef
         {
             public int StartIndex = -1;
-            public Slice NameAsSlice;
+            public SliceArray NameAsSlice;
             public string Name;
 
             public bool IsGlobal;

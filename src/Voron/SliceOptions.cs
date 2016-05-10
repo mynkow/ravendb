@@ -2,8 +2,9 @@ namespace Voron
 {
     public enum SliceOptions : byte
     {
-        Key = 0,
-        BeforeAllKeys = 1,
-        AfterAllKeys = 2,
+        Uninitialized = 0,
+        Key = 1,
+        BeforeAllKeys = 2,
+        AfterAllKeys = 3,
     }
 }

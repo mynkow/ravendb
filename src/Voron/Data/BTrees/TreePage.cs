@@ -82,7 +82,8 @@ namespace Voron.Data.BTrees
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public TreeNodeHeader* Search(Slice key)
+        public TreeNodeHeader* Search<T>(T key)
+            where T : ISlice
         {
             int numberOfEntries = NumberOfEntries;
             if (numberOfEntries == 0)
@@ -96,7 +97,7 @@ namespace Voron.Data.BTrees
             {
                 case SliceOptions.Key:
                     {
-                        var pageKey = new Slice(SliceOptions.Key);
+                        SlicePointer pageKey = default(SlicePointer);
 
                         if (numberOfEntries == 1)
                         {
@@ -216,7 +217,8 @@ namespace Voron.Data.BTrees
             Lower -= (ushort)Constants.NodeOffsetSize;
         }
 
-        public byte* AddPageRefNode(int index, Slice key, long pageNumber)
+        public byte* AddPageRefNode<T>(int index, T key, long pageNumber)
+            where T : ISlice
         {
             var node = CreateNode(index, key, TreeNodeFlags.PageRef, -1, 0);
             node->PageNumber = pageNumber;
@@ -224,7 +226,8 @@ namespace Voron.Data.BTrees
             return null; // nothing to write into page ref node
         }
 
-        public byte* AddDataNode(int index, Slice key, int dataSize, ushort previousNodeVersion)
+        public byte* AddDataNode<T>(int index, T key, int dataSize, ushort previousNodeVersion)
+            where T : ISlice
         {
             Debug.Assert(dataSize >= 0);
             Debug.Assert(key.Options == SliceOptions.Key);
@@ -235,7 +238,8 @@ namespace Voron.Data.BTrees
             return (byte*)node + Constants.NodeHeaderSize + key.Size;
         }
 
-        public byte* AddMultiValueNode(int index, Slice key, int dataSize, ushort previousNodeVersion)
+        public byte* AddMultiValueNode<T>(int index, T key, int dataSize, ushort previousNodeVersion)
+            where T : ISlice
         {
             Debug.Assert(dataSize == sizeof(TreeRootHeader));
             Debug.Assert(key.Options == SliceOptions.Key);
@@ -258,7 +262,8 @@ namespace Voron.Data.BTrees
             node->PageNumber = implicitRefPageNumber;
         }
 
-        private TreeNodeHeader* CreateNode(int index, Slice key, TreeNodeFlags flags, int len, ushort previousNodeVersion)
+        private TreeNodeHeader* CreateNode<T>(int index, T key, TreeNodeFlags flags, int len, ushort previousNodeVersion)
+            where T : ISlice
         {
             Debug.Assert(index <= NumberOfEntries && index >= 0);
             Debug.Assert(IsBranch == false || index != 0 || key.Size == 0);// branch page's first item must be the implicit ref
@@ -289,7 +294,8 @@ namespace Voron.Data.BTrees
         /// Internal method that is used when splitting pages
         /// No need to do any work here, we are always adding at the end
         /// </summary>
-        internal void CopyNodeDataToEndOfPage(TreeNodeHeader* other, Slice key)
+        internal void CopyNodeDataToEndOfPage<T>(TreeNodeHeader* other, T key)
+            where T : ISlice
         {
             var index = NumberOfEntries;
 
@@ -378,8 +384,7 @@ namespace Voron.Data.BTrees
                 var copy = tmp.GetTempPage();
                 copy.TreeFlags = TreeFlags;
 
-                var slice = CreateNewEmptyKey();
-
+                var slice = default(SlicePointer);
                 for (int j = 0; j < i; j++)
                 {
                     var node = GetNode(j);
@@ -399,7 +404,8 @@ namespace Voron.Data.BTrees
                 LastSearchPosition = i;
         }
 
-        public int NodePositionFor(Slice key)
+        public int NodePositionFor<T>(T key)
+            where T : ISlice
         {
             Search(key);
             return LastSearchPosition;
@@ -416,7 +422,7 @@ namespace Voron.Data.BTrees
 
             for (var i = 0; i < NumberOfEntries; i++)
             {
-                sb.Append(GetNodeKey(i)).Append(", ");
+                sb.Append(GetNodeKey<SliceArray>(i)).Append(", ");
             }
             return sb.ToString();
         }
@@ -466,20 +472,23 @@ namespace Voron.Data.BTrees
             return len <= SizeLeft;
         }
 
-        public bool HasSpaceFor(LowLevelTransaction tx, Slice key, int len)
+        public bool HasSpaceFor<T>(LowLevelTransaction tx, T key, int len)
+            where T : ISlice
         {
             var requiredSpace = GetRequiredSpace(key, len);
             return HasSpaceFor(tx, requiredSpace);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool HasSpaceFor(Slice key, int len)
+        private bool HasSpaceFor<T>(T key, int len)
+            where T : ISlice
         {
             return HasSpaceFor(GetRequiredSpace(key, len));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int GetRequiredSpace(Slice key, int len)
+        public int GetRequiredSpace<T>(T key, int len)
+            where T : ISlice
         {
             return TreeSizeOf.NodeEntry(PageMaxSpace, key, len) + Constants.NodeOffsetSize;
         }
@@ -504,32 +513,62 @@ namespace Voron.Data.BTrees
 
         public string this[int i]
         {
-            get { return GetNodeKey(i).ToString(); }
+            get { return GetNodeKey<SliceArray>(i).ToString(); }
         }
 
+
+        //[MethodImpl(MethodImplOptions.AggressiveInlining)]
+        //public void SetNodeKey(TreeNodeHeader* node, SliceRef<SlicePointer> slice)
+        //{
+        //    throw new NotImplementedException();
+        //    // slice.SetInline(slice, node);
+        //}
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetNodeKey(TreeNodeHeader* node, ref Slice slice)
+        public void SetNodeKey(TreeNodeHeader* node, ref SlicePointer slice)
         {
-            Slice.SetInline(slice, node);
+            slice = new SlicePointer(node);
         }
 
-        public Slice GetNodeKey(int nodeNumber)
+        public T GetNodeKey<T>(int nodeNumber)
+             where T : ISlice
         {
             var node = GetNode(nodeNumber);
 
-            return GetNodeKey(node);
+            return GetNodeKey<T>(node);
         }
 
-        public Slice GetNodeKey(TreeNodeHeader* node)
+        public T GetNodeKey<T>(TreeNodeHeader* node)
+            where T : ISlice
         {
-            var keySize = node->KeySize;
-            var key = new byte[keySize];
+            // This pattern while it require us to write more code is extremely efficient because the
+            // JIT will treat the condition as constants when it generates the code. Therefore, the
+            // only code that will survive is the intended code for the proper type. 
 
-            fixed (byte* ptr = key)
-                Memory.CopyInline(ptr, (byte*)node + Constants.NodeHeaderSize, keySize);
+            if ( typeof(T) == typeof(SliceArray))
+            {
+                var keySize = node->KeySize;
+                var key = new byte[keySize];
 
-            return new Slice(key);
+                fixed (byte* ptr = key)
+                    Memory.CopyInline(ptr, (byte*)node + Constants.NodeHeaderSize, keySize);
+
+                return (T) (object) new SliceArray(key);
+            }
+
+            if ( typeof(T) == typeof(SlicePointer))
+            {
+                // We do not copy and therefore we do not allocate either.
+                return (T)(object)new SlicePointer(node);
+            }
+
+            // We do not support any other branch of slice here (like SliceRef<T>).
+            if (typeof(T) == typeof(ISlice))
+            {
+                throw new InvalidOperationException($"The type for Skip<T> must be a concrete type. Change the {nameof(ISlice)} interface with the proper concrete type you need.");
+            }
+
+            throw new NotSupportedException($"The type '{nameof(T)}' is not supported.");
         }
 
         public string DebugView()
@@ -539,7 +578,7 @@ namespace Voron.Data.BTrees
             {
                 sb.Append(i)
                     .Append(": ")
-                    .Append(GetNodeKey(i))
+                    .Append(GetNodeKey<SliceArray>(i))
                     .Append(" - ")
                     .Append(KeysOffsets[i])
                     .AppendLine();
@@ -558,14 +597,14 @@ namespace Voron.Data.BTrees
                 throw new InvalidOperationException("The branch page " + PageNumber + " has " + NumberOfEntries + " entry");
             }
 
-            var prev = GetNodeKey(0);
+            var prev = GetNodeKey<SliceArray>(0);
             var pages = new HashSet<long>();
             for (int i = 1; i < NumberOfEntries; i++)
             {
                 var node = GetNode(i);
-                var current = GetNodeKey(i);
+                var current = GetNodeKey<SliceArray>(i);
 
-                if (prev.Compare(current) >= 0)
+                if (SliceComparer.Compare(prev,current) >= 0)
                 {
                     DebugStuff.RenderAndShowTree(tx, root);
                     throw new InvalidOperationException("The page " + PageNumber + " is not sorted");
@@ -617,16 +656,11 @@ namespace Voron.Data.BTrees
             return sl;
         }
 
-        public void EnsureHasSpaceFor(LowLevelTransaction tx, Slice key, int len)
+        public void EnsureHasSpaceFor<T>(LowLevelTransaction tx, T key, int len)
+            where T : ISlice
         {
             if (HasSpaceFor(tx, key, len) == false)
                 throw new InvalidOperationException("Could not ensure that we have enough space, this is probably a bug");
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Slice CreateNewEmptyKey()
-        {
-            return new Slice(SliceOptions.Key);
         }
     }
 }

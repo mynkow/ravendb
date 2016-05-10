@@ -17,7 +17,7 @@ namespace Voron.Data.Fixed
             bool SeekToLast();
             bool Seek(long key);
             long CurrentKey { get; }
-            Slice Value { get; }
+            SlicePointer Value { get; }
             bool MoveNext();
             bool MovePrev();
 
@@ -39,7 +39,7 @@ namespace Voron.Data.Fixed
             }
 
             public long CurrentKey { get { throw new InvalidOperationException("Invalid position, cannot read past end of tree"); } }
-            public Slice Value { get { throw new InvalidOperationException("Invalid position, cannot read past end of tree"); } }
+            public SlicePointer Value { get { throw new InvalidOperationException("Invalid position, cannot read past end of tree"); } }
             public bool MoveNext()
             {
                 return false;
@@ -110,14 +110,14 @@ namespace Voron.Data.Fixed
                 }
             }
 
-            public Slice Value
+            public SlicePointer Value
             {
                 get
                 {
                     if (_pos == _header->NumberOfEntries)
                         throw new InvalidOperationException("Invalid position, cannot read past end of tree");
 
-                    return new Slice(_dataStart + (_pos * _fst._entrySize) + sizeof(long), _fst._valSize);
+                    return new SlicePointer(_dataStart + (_pos * _fst._entrySize) + sizeof(long), _fst._valSize);
                 }
             }
 
@@ -203,14 +203,14 @@ namespace Voron.Data.Fixed
                 }
             }
 
-            public Slice Value
+            public SlicePointer Value
             {
                 get
                 {
                     if (_currentPage == null)
                         throw new InvalidOperationException("No current page was set");
 
-                    return new Slice(_currentPage.Pointer + _currentPage.StartPosition + (_parent._entrySize * _currentPage.LastSearchPosition) + sizeof(long), _parent._valSize);
+                    return new SlicePointer(_currentPage.Pointer + _currentPage.StartPosition + (_parent._entrySize * _currentPage.LastSearchPosition) + sizeof(long), _parent._valSize);
                 }
             }
 
