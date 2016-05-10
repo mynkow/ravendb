@@ -192,6 +192,7 @@ namespace Voron
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Skip<T>(ushort bytesToSkip) where T : ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the
@@ -219,6 +220,7 @@ namespace Voron
             throw new NotSupportedException("The type is not supported.");
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Clone<T>() where T : ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the
@@ -286,6 +288,7 @@ namespace Voron
             AfterAllKeys = new SliceArray(SliceOptions.AfterAllKeys);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public SliceArray(SliceOptions options)
         {
             if (options == SliceOptions.Key)
@@ -316,6 +319,7 @@ namespace Voron
             this._options = SliceOptions.Key;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public SliceArray(string key) : this(Encoding.UTF8.GetBytes(key))
         { }
 
@@ -365,6 +369,7 @@ namespace Voron
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static implicit operator SliceArray(string value)
         {
             return new SliceArray(Encoding.UTF8.GetBytes(value));
@@ -426,6 +431,7 @@ namespace Voron
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Skip<T>(ushort bytesToSkip) where T : ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the
@@ -458,6 +464,7 @@ namespace Voron
             throw new NotSupportedException("The type is not supported.");
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Clone<T>() where T : ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the
@@ -493,6 +500,7 @@ namespace Voron
 
     public static class Slices
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T GetBeforeAllKeys<T>() where T : ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the
@@ -516,6 +524,7 @@ namespace Voron
             throw new NotSupportedException($"The type '{nameof(T)}' is not supported.");
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T GetAfterAllKeys<T>() where T : ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the
@@ -539,6 +548,7 @@ namespace Voron
             throw new NotSupportedException($"The type '{nameof(T)}' is not supported.");
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T GetEmpty<T>() where T : ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the

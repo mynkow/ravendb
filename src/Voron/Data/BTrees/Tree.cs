@@ -398,21 +398,12 @@ namespace Voron.Data.BTrees
 
             bool rightmostPage = true;
             bool leftmostPage = true;
-
+      
             while ((p.TreeFlags & TreePageFlags.Branch) == TreePageFlags.Branch)
             {
                 int nodePos;
-                if (key.Options == SliceOptions.BeforeAllKeys)
-                {
-                    p.LastSearchPosition = nodePos = 0;
-                    rightmostPage = false;
-                }
-                else if (key.Options == SliceOptions.AfterAllKeys)
-                {
-                    p.LastSearchPosition = nodePos = (ushort)(p.NumberOfEntries - 1);
-                    leftmostPage = false;
-                }
-                else
+
+                if ( key.Options == SliceOptions.Key)
                 {
                     if (p.Search(key) != null)
                     {
@@ -435,6 +426,16 @@ namespace Voron.Data.BTrees
                         leftmostPage = false;
                     }
                 }
+                else if (key.Options == SliceOptions.BeforeAllKeys)
+                {
+                    p.LastSearchPosition = nodePos = 0;
+                    rightmostPage = false;
+                }
+                else // if (key.Options == SliceOptions.AfterAllKeys)
+                {
+                    p.LastSearchPosition = nodePos = (ushort)(p.NumberOfEntries - 1);
+                    leftmostPage = false;
+                }
 
                 var pageNode = p.GetNode(nodePos);
                 p = _llt.GetReadOnlyTreePage(pageNode->PageNumber);
@@ -452,6 +453,7 @@ namespace Voron.Data.BTrees
             AddToRecentlyFoundPages(c, p, leftmostPage, rightmostPage);
 
             cursor = new Lazy<TreeCursor>(() => c);
+
             return p;
         }
 
