@@ -181,7 +181,7 @@ namespace Voron.Data.BTrees
             T seperatorKey;
             if (toRight && splitIndex == currentIndex)
             {
-                seperatorKey = SliceComparer.Compare(currentKey, _newKey) < 0 ? currentKey : _newKey;
+                seperatorKey = SliceComparer.CompareInline(currentKey, _newKey) < 0 ? currentKey : _newKey;
             }
             else
             {
@@ -192,7 +192,7 @@ namespace Voron.Data.BTrees
             AddSeparatorToParentPage(rightPage.PageNumber, seperatorKey, toRight, out parentOfRight);
 
             bool addedAsImplicitRef = false;
-            if (_page.IsBranch && toRight && SliceComparer.Equals(seperatorKey, _newKey))
+            if (_page.IsBranch && toRight && SliceComparer.EqualsInline(seperatorKey, _newKey))
             {
                 // _newKey needs to be inserted as first key (BeforeAllKeys) to the right page, so we need to add it before we move entries from the current page
                 AddNodeToPage(rightPage, 0, Slices.GetBeforeAllKeys<T>());

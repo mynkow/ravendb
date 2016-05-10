@@ -25,7 +25,7 @@ namespace Voron.Data.Tables
         private readonly int _pageSize;      
 
         private Dictionary<SliceArray, Tree> _treesBySliceCache;
-        private readonly Dictionary<SliceArray, Dictionary<SliceArray, FixedSizeTree>> _fixedSizeTreeCache = new Dictionary<SliceArray, Dictionary<SliceArray, FixedSizeTree>>();
+        private readonly Dictionary<SliceArray, Dictionary<SliceArray, FixedSizeTree>> _fixedSizeTreeCache = new Dictionary<SliceArray, Dictionary<SliceArray, FixedSizeTree>>(SliceComparer.Instance);
 
         public readonly string Name;
 
@@ -399,7 +399,7 @@ namespace Voron.Data.Tables
             var parentName = parent.Name ?? Constants.RootTreeName;
             if (_fixedSizeTreeCache.TryGetValue(parentName, out cache) == false)
             {
-                _fixedSizeTreeCache[parentName] = cache = new Dictionary<SliceArray, FixedSizeTree>();
+                _fixedSizeTreeCache[parentName] = cache = new Dictionary<SliceArray, FixedSizeTree>(SliceComparer.Instance);
             }
             
             FixedSizeTree tree;
@@ -452,7 +452,7 @@ namespace Voron.Data.Tables
         internal Tree GetTree(SliceArray name)
         {
             if (_treesBySliceCache == null)
-                _treesBySliceCache = new Dictionary<SliceArray, Tree>();
+                _treesBySliceCache = new Dictionary<SliceArray, Tree>(SliceComparer.Instance);
 
             Tree tree;
             if (_treesBySliceCache.TryGetValue(name, out tree))

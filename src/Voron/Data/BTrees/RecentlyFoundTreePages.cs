@@ -13,10 +13,11 @@ namespace Voron.Data.BTrees
         public class FoundTreePage
         {
             public readonly long Number;
-            public TreePage Page;
             public readonly SliceArray FirstKey;
             public readonly SliceArray LastKey;
             public readonly long[] CursorPath;
+
+            public TreePage Page;
 
             public FoundTreePage(long number, TreePage page, SliceArray firstKey, SliceArray lastKey, long[] cursorPath)
             {

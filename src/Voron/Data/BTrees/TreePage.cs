@@ -516,20 +516,13 @@ namespace Voron.Data.BTrees
             get { return GetNodeKey<SliceArray>(i).ToString(); }
         }
 
-
-        //[MethodImpl(MethodImplOptions.AggressiveInlining)]
-        //public void SetNodeKey(TreeNodeHeader* node, SliceRef<SlicePointer> slice)
-        //{
-        //    throw new NotImplementedException();
-        //    // slice.SetInline(slice, node);
-        //}
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetNodeKey(TreeNodeHeader* node, ref SlicePointer slice)
         {
             slice = new SlicePointer(node);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T GetNodeKey<T>(int nodeNumber)
              where T : ISlice
         {
@@ -538,6 +531,7 @@ namespace Voron.Data.BTrees
             return GetNodeKey<T>(node);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T GetNodeKey<T>(TreeNodeHeader* node)
             where T : ISlice
         {
@@ -604,7 +598,7 @@ namespace Voron.Data.BTrees
                 var node = GetNode(i);
                 var current = GetNodeKey<SliceArray>(i);
 
-                if (SliceComparer.Compare(prev,current) >= 0)
+                if (SliceComparer.CompareInline(prev,current) >= 0)
                 {
                     DebugStuff.RenderAndShowTree(tx, root);
                     throw new InvalidOperationException("The page " + PageNumber + " is not sorted");
