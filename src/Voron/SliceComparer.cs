@@ -178,13 +178,13 @@ namespace Voron
         }
 
         public unsafe static bool StartWith<T, W>(T value, W prefix)
-            where T : ISlice
-            where W : ISlice
+            where T : class, ISlice
+            where W : class, ISlice
         {
-            if (!prefix.HasValue)
+            if (prefix == null)
                 return true;
                     
-            if (!value.HasValue || prefix.Size > value.Size)
+            if (value == null || prefix.Size > value.Size)
                 return false;
 
             if ( typeof(T) == typeof(W) )

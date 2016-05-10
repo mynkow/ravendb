@@ -80,7 +80,7 @@ namespace Voron.Data.BTrees
         }
 
         public void MultiAdd<T>(T key, string value, ushort? version = null)
-            where T : ISlice
+            where T : class, ISlice
         {
             MultiAdd(key, new SliceArray(value), version);
         }

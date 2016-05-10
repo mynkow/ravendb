@@ -215,7 +215,7 @@ namespace Raven.Server.Documents.Indexes
         }
 
         private unsafe void WriteLastEtag<T>(RavenTransaction tx, string tree, T collection, long etag)
-            where T : ISlice
+            where T : class, ISlice
         {
             if (Log.IsDebugEnabled)
                 Log.Debug($"Writing last etag for '{_index.Name} ({_index.IndexId})'. Tree: {tree}. Collection: {collection}. Etag: {etag}.");
@@ -225,7 +225,7 @@ namespace Raven.Server.Documents.Indexes
         }
 
         private static long ReadLastEtag<T>(RavenTransaction tx, string tree, T collection)
-            where T : ISlice
+            where T : class, ISlice
         {
             var statsTree = tx.InnerTransaction.CreateTree(tree);
             var readResult = statsTree.Read(collection);

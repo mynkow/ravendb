@@ -231,7 +231,7 @@ namespace FastTests.Voron.FixedSize
                     if (i >= 2 && i <= 5)
                     {
                         Assert.False(fst.Contains(i), i.ToString());
-                        Assert.False(fst.Read(i).HasValue);
+                        Assert.Null(fst.Read(i));
                     }
                     else
                     {
@@ -281,7 +281,7 @@ namespace FastTests.Voron.FixedSize
                     if (i >= 2)
                     {
                         Assert.False(fst.Contains(i), i.ToString());
-                        Assert.False(fst.Read(i).HasValue);
+                        Assert.Null(fst.Read(i));
                     }
                     else
                     {
@@ -294,7 +294,7 @@ namespace FastTests.Voron.FixedSize
                     if (i <= 35)
                     {
                         Assert.False(fst.Contains(i), i.ToString());
-                        Assert.False(fst.Read(i).HasValue);
+                        Assert.Null(fst.Read(i));
                     }
                     else
                     {
@@ -338,7 +338,7 @@ namespace FastTests.Voron.FixedSize
                 for (int i = 1; i <= 10; i++)
                 {
                     Assert.False(fst.Contains(i), i.ToString());
-                    Assert.False(fst.Read(i).HasValue);
+                    Assert.Null(fst.Read(i));
                 }
                 tx.Commit();
             }
@@ -363,7 +363,7 @@ namespace FastTests.Voron.FixedSize
 
                 Assert.Equal(1L, fst.Read(1).CreateReader().ReadLittleEndianInt64());
                 Assert.Equal(2L, fst.Read(2).CreateReader().ReadLittleEndianInt64());
-                Assert.True(!fst.Read(3).HasValue);
+                Assert.Null(fst.Read(3));
                 tx.Commit();
             }
         }
@@ -397,7 +397,7 @@ namespace FastTests.Voron.FixedSize
                 var fst = tx.FixedTreeFor("test", 8);
 
                 Assert.Equal(1L, fst.Read(1).CreateReader().ReadLittleEndianInt64());
-                Assert.False(fst.Read(2).HasValue);
+                Assert.Null(fst.Read(2));
                 Assert.Equal(3L, fst.Read(3).CreateReader().ReadLittleEndianInt64());
                 tx.Commit();
             }

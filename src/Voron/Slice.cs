@@ -14,20 +14,20 @@ namespace Voron
         byte this[int index] { get; }
         SliceOptions Options { get; }
         ushort Size { get; }
-        bool HasValue { get; }
+        //bool HasValue { get; }
 
         void CopyTo(int from, byte* dest, int offset, int count);
         void CopyTo(byte* dest);
         void CopyTo(byte[] dest);
         void CopyTo(int from, byte[] dest, int offset, int count);
 
-        T Clone<T>() where T : ISlice;
-        T Skip<T>(ushort bytesToSkip) where T : ISlice;
+        T Clone<T>() where T : class, ISlice;
+        T Skip<T>(ushort bytesToSkip) where T : class, ISlice;
     }
 
     // TODO: Implement a debug view for the slice.
     [StructLayout(LayoutKind.Sequential)]
-    public unsafe struct SlicePointer : ISlice
+    public unsafe class SlicePointer : ISlice
     {
         public static SlicePointer AfterAllKeys;
         public static SlicePointer BeforeAllKeys;
@@ -55,6 +55,13 @@ namespace Voron
             Empty = new SlicePointer();
             BeforeAllKeys = new SlicePointer(SliceOptions.BeforeAllKeys);
             AfterAllKeys = new SlicePointer(SliceOptions.AfterAllKeys);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public SlicePointer()
+        {
+            _options = SliceOptions.Uninitialized;
+            _size = 0;          
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -113,11 +120,11 @@ namespace Voron
             get { return _options; }
         }
 
-        public bool HasValue
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return _options != SliceOptions.Uninitialized; }
-        }
+        //public bool HasValue
+        //{
+        //    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        //    get { return _options != SliceOptions.Uninitialized; }
+        //}
 
         public override int GetHashCode()
         {
@@ -193,7 +200,7 @@ namespace Voron
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public T Skip<T>(ushort bytesToSkip) where T : ISlice
+        public T Skip<T>(ushort bytesToSkip) where T : class, ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the
             // JIT will treat the condition as constants when it generates the code. Therefore, the
@@ -221,7 +228,7 @@ namespace Voron
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public T Clone<T>() where T : ISlice
+        public T Clone<T>() where T : class, ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the
             // JIT will treat the condition as constants when it generates the code. Therefore, the
@@ -258,11 +265,11 @@ namespace Voron
 
     // TODO: Implement a debug view for the slice.
     [StructLayout(LayoutKind.Sequential)]
-    public unsafe struct SliceArray : ISlice
+    public unsafe class SliceArray : ISlice
     {
-        public static readonly SliceArray AfterAllKeys = new SliceArray(SliceOptions.AfterAllKeys);
-        public static readonly SliceArray BeforeAllKeys = new SliceArray(SliceOptions.BeforeAllKeys);
-        public static readonly SliceArray Empty = new SliceArray(new byte[0]);
+        public static readonly SliceArray AfterAllKeys;
+        public static readonly SliceArray BeforeAllKeys;
+        public static readonly SliceArray Empty ;
 
         private static readonly uint[] _lookup32 = CreateLookup32();
 
@@ -283,16 +290,21 @@ namespace Voron
 
         static SliceArray()
         {            
-            Empty = new SliceArray();
+            Empty = new SliceArray(new byte[0]);
             BeforeAllKeys = new SliceArray(SliceOptions.BeforeAllKeys);
             AfterAllKeys = new SliceArray(SliceOptions.AfterAllKeys);
+        }
+
+        public SliceArray()
+        {
+            _size = 0;
+            _options = SliceOptions.Uninitialized;        
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public SliceArray(SliceOptions options)
         {
-            if (options == SliceOptions.Key)
-                throw new ArgumentException($"{nameof(SliceArray)} cannot be a key if no value is set.");
+            Debug.Assert(options != SliceOptions.Key);
 
             Value = Empty.Value;
             _size = 0;
@@ -346,11 +358,11 @@ namespace Voron
             get { return _options; }
         }
 
-        public bool HasValue
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return _options != SliceOptions.Uninitialized; }
-        }
+        //public bool HasValue
+        //{
+        //    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        //    get { return _options != SliceOptions.Uninitialized; }
+        //}
 
         public override int GetHashCode()
         {
@@ -432,7 +444,7 @@ namespace Voron
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public T Skip<T>(ushort bytesToSkip) where T : ISlice
+        public T Skip<T>(ushort bytesToSkip) where T : class, ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the
             // JIT will treat the condition as constants when it generates the code. Therefore, the
@@ -465,7 +477,7 @@ namespace Voron
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public T Clone<T>() where T : ISlice
+        public T Clone<T>() where T : class, ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the
             // JIT will treat the condition as constants when it generates the code. Therefore, the
@@ -501,7 +513,7 @@ namespace Voron
     public static class Slices
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static T GetBeforeAllKeys<T>() where T : ISlice
+        public static T GetBeforeAllKeys<T>() where T : class, ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the
             // JIT will treat the condition as constants when it generates the code. Therefore, the
@@ -525,7 +537,7 @@ namespace Voron
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static T GetAfterAllKeys<T>() where T : ISlice
+        public static T GetAfterAllKeys<T>() where T : class, ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the
             // JIT will treat the condition as constants when it generates the code. Therefore, the
@@ -549,7 +561,7 @@ namespace Voron
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static T GetEmpty<T>() where T : ISlice
+        public static T GetEmpty<T>() where T : class, ISlice
         {
             // This pattern while it require us to write more code is extremely efficient because the
             // JIT will treat the condition as constants when it generates the code. Therefore, the
@@ -572,263 +584,4 @@ namespace Voron
             throw new NotSupportedException($"The type '{nameof(T)}' is not supported.");
         }
     }
-
-    /// <summary>
-    /// This is a marker class. 
-    /// </summary>
-    public abstract class SliceRef
-    {
-        public abstract ISlice GetInnerSlice();
-    }
-
-    // TODO: Implement a debug view for the slice.
-    public class SliceRef<T> : SliceRef, ISlice where T : ISlice
-    {
-        private T _value;
-        private bool _hasValue;
-
-        public bool HasValue
-        {
-            get { return _hasValue; }
-        }
-
-        public T Value
-        {
-            get { return _value; }
-        }
-
-        public SliceRef ()
-        {
-            this._hasValue = false;
-        }
-
-        public SliceRef( T slice )
-        {
-            this._value = slice;
-            this._hasValue = true;
-        }
-
-        public void Set(T value)
-        {
-            this._value = value;
-            this._hasValue = true;
-        }
-
-        public void Clear()
-        {
-            this._value = default(T);
-            this._hasValue = false;
-        }
-
-        public override ISlice GetInnerSlice()
-        {
-            if (!_hasValue)
-                return null;
-
-            return _value;            
-        }
-
-        //TODO: Implement if necessary
-        public SliceOptions Options
-        {
-            get
-            {
-                throw new NotImplementedException();
-            }
-        }
-
-        public ushort Size
-        {
-            get
-            {
-                throw new NotImplementedException();
-            }
-        }
-
-        public byte this[int index]
-        {
-            get
-            {
-                throw new NotImplementedException();
-            }
-        }
-
-        public SliceRef<T> Clone ()
-        {
-            if (_hasValue)
-                return new SliceRef<T>(_value.Clone<T>());
-            else
-                return new SliceRef<T>();
-        }
-
-        public unsafe void CopyTo(int from, byte* dest, int offset, int count)
-        {
-            throw new NotImplementedException();
-        }
-
-        public unsafe void CopyTo(byte* dest)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void CopyTo(byte[] dest)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void CopyTo(int from, byte[] dest, int offset, int count)
-        {
-            throw new NotImplementedException();
-        }
-
-        public T1 Clone<T1>() where T1 : ISlice
-        {
-            throw new NotImplementedException();
-        }
-
-        public T1 Skip<T1>(ushort bytesToSkip) where T1 : ISlice
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-
-
-
-
-    //public unsafe class Slice<T> where T : ISlice
-    //{
-    //    protected readonly T Storage;
-
-    //    public SliceOptions Options;
-    //    public ushort Size
-    //    {
-    //        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    //        get { return Storage.Size; }
-    //    }
-
-    //    protected Slice(T storage)
-    //    {
-    //        this.Storage = storage;
-    //    }
-
-    //    protected Slice(SliceOptions options, T storage)
-    //    {
-    //        this.Options = options;
-    //        this.Storage = storage;
-    //    }
-
-    //    public bool Equals(Slice other)
-    //    {
-    //        return Compare(other) == 0;
-    //    }
-
-    //    public override bool Equals(object obj)
-    //    {
-    //        if (ReferenceEquals(null, obj)) return false;
-    //        if (ReferenceEquals(this, obj)) return true;
-    //        if (obj.GetType() != GetType()) return false;
-    //        return Equals((Slice)obj);
-    //    }
-
-    //    public override int GetHashCode()
-    //    {
-    //        return this.Storage.GetHashCode();
-    //    }
-
-    //    public byte this[int index]
-    //    {
-    //        get
-    //        {
-    //            if (index < 0 || index > Size)
-    //                throw new ArgumentOutOfRangeException(nameof(index));
-
-    //            return this.Storage[index];
-    //        }
-    //    }
-
-    //    public override string ToString()
-    //    {
-    //        return Storage.ToString();
-    //    }
-
-    //    //private int CompareData(Slice other, ushort size)
-    //    //{
-    //    //    if (Array != null)
-    //    //    {
-    //    //        fixed (byte* a = Array)
-    //    //        {
-    //    //            if (other.Array != null)
-    //    //            {
-    //    //                fixed (byte* b = other.Array)
-    //    //                {
-    //    //                    return Memory.CompareInline(a, b, size);
-    //    //                }
-    //    //            }
-    //    //            else return Memory.CompareInline(a, other.Pointer, size);
-    //    //        }
-    //    //    }
-
-    //    //    if (other.Array != null)
-    //    //    {
-    //    //        fixed (byte* b = other.Array)
-    //    //        {
-    //    //            return Memory.CompareInline(Pointer, b, size);
-    //    //        }
-    //    //    }
-    //    //    else return Memory.CompareInline(Pointer, other.Pointer, size);
-    //    //}      
-
-    //    public Slice ToSlice()
-    //    {
-    //        return new Slice(this, Size);
-    //    }
-
-
-
-    //    public Slice Clone()
-    //    {
-    //        throw new NotImplementedException();
-
-    //        //var buffer = new byte[Size];
-    //        //if (Array == null)
-    //        //{
-    //        //    fixed (byte* dest = buffer)
-    //        //    {
-    //        //        Memory.Copy(dest, Pointer, Size);
-    //        //    }
-    //        //}
-    //        //else
-    //        //{
-    //        //    Buffer.BlockCopy(Array, 0, buffer, 0, Size);
-    //        //}
-
-    //        //return new Slice(buffer);
-    //    }
-
-
-    //    public int Compare(Slice other)
-    //    {
-    //        Debug.Assert(Options == SliceOptions.Key);
-    //        Debug.Assert(other.Options == SliceOptions.Key);
-
-    //        var srcKey = this.Size;
-    //        var otherKey = other.Size;
-    //        var length = srcKey <= otherKey ? srcKey : otherKey;
-
-    //        var r = CompareData(other, length);
-    //        if (r != 0)
-    //            return r;
-
-    //        return srcKey - otherKey;
-    //    }
-
-    //    public bool StartsWith(Slice other)
-    //    {
-    //        if (Size < other.Size)
-    //            return false;
-
-    //        return CompareData(other, other.Size) == 0;
-    //    }
-    //}
 }

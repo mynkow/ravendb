@@ -535,7 +535,7 @@ namespace Voron.Data.Tables
         }
 
         public IEnumerable<SeekResult> SeekForwardFrom<T>(TableSchema.SchemaIndexDef index, T value, bool startsWith = false)
-            where T : ISlice
+            where T : class, ISlice
         {
             var tree = GetTree(index);
             using (var it = tree.Iterate())
@@ -558,7 +558,7 @@ namespace Voron.Data.Tables
         }
 
         public IEnumerable<TableValueReader> SeekByPrimaryKey<T>(T value)
-            where T : ISlice
+            where T : class, ISlice
         {
             var pk = _schema.Key;
             var tree = GetTree(pk);

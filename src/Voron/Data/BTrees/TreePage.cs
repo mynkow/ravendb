@@ -295,7 +295,7 @@ namespace Voron.Data.BTrees
         /// No need to do any work here, we are always adding at the end
         /// </summary>
         internal void CopyNodeDataToEndOfPage<T>(TreeNodeHeader* other, T key)
-            where T : ISlice
+            where T : class, ISlice
         {
             var index = NumberOfEntries;
 

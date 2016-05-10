@@ -6,7 +6,7 @@ namespace Voron.Data
 {
     public unsafe class EmptyIterator : IIterator
     {
-        public bool Seek<T>(T key) where T : ISlice
+        public bool Seek<T>(T key) where T : class, ISlice
         {
             return false;
         }

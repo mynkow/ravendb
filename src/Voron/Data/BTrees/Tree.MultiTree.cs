@@ -40,10 +40,10 @@ namespace Voron.Data.BTrees
         public bool IsMultiValueTree { get; set; }
 
         public void MultiAdd<T, W>(T key, W value, ushort? version = null)
-            where T : ISlice
-            where W : ISlice
+            where T : class, ISlice
+            where W : class, ISlice
         {
-            if (!value.HasValue)
+            if (value == null)
                 throw new ArgumentNullException(nameof(value));
 
             int maxNodeSize = Llt.DataPager.NodeMaxSize;
@@ -139,8 +139,8 @@ namespace Voron.Data.BTrees
         }
 
         private void ExpandMultiTreeNestedPageSize<T,W>(T key, W value, byte* nestedPagePtr, ushort newSize, int currentSize)
-            where T : ISlice
-            where W : ISlice
+            where T : class, ISlice
+            where W : class, ISlice
         {
             Debug.Assert(newSize > currentSize);
             TemporaryPage tmp;
@@ -175,8 +175,8 @@ namespace Voron.Data.BTrees
         }
 
         private void MultiAddOnNewValue<T,W>(T key, W value, ushort? version, int maxNodeSize)
-            where T : ISlice
-            where W : ISlice
+            where T : class, ISlice
+            where W : class, ISlice
         {
             var valueToInsert = value;
 

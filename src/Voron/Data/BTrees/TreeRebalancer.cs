@@ -252,7 +252,7 @@ namespace Voron.Data.BTrees
         }
 
         private void AddSeparatorToParentPage<T>(TreePage parentPage, long pageNumber, T separatorKey, int separatorKeyPosition)
-            where T : ISlice
+            where T : class, ISlice
         {
             if (parentPage.HasSpaceFor(_tx, TreeSizeOf.BranchEntry(separatorKey) + Constants.NodeOffsetSize) == false)
             {

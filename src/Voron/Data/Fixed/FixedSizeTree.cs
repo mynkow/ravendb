@@ -116,18 +116,18 @@ namespace Voron.Data.Fixed
         }
 
         public bool Add<T>(long key, T val = default(T))
-            where T : ISlice
+            where T : class, ISlice
         {
-            if (_valSize == 0 && (val.HasValue && val.Size != 0))
+            if (_valSize == 0 && (val != null && val.Size != 0))
                 throw new InvalidOperationException("When the value size is zero, no value can be specified");
-            if (_valSize != 0 && !val.HasValue)
+            if (_valSize != 0 && val == null)
                 throw new InvalidOperationException("When the value size is not zero, the value must be specified");
-            if (val.HasValue && val.Size != _valSize)
+            if (val != null && val.Size != _valSize)
                 throw new InvalidOperationException("The value size must be " + _valSize + " but was " + val.Size);
 
             bool isNew;
             var pos = DirectAdd(key, out isNew);
-            if (val.HasValue && val.Size != 0)
+            if (val != null && val.Size != 0)
                 val.CopyTo(pos);
 
             return isNew;
@@ -1253,7 +1253,7 @@ namespace Voron.Data.Fixed
             switch (_type)
             {
                 case null:
-                    return SlicePointer.Empty;
+                    return null;
 
                 case RootObjectType.EmbeddedFixedSizeTree:
                     var ptr = _parent.DirectRead(_treeName);
@@ -1261,7 +1261,7 @@ namespace Voron.Data.Fixed
                     var dataStart = ptr + sizeof(FixedSizeTreeHeader.Embedded);
                     var pos = BinarySearch(dataStart, header->NumberOfEntries, key, _entrySize);
                     if (_lastMatch != 0)
-                        return SlicePointer.Empty;
+                        return null;
                     return new SlicePointer(dataStart + (pos * _entrySize) + sizeof(long), _valSize);
 
                 case RootObjectType.FixedSizeTree:
@@ -1280,7 +1280,7 @@ namespace Voron.Data.Fixed
 
                     BinarySearch(page, key);
                     if (_lastMatch != 0)
-                        return SlicePointer.Empty;
+                        return null;
                     return new SlicePointer(dataStart + (page.LastSearchPosition * _entrySize) + sizeof(long), _valSize);
 
                 default:

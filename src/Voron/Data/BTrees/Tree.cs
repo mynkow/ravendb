@@ -97,7 +97,7 @@ namespace Voron.Data.BTrees
         /// This is using little endian
         /// </summary>
         public long Increment<T>(T key, long delta, ushort? version = null)
-            where T : ISlice
+            where T : class, ISlice
         {
             State.IsModified = true;
 
@@ -115,7 +115,7 @@ namespace Voron.Data.BTrees
         }
 
         public void Add<T>(T key, Stream value, ushort? version = null)
-            where T : ISlice
+            where T : class, ISlice
         {
             if (value == null) throw new ArgumentNullException(nameof(value));
             if (value.Length > int.MaxValue)
@@ -128,7 +128,7 @@ namespace Voron.Data.BTrees
         }
 
         public void Add<T>(T key, byte[] value, ushort? version = null)
-            where T : ISlice
+            where T : class, ISlice
         {
             if (value == null) throw new ArgumentNullException(nameof(value));
 
@@ -142,10 +142,10 @@ namespace Voron.Data.BTrees
         }
 
         public void Add<T,W>(T key, W value, ushort? version = null)
-            where T : ISlice
-            where W : ISlice
+            where T : class, ISlice
+            where W : class, ISlice
         {
-            if (!value.HasValue)
+            if (value == null)
                 throw new ArgumentNullException(nameof(value));
 
             State.IsModified = true;
@@ -177,7 +177,7 @@ namespace Voron.Data.BTrees
         }
 
         public byte* DirectAdd<T>(T key, int len, TreeNodeFlags nodeType = TreeNodeFlags.Data, ushort? version = null)
-            where T : ISlice
+            where T : class, ISlice
         {
             Debug.Assert(nodeType == TreeNodeFlags.Data || nodeType == TreeNodeFlags.MultiValuePageRef);
 
@@ -1011,7 +1011,7 @@ namespace Voron.Data.BTrees
         }
 
         public T LastKeyOrDefault<T>()
-            where T : ISlice
+            where T : class, ISlice
         {
             using (var it = Iterate())
             {
@@ -1023,7 +1023,7 @@ namespace Voron.Data.BTrees
         }
 
         public T FirstKeyOrDefault<T>()
-             where T : ISlice
+             where T : class, ISlice
         {
             using (var it = Iterate())
             {

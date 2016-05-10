@@ -101,7 +101,7 @@ namespace Voron.Impl.FreeSpace
 
                     var nextSectionId = currentSectionId + 1;
                     var read = freeSpaceTree.Read(nextSectionId);
-                    if (!read.HasValue)
+                    if (read == null)
                     {
                         //not a following next section
                         info.Clear();
@@ -244,7 +244,7 @@ namespace Voron.Impl.FreeSpace
             var nextSectionId = currentSectionId + 1;
 
             var read = freeSpacetree.Read(nextSectionId);
-            if (!read.HasValue)
+            if (read == null)
                 return false;
 
             var next = new StreamBitArray(read.CreateReader());
@@ -324,7 +324,7 @@ namespace Voron.Impl.FreeSpace
 
                 var section = pageNumber/NumberOfPagesInSection;
                 var result = freeSpaceTree.Read(section);
-                var sba = !result.HasValue ? new StreamBitArray() : new StreamBitArray(result.CreateReader());
+                var sba = result == null ? new StreamBitArray() : new StreamBitArray(result.CreateReader());
                 sba.Set((int)(pageNumber%NumberOfPagesInSection), true);
                 freeSpaceTree.Add(section, sba.ToSlice());
 

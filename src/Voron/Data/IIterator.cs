@@ -8,7 +8,7 @@ namespace Voron.Data
         SliceArray RequiredPrefix { get; set; }
         SliceArray MaxKey { get; set; }        
 
-        bool Seek<T>(T key) where T : ISlice;
+        bool Seek<T>(T key) where T : class, ISlice;
         bool MoveNext();
         bool MovePrev();
         bool Skip(int count);

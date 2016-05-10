@@ -15,8 +15,8 @@ namespace Voron.Data.BTrees
 
         public event Action<IIterator> OnDisposal;
 
-        private SlicePointer _currentKey = SlicePointer.Empty;
-        private SlicePointer _currentInternalKey = SlicePointer.Empty;
+        private SlicePointer _currentKey = null;
+        private SlicePointer _currentInternalKey = null;
 
         public TreeIterator(Tree tree, LowLevelTransaction tx)
         {
@@ -37,7 +37,7 @@ namespace Voron.Data.BTrees
         }
 
         public bool Seek<T>(T key)
-            where T : ISlice
+            where T : class, ISlice
         {
             if (_disposed)
                 throw new ObjectDisposedException("TreeIterator " + _tree.Name);
@@ -220,7 +220,7 @@ namespace Voron.Data.BTrees
     public static class IteratorExtensions
     {
         public static IEnumerable<string> DumpValues<T>(this IIterator self)
-            where T : ISlice
+            where T : class, ISlice
         {                      
             if (self.Seek(Slices.GetBeforeAllKeys<T>()) == false)
                 yield break;
@@ -233,13 +233,13 @@ namespace Voron.Data.BTrees
 
         public unsafe static bool ValidateCurrentKey(this IIterator self, TreeNodeHeader* node, TreePage page)
         {
-            if (self.RequiredPrefix.HasValue)
+            if (self.RequiredPrefix != null)
             {
                 var currentKey = page.GetNodeKey<SlicePointer>(node);
                 if (SliceComparer.StartWith(currentKey, self.RequiredPrefix) == false)
                     return false;
             }
-            if (self.MaxKey.HasValue)
+            if (self.MaxKey != null)
             {
                 var currentKey = page.GetNodeKey<SlicePointer>(node);
                 if (SliceComparer.CompareInline(currentKey, self.MaxKey) >= 0)

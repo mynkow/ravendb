@@ -7,7 +7,7 @@ using Voron.Impl.FreeSpace;
 namespace Voron.Data.BTrees
 {
     public unsafe class TreePageSplitter<T>
-        where T : ISlice
+        where T : class, ISlice
     {
         private readonly TreeCursor _cursor;
         private readonly int _len;
@@ -130,7 +130,7 @@ namespace Voron.Data.BTrees
 
         private byte* AddNodeToPage(TreePage page, int index, T alreadyPreparedNewKey = default(T))
         {
-            var newKeyToInsert = alreadyPreparedNewKey.HasValue ? alreadyPreparedNewKey : _newKey;
+            var newKeyToInsert = alreadyPreparedNewKey != null ? alreadyPreparedNewKey : _newKey;
 
             switch (_nodeType)
             {
@@ -200,7 +200,7 @@ namespace Voron.Data.BTrees
             }
 
             // move the actual entries from page to right page
-            var instance = default(SlicePointer);
+            SlicePointer instance = null;
             ushort nKeys = _page.NumberOfEntries;
             for (int i = splitIndex; i < nKeys; i++)
             {
