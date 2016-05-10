@@ -128,7 +128,7 @@ namespace Voron.Data.Tables
         }
 
         public TableValueReader ReadByKey<T>(T key)
-            where T : ISlice
+            where T : class, ISlice
         {
             long id;
             if (TryFindIdFromPrimaryKey(key, out id) == false)
@@ -143,7 +143,7 @@ namespace Voron.Data.Tables
         }
 
         private bool TryFindIdFromPrimaryKey<T>(T key, out long id)
-            where T : ISlice
+            where T : class, ISlice
         {
             var pkTree = GetTree(_schema.Key);
             var readResult = pkTree.Read(key);
@@ -481,7 +481,7 @@ namespace Voron.Data.Tables
 
 
         public void DeleteByKey<T>(T key)
-            where T : ISlice
+            where T : class, ISlice
         {
             var pk = _schema.Key;
             var pkTree = GetTree(_schema.Key);

@@ -294,9 +294,7 @@ namespace Voron.Data.BTrees
             newPage.Dirty = true;
             RecentlyFoundPages.Reset(pageNumber);
 
-            var onPageModified = PageModified;
-            if (onPageModified != null)
-                onPageModified(pageNumber);
+            PageModified?.Invoke(pageNumber);
 
             return newPage;
         }
@@ -316,10 +314,7 @@ namespace Voron.Data.BTrees
 
             State.RecordNewPage(overflowPageStart, numberOfPages);
 
-
-            var onPageModified = PageModified;
-            if (onPageModified != null)
-                onPageModified(overflowPageStart.PageNumber);
+            PageModified?.Invoke(overflowPageStart.PageNumber);
 
             return overflowPageStart.PageNumber;
         }
@@ -376,7 +371,7 @@ namespace Voron.Data.BTrees
             }
         }
 
-        internal TreePage FindPageFor<T>(T key, out TreeNodeHeader* node) where T : ISlice
+        internal TreePage FindPageFor<T>(T key, out TreeNodeHeader* node) where T : class, ISlice
         {
             TreePage p;
 
@@ -388,7 +383,7 @@ namespace Voron.Data.BTrees
             return SearchForPage(key, out node);
         }
 
-        internal TreePage FindPageFor<T>(T key, out TreeNodeHeader* node, out Func<TreeCursor> cursor) where T : ISlice
+        internal TreePage FindPageFor<T>(T key, out TreeNodeHeader* node, out Func<TreeCursor> cursor) where T : class, ISlice
         {
             TreePage p;
 
@@ -400,7 +395,8 @@ namespace Voron.Data.BTrees
             return SearchForPage(key, out cursor, out node);
         }
 
-        private TreePage SearchForPage<T>(T key, out TreeNodeHeader* node) where T : ISlice
+        private TreePage SearchForPage<T>(T key, out TreeNodeHeader* node) 
+            where T : class, ISlice
         {
             var p = _llt.GetReadOnlyTreePage(State.RootPageNumber);
 
@@ -597,7 +593,7 @@ namespace Voron.Data.BTrees
             RecentlyFoundPages.Add(foundPage);
         }
 
-        private bool TryUseRecentTransactionPage<T>(T key, out TreePage page, out TreeNodeHeader* node) where T : ISlice
+        private bool TryUseRecentTransactionPage<T>(T key, out TreePage page, out TreeNodeHeader* node) where T : class, ISlice
         {
             node = null;
             page = null;
@@ -629,7 +625,7 @@ namespace Voron.Data.BTrees
             return true;
         }
 
-        private bool TryUseRecentTransactionPage<T>(T key, out Func<TreeCursor> cursor, out TreePage page, out TreeNodeHeader* node) where T : ISlice
+        private bool TryUseRecentTransactionPage<T>(T key, out Func<TreeCursor> cursor, out TreePage page, out TreeNodeHeader* node) where T : class, ISlice
         {
             node = null;
             page = null;
@@ -749,7 +745,7 @@ namespace Voron.Data.BTrees
         }
 
         public void Delete<T>(T key, ushort? version = null)
-            where T : ISlice
+            where T : class, ISlice
         {
             if (_llt.Flags == (TransactionFlags.ReadWrite) == false)
                 throw new ArgumentException("Cannot delete a value in a read only transaction");
@@ -789,7 +785,7 @@ namespace Voron.Data.BTrees
         }
 
         public ReadResult Read<T>(T key)
-            where T : ISlice
+            where T : class, ISlice
         {
             TreeNodeHeader* node;
             var p = FindPageFor(key, out node);
@@ -801,7 +797,7 @@ namespace Voron.Data.BTrees
         }
 
         public int GetDataSize<T>(T key)
-            where T : ISlice
+            where T : class, ISlice
         {            
             TreeNodeHeader* node;
             var p = FindPageFor(key, out node);
@@ -841,7 +837,7 @@ namespace Voron.Data.BTrees
         }
 
         public ushort ReadVersion<T>(T key)
-            where T : ISlice
+            where T : class, ISlice
         {
             TreeNodeHeader* node;
             var p = FindPageFor(key, out node);
@@ -855,7 +851,7 @@ namespace Voron.Data.BTrees
         }
 
         internal byte* DirectRead<T>(T key)
-            where T : ISlice
+            where T : class, ISlice
         {
             TreeNodeHeader* node;
             var p = FindPageFor(key, out node);

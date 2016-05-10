@@ -162,7 +162,7 @@ namespace SlowTests.Voron
             return results;
         }
 
-        protected unsafe Tuple<SlicePointer, SlicePointer> ReadKey<T>(Transaction txh, Tree tree, T key) where T : ISlice
+        protected unsafe Tuple<SlicePointer, SlicePointer> ReadKey<T>(Transaction txh, Tree tree, T key) where T : class, ISlice
         {
             TreeNodeHeader* node;
             var p = tree.FindPageFor(key, out node);

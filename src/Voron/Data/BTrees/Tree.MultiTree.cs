@@ -212,8 +212,8 @@ namespace Voron.Data.BTrees
         }
 
         public void MultiDelete<T, W>(T key, W value, ushort? version = null)
-            where T : ISlice
-            where W : ISlice
+            where T : class, ISlice
+            where W : class, ISlice
         {
             State.IsModified = true;
             TreeNodeHeader* node;
@@ -275,7 +275,7 @@ namespace Voron.Data.BTrees
 
         //TODO: write a test for this
         public long MultiCount<T>(T key)
-            where T : ISlice
+            where T : class, ISlice
         {
             TreeNodeHeader* node;
             var page = FindPageFor(key, out node);
@@ -301,7 +301,7 @@ namespace Voron.Data.BTrees
         }
 
         public IIterator MultiRead<T>(T key)
-            where T : ISlice
+            where T : class, ISlice
         {
             TreeNodeHeader* node;
             var page = FindPageFor(key, out node);
