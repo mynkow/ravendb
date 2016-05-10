@@ -45,9 +45,9 @@ namespace Voron
             _pos += sizeof(short);
         }
 
-        public Slice CreateSlice()
+        public SliceArray CreateSlice()
         {
-            return new Slice(_buffer);
+            return new SliceArray(_buffer);
         }
 
         public void Write(bool b)
@@ -90,9 +90,9 @@ namespace Voron
             _pos = 0;
         }
 
-        public Slice CreateSlice(int size)
+        public SliceArray CreateSlice(int size)
         {
-            return new Slice(_buffer, (ushort)size);
+            return new SliceArray(_buffer, (ushort)size);
         }
     }
 }

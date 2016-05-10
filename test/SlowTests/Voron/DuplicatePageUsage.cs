@@ -57,7 +57,7 @@ namespace SlowTests.Voron
                     }
 
                     var val = long.MaxValue/2;
-                    options.Add("LastEntryId", new Slice((byte*)&val, sizeof(long)));
+                    options.Add<SliceArray,SlicePointer>("LastEntryId", new SlicePointer((byte*)&val, sizeof(long)));
                     tx.Commit();
                 }
             }

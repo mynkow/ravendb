@@ -205,7 +205,7 @@ namespace FastTests.Voron.Storage
                     for (int i = 0; i < r.Next(1000); i++)
                     {
                         if (valueSize == 0)
-                            fst.Add(i);
+                            fst.Add<SliceArray>(i);
                         else
                             fst.Add(i, new byte[valueSize]);
                     }

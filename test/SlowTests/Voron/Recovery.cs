@@ -303,7 +303,7 @@ namespace SlowTests.Voron
 
 				    using (var iterator = bTree.MultiRead("a"))
 					{
-						Assert.True(iterator.Seek(Slice.BeforeAllKeys));
+						Assert.True(iterator.Seek(Slices.GetBeforeAllKeys<SlicePointer>()));
 
 						var keys = new HashSet<string>();
 						do

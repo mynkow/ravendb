@@ -55,14 +55,11 @@ namespace FastTests.Voron.Tables
                     continue;
                 }
 
-                var slice = o as Slice;
-                if (slice != null)
+                if (o is SliceArray)
                 {
-                    if (slice.Array == null)
-                        throw new NotSupportedException();
-
-                    gcHandle = GCHandle.Alloc(slice.Array, GCHandleType.Pinned);
-                    builder.Add((byte*)gcHandle.AddrOfPinnedObject(), slice.Array.Length);
+                    var slice = (SliceArray)o;
+                    gcHandle = GCHandle.Alloc(slice.Value, GCHandleType.Pinned);
+                    builder.Add((byte*)gcHandle.AddrOfPinnedObject(), slice.Value.Length);
                     handles1.Add(gcHandle);
 
                     continue;

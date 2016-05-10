@@ -122,7 +122,7 @@ namespace Voron
                 if (metadataTree == null)
                     throw new VoronUnrecoverableErrorException("Could not find metadata tree in database, possible mismatch / corruption?");
 
-                var dbId = metadataTree.Read("db-id");
+                var dbId = metadataTree.Read<SliceArray>("db-id");
                 if (dbId == null)
                     throw new VoronUnrecoverableErrorException("Could not find db id in metadata tree, possible mismatch / corruption?");
 
@@ -133,7 +133,7 @@ namespace Voron
 
                 DbId = new Guid(buffer);
 
-                var schemaVersion = metadataTree.Read("schema-version");
+                var schemaVersion = metadataTree.Read<SliceArray>("schema-version");
                 if (schemaVersion == null)
                     throw new VoronUnrecoverableErrorException("Could not find schema version in metadata tree, possible mismatch / corruption?");
 
@@ -170,8 +170,8 @@ namespace Voron
                 DbId = Guid.NewGuid();
 
                 var metadataTree = treesTx.CreateTree(Constants.MetadataTreeName);
-                metadataTree.Add("db-id", DbId.ToByteArray());
-                metadataTree.Add("schema-version", EndianBitConverter.Little.GetBytes(Options.SchemaVersion));
+                metadataTree.Add<SliceArray>("db-id", DbId.ToByteArray());
+                metadataTree.Add<SliceArray>("schema-version", EndianBitConverter.Little.GetBytes(Options.SchemaVersion));
 
                 treesTx.PrepareForCommit();
 
@@ -415,25 +415,27 @@ namespace Voron
             var fixedSizeTrees = new List<FixedSizeTree>();
             using (var rootIterator = tx.LowLevelTransaction.RootObjects.Iterate())
             {
-                if (rootIterator.Seek(Slice.BeforeAllKeys))
+                if (rootIterator.Seek(SliceArray.BeforeAllKeys))
                 {
                     do
                     {
-                        switch (tx.GetRootObjectType(rootIterator.CurrentKey))
+                        var curretKey = rootIterator.CurrentKey.Clone<SliceArray>();
+                        switch (tx.GetRootObjectType(curretKey))
                         {
                             case RootObjectType.VariableSizeTree:
-                                var tree = tx.ReadTree(rootIterator.CurrentKey.ToString());
+                                var tree = tx.ReadTree(curretKey.ToString());
                                 trees.Add(tree);
                                 break;
                             case RootObjectType.EmbeddedFixedSizeTree:
                                 break;
                             case RootObjectType.FixedSizeTree:
-                                fixedSizeTrees.Add(tx.FixedTreeFor(rootIterator.CurrentKey, 0));
+                                fixedSizeTrees.Add(tx.FixedTreeFor(curretKey, 0));
                                 break;
                             default:
                                 throw new ArgumentOutOfRangeException();
                         }
-                    } while (rootIterator.MoveNext());
+                    }
+                    while (rootIterator.MoveNext());
                 }
             }
 

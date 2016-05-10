@@ -251,11 +251,12 @@ namespace Voron.Data.BTrees
             AddSeparatorToParentPage(parentPage, pageNumber, newSeparatorKey, pos);
         }
 
-        private void AddSeparatorToParentPage(TreePage parentPage, long pageNumber, Slice separatorKey, int separatorKeyPosition)
+        private void AddSeparatorToParentPage<T>(TreePage parentPage, long pageNumber, T separatorKey, int separatorKeyPosition)
+            where T : ISlice
         {
             if (parentPage.HasSpaceFor(_tx, TreeSizeOf.BranchEntry(separatorKey) + Constants.NodeOffsetSize) == false)
             {
-                var pageSplitter = new TreePageSplitter(_tx, _tree, separatorKey, -1, pageNumber, TreeNodeFlags.PageRef, 0, _cursor);
+                var pageSplitter = new TreePageSplitter<T>(_tx, _tree, separatorKey, -1, pageNumber, TreeNodeFlags.PageRef, 0, _cursor);
                 pageSplitter.Execute();
             }
             else
@@ -285,11 +286,11 @@ namespace Voron.Data.BTrees
                 var implicitLeftNode = to.GetNode(0);
                 var leftPageNumber = implicitLeftNode->PageNumber;
 
-                Slice implicitLeftKeyToInsert;
+                SlicePointer implicitLeftKeyToInsert;
 
                 if (implicitLeftNode == actualKeyNode)
                 {
-                    implicitLeftKeyToInsert = new Slice(actualKeyNode);
+                    implicitLeftKeyToInsert = new SlicePointer(actualKeyNode);
                 }
                 else
                 {
@@ -332,23 +333,23 @@ namespace Voron.Data.BTrees
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private Slice GetActualKey(TreePage page, int pos)
+        private SlicePointer GetActualKey(TreePage page, int pos)
         {
             TreeNodeHeader* _;
             return GetActualKey(page, pos, out _);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private Slice GetActualKey(TreePage page, int pos, out TreeNodeHeader* node)
+        private SlicePointer GetActualKey(TreePage page, int pos, out TreeNodeHeader* node)
         {
             node = page.GetNode(pos);
-            var key = page.GetNodeKey(node);
+            var key = page.GetNodeKey<SlicePointer>(node);
             while (key.Size == 0)
             {
                 Debug.Assert(page.IsBranch);
                 page = _tx.GetReadOnlyTreePage(node->PageNumber);
                 node = page.GetNode(0);
-                key = page.GetNodeKey(node);
+                key = page.GetNodeKey<SlicePointer>(node);
             }
 
             return key;

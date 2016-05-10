@@ -180,9 +180,9 @@ namespace Voron.Impl.FreeSpace
             return tmpBuffer;
         }
 
-        public Slice ToSlice()
+        public SliceArray ToSlice()
         {
-            return new Slice(ToBuffer());
+            return new SliceArray(ToBuffer());
         }
     }
 }

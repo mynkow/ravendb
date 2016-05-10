@@ -96,7 +96,7 @@ namespace Raven.Server.ServerWide
         public BlittableJsonReaderObject Read(TransactionOperationContext ctx, string id)
         {
             var dbs = ctx.Transaction.InnerTransaction.ReadTree("items");
-            var result = dbs.Read(id);
+            var result = dbs.Read<SliceArray>(id);
             if (result == null)
                 return null;
             return new BlittableJsonReaderObject(result.Reader.Base, result.Reader.Length, ctx);
@@ -105,7 +105,7 @@ namespace Raven.Server.ServerWide
         public void Delete(TransactionOperationContext ctx, string id)
         {
             var dbs = ctx.Transaction.InnerTransaction.ReadTree("items");
-            dbs.Delete(id);
+            dbs.Delete<SliceArray>(id);
         }
 
         public class Item

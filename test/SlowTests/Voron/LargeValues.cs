@@ -61,7 +61,7 @@ namespace SlowTests.Voron
                     var tree = snapshot.ReadTree(treeName);
                     using (var iterator = tree.Iterate())
                     {
-                        Assert.True(iterator.Seek(Slice.BeforeAllKeys));
+                        Assert.True(iterator.Seek(Slices.GetBeforeAllKeys<SlicePointer>()));
 
                         var keys = new HashSet<string>();
 

@@ -8,20 +8,20 @@ namespace Voron.Data.BTrees
     {
         private readonly Tree _tree;
         private readonly LowLevelTransaction _tx;
+
         private TreeCursor _cursor;
         private TreePage _currentPage;
-        private Slice _currentKey = new Slice(SliceOptions.Key);
-        private Slice _currentInternalKey;
         private bool _disposed;
 
         public event Action<IIterator> OnDisposal;
+
+        private SlicePointer _currentKey = SlicePointer.Empty;
+        private SlicePointer _currentInternalKey = SlicePointer.Empty;
 
         public TreeIterator(Tree tree, LowLevelTransaction tx)
         {
             _tree = tree;
             _tx = tx;
-
-            _currentInternalKey = new Slice(SliceOptions.Key); 				
         }
 
         public int GetCurrentDataSize()
@@ -31,21 +31,27 @@ namespace Voron.Data.BTrees
             return TreeNodeHeader.GetDataSize(_tx, Current);
         }
 
-        public bool Seek(Slice key)
+        public bool Seek(string key)
+        {
+            return Seek<SliceArray>(key);
+        }
+
+        public bool Seek<T>(T key)
+            where T : ISlice
         {
             if (_disposed)
                 throw new ObjectDisposedException("TreeIterator " + _tree.Name);
 
             TreeNodeHeader* node;
-            Func<TreeCursor> cursorConstructor;
-            _currentPage = _tree.FindPageFor(key, out node, out cursorConstructor);
-            _cursor = cursorConstructor();
+            Func<TreeCursor> constructor;
+            _currentPage = _tree.FindPageFor(key, out node, out constructor);
+            _cursor = constructor();
             _cursor.Pop();
 
             if (node != null)
             {
                 _currentPage.SetNodeKey(node, ref _currentInternalKey);
-                _currentKey = _currentInternalKey.ToSlice();
+                _currentKey = _currentInternalKey; // TODO: Check here if aliasing via pointer is the intended use.
                 return this.ValidateCurrentKey(Current, _currentPage);
             }
             
@@ -57,7 +63,7 @@ namespace Voron.Data.BTrees
             return MoveNext();
         }
 
-        public Slice CurrentKey
+        public SlicePointer CurrentKey
         {
             get
             {
@@ -124,7 +130,7 @@ namespace Voron.Data.BTrees
                         return false;
 
                     _currentPage.SetNodeKey(current, ref _currentInternalKey);
-                    _currentKey = _currentInternalKey.ToSlice();
+                    _currentKey = _currentInternalKey;
                     return true;// there is another entry in this page
                 }
                 if (_cursor.PageCount == 0)
@@ -159,7 +165,7 @@ namespace Voron.Data.BTrees
                         return false;
 
                     _currentPage.SetNodeKey(current, ref _currentInternalKey);
-                    _currentKey = _currentInternalKey.ToSlice();
+                    _currentKey = _currentInternalKey;
                     return true;// there is another entry in this page
                 }
                 if (_cursor.PageCount == 0)
@@ -201,9 +207,9 @@ namespace Voron.Data.BTrees
             OnDisposal?.Invoke(this);
         }
 
-        public Slice RequiredPrefix { get; set; }
+        public SliceArray RequiredPrefix { get; set; }
 
-        public Slice MaxKey { get; set; }
+        public SliceArray MaxKey { get; set; }
 
         public long TreeRootPage
         {
@@ -213,9 +219,10 @@ namespace Voron.Data.BTrees
 
     public static class IteratorExtensions
     {
-        public static IEnumerable<string> DumpValues(this IIterator self)
-        {
-            if (self.Seek(Slice.BeforeAllKeys) == false)
+        public static IEnumerable<string> DumpValues<T>(this IIterator self)
+            where T : ISlice
+        {                      
+            if (self.Seek(Slices.GetBeforeAllKeys<T>()) == false)
                 yield break;
 
             do
@@ -226,16 +233,16 @@ namespace Voron.Data.BTrees
 
         public unsafe static bool ValidateCurrentKey(this IIterator self, TreeNodeHeader* node, TreePage page)
         {
-            if (self.RequiredPrefix != null)
+            if (self.RequiredPrefix.HasValue)
             {
-                var currentKey = page.GetNodeKey(node);
-                if (currentKey.StartsWith(self.RequiredPrefix) == false)
+                var currentKey = page.GetNodeKey<SlicePointer>(node);
+                if (SliceComparer.StartWith(currentKey, self.RequiredPrefix) == false)
                     return false;
             }
-            if (self.MaxKey != null)
+            if (self.MaxKey.HasValue)
             {
-                var currentKey = page.GetNodeKey(node);
-                if (currentKey.Compare(self.MaxKey) >= 0)
+                var currentKey = page.GetNodeKey<SlicePointer>(node);
+                if (SliceComparer.CompareInline(currentKey, self.MaxKey) >= 0)
                     return false;
             }
             return true;

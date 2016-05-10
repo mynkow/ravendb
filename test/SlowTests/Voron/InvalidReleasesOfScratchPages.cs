@@ -79,7 +79,7 @@ namespace SlowTests.Voron
 										using (var snapshot = Env.ReadTransaction())
 										using (var iterator = snapshot.ReadTree(treeName).Iterate())
 										{
-											if (!iterator.Seek(Slice.BeforeAllKeys))
+											if (!iterator.Seek(Slices.GetBeforeAllKeys<SlicePointer>()))
 											{
 												continue;
 											}

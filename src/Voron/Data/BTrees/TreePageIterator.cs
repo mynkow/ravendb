@@ -6,14 +6,13 @@ namespace Voron.Data.BTrees
     public unsafe class TreePageIterator : IIterator
     {
         private readonly TreePage _page;
-        private Slice _currentKey = new Slice(SliceOptions.Key);
-        private Slice _currentInternalKey;
+        private SlicePointer _currentKey = SlicePointer.Empty;
+        private SlicePointer _currentInternalKey;
         private bool _disposed;
 
         public TreePageIterator(TreePage page)
         {
             _page = page;
-            _currentInternalKey = page.CreateNewEmptyKey();
         }
 
         public void Dispose()
@@ -23,7 +22,8 @@ namespace Voron.Data.BTrees
             OnDisposal?.Invoke(this);
         }
 
-        public bool Seek(Slice key)
+        public bool Seek<T>(T key)
+            where T : ISlice
         {
             if(_disposed)
                 throw new ObjectDisposedException("PageIterator");
@@ -32,7 +32,7 @@ namespace Voron.Data.BTrees
                 return false;
 
             _page.SetNodeKey(current, ref _currentInternalKey);
-            _currentKey = _currentInternalKey.ToSlice();
+            _currentKey = _currentInternalKey;
 
             return this.ValidateCurrentKey(current, _page);
         }
@@ -51,7 +51,7 @@ namespace Voron.Data.BTrees
         }
 
 
-        public Slice CurrentKey
+        public SlicePointer CurrentKey
         {
             get
             {
@@ -71,8 +71,8 @@ namespace Voron.Data.BTrees
         }
 
 
-        public Slice RequiredPrefix { get; set; }
-        public Slice MaxKey { get; set; }
+        public SliceArray RequiredPrefix { get; set; }
+        public SliceArray MaxKey { get; set; }
 
         public bool MoveNext()
         {
@@ -109,7 +109,7 @@ namespace Voron.Data.BTrees
                 return false;
             }
             _page.SetNodeKey(current, ref _currentInternalKey);
-            _currentKey = _currentInternalKey.ToSlice();
+            _currentKey = _currentInternalKey;
             return true;
         }
 

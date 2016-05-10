@@ -77,7 +77,7 @@ namespace FastTests.Voron.Trees
         {
             using (var tx = Env.WriteTransaction())
             {
-                Slice key = "test";
+                SliceArray key = "test";
                 var tree = tx.CreateTree("foo");
                 tree.Add(key, StreamFor("value"));
 

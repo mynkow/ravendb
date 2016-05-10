@@ -22,7 +22,7 @@ namespace Voron.Data.Fixed
         internal const int BranchEntrySize = sizeof(long) + sizeof(long);
         private readonly LowLevelTransaction _tx;
         private readonly Tree _parent;
-        private readonly Slice _treeName;
+        private readonly SliceArray _treeName;
         private readonly ushort _valSize;
         private readonly int _entrySize;
         private readonly int _maxEmbeddedEntries;
@@ -30,7 +30,7 @@ namespace Voron.Data.Fixed
         private Stack<FixedSizeTreePage> _cursor;
         private int _changes;
 
-        public static ushort GetValueSize(LowLevelTransaction tx, Tree parent, Slice treeName)
+        public static ushort GetValueSize(LowLevelTransaction tx, Tree parent, SliceArray treeName)
         {
             var header = (FixedSizeTreeHeader.Embedded*)parent.DirectRead(treeName);
             if (header == null)
@@ -48,15 +48,16 @@ namespace Voron.Data.Fixed
             return header->ValueSize;
         }
 
-        public FixedSizeTree(LowLevelTransaction tx, Tree parent, Slice treeName, ushort valSize)
-        {
-            if (treeName.Array == null)
-                throw new ArgumentException("Tree name must be immutable");
+        public FixedSizeTree(LowLevelTransaction tx, Tree parent, string treeName, ushort valSize) 
+            : this ( tx, parent, (SliceArray) treeName, valSize)
+        {}
 
+        public FixedSizeTree(LowLevelTransaction tx, Tree parent, ISlice treeName, ushort valSize)
+        {
             _tx = tx;
             _parent = parent;
             _valSize = valSize;
-            _treeName = treeName;
+            _treeName = treeName.Clone<SliceArray>();
 
             _entrySize = sizeof(long) + _valSize;
             _maxEmbeddedEntries = 512 / _entrySize;
@@ -97,7 +98,7 @@ namespace Voron.Data.Fixed
                 p.IsLeaf ? entrySize : BranchEntrySize);
         }
 
-        public Slice Name => _treeName;
+        public SliceArray Name => _treeName;
 
         public static long[] Debug(byte* p, int entries, int size)
         {
@@ -109,18 +110,24 @@ namespace Voron.Data.Fixed
             return a;
         }
 
-        public bool Add(long key, Slice val = null)
+        public bool Add(long key)
         {
-            if (_valSize == 0 && (val != null && val.Size != 0))
+            return Add<SliceArray>(key);
+        }
+
+        public bool Add<T>(long key, T val = default(T))
+            where T : ISlice
+        {
+            if (_valSize == 0 && (val.HasValue && val.Size != 0))
                 throw new InvalidOperationException("When the value size is zero, no value can be specified");
-            if (_valSize != 0 && val == null)
+            if (_valSize != 0 && !val.HasValue)
                 throw new InvalidOperationException("When the value size is not zero, the value must be specified");
-            if (val != null && val.Size != _valSize)
+            if (val.HasValue && val.Size != _valSize)
                 throw new InvalidOperationException("The value size must be " + _valSize + " but was " + val.Size);
 
             bool isNew;
             var pos = DirectAdd(key, out isNew);
-            if (val != null && val.Size != 0)
+            if (val.HasValue && val.Size != 0)
                 val.CopyTo(pos);
 
             return isNew;
@@ -128,7 +135,7 @@ namespace Voron.Data.Fixed
 
         public bool Add(long key, byte[] val)
         {
-            return Add(key, new Slice(val));
+            return Add(key, new SliceArray(val));
         }
 
         public byte* DirectAdd(long key, out bool isNew)
@@ -1241,24 +1248,26 @@ namespace Voron.Data.Fixed
             }
         }
 
-        public Slice Read(long key)
+        public SlicePointer Read(long key)
         {
             switch (_type)
             {
                 case null:
-                    return null;
+                    return SlicePointer.Empty;
+
                 case RootObjectType.EmbeddedFixedSizeTree:
                     var ptr = _parent.DirectRead(_treeName);
                     var header = (FixedSizeTreeHeader.Embedded*)ptr;
                     var dataStart = ptr + sizeof(FixedSizeTreeHeader.Embedded);
                     var pos = BinarySearch(dataStart, header->NumberOfEntries, key, _entrySize);
                     if (_lastMatch != 0)
-                        return null;
-                    return new Slice(dataStart + (pos * _entrySize) + sizeof(long), _valSize);
+                        return SlicePointer.Empty;
+                    return new SlicePointer(dataStart + (pos * _entrySize) + sizeof(long), _valSize);
+
                 case RootObjectType.FixedSizeTree:
                     var largePtr = (FixedSizeTreeHeader.Large*)_parent.DirectRead(_treeName);
-                    var page = _tx.GetReadOnlyFixedSizeTreePage(largePtr->RootPageNumber);
 
+                    var page = _tx.GetReadOnlyFixedSizeTreePage(largePtr->RootPageNumber);
                     while (page.IsLeaf == false)
                     {
                         BinarySearch(page, key);
@@ -1271,8 +1280,9 @@ namespace Voron.Data.Fixed
 
                     BinarySearch(page, key);
                     if (_lastMatch != 0)
-                        return null;
-                    return new Slice(dataStart + (page.LastSearchPosition * _entrySize) + sizeof(long), _valSize);
+                        return SlicePointer.Empty;
+                    return new SlicePointer(dataStart + (page.LastSearchPosition * _entrySize) + sizeof(long), _valSize);
+
                 default:
                     throw new ArgumentOutOfRangeException(_type.ToString());
             }

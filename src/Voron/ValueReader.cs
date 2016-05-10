@@ -212,32 +212,27 @@ namespace Voron
 
         public int CompareTo(ValueReader other)
         {
-            int r = CompareData(other, Math.Min(Length, other.Length));
+            int r = Memory.CompareInline(_val, other._val, Math.Min(Length, other.Length));
             if (r != 0)
                 return r;
 
             return Length - other.Length;
         }
 
-        private int CompareData(ValueReader other, int len)
-        {
-            return Memory.Compare(_val, other._val, len);
-        }
-
-        public Slice AsSlice()
+        public SlicePointer AsSlice()
         {
             if (_len >= ushort.MaxValue)
                 throw new InvalidOperationException("Cannot convert to slice, len is too big: " + _len);
 
-            return new Slice(_val, (ushort)_len);
+            return new SlicePointer(_val, (ushort)_len);
         }
 
-        public Slice AsPartialSlice(int removeFromEnd)
+        public SlicePointer AsPartialSlice(int removeFromEnd)
         {
             if (_len >= ushort.MaxValue)
                 throw new InvalidOperationException("Cannot convert to slice, len is too big: " + _len);
 
-            return new Slice(_val, (ushort)(_len - removeFromEnd));
+            return new SlicePointer(_val, (ushort)(_len - removeFromEnd));
         }
     }
 }

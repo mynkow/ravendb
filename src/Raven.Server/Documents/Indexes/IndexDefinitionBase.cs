@@ -20,7 +20,7 @@ namespace Raven.Server.Documents.Indexes
     {
         protected const string MetadataFileName = "metadata";
 
-        protected static readonly Slice DefinitionSlice = "Definition";
+        protected static readonly SliceArray DefinitionSlice = "Definition";
 
         private int? _cachedHashCode;
 

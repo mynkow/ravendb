@@ -79,7 +79,7 @@ namespace FastTests.Voron.Trees
                 tx.Commit();
             }
 
-            var expected = new List<Slice>();
+            var expected = new List<SliceArray>();
             for (int i = 15; i < 1000; i++)
             {
                 expected.Add(string.Format("{0,5}", i));
@@ -100,20 +100,21 @@ namespace FastTests.Voron.Trees
             {
                 var tree = tx.ReadTree("foo");
                 var list = Keys(tree, tx);
-                Assert.Equal(expected, list);
+
+                Assert.Equal(expected, list, SliceComparer.Instance);
             }
         }
 
-        public List<Slice> Keys(Tree t, Transaction tx)
+        public List<SliceArray> Keys(Tree t, Transaction tx)
         {
-            var results = new List<Slice>();
+            var results = new List<SliceArray>();
             using (var it = t.Iterate())
             {
-                if (it.Seek(Slice.BeforeAllKeys) == false)
+                if (it.Seek(Slices.GetBeforeAllKeys<SliceArray>()) == false)
                     return results;
                 do
                 {
-                    results.Add(it.CurrentKey);
+                    results.Add(it.CurrentKey.Clone<SliceArray>());
                 } while (it.MoveNext());
             }
             return results;

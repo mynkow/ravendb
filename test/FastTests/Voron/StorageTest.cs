@@ -160,7 +160,7 @@ namespace FastTests.Voron
             return results;
         }
 
-        protected unsafe Tuple<Slice, Slice> ReadKey(Transaction txh, Tree tree, Slice key)
+        protected unsafe Tuple<SliceArray, SlicePointer> ReadKey(Transaction txh, Tree tree, SliceArray key)
         {
             TreeNodeHeader* node;
             var p = tree.FindPageFor(key, out node);
@@ -169,13 +169,12 @@ namespace FastTests.Voron
             if (node == null)
                 return null;
 
-            var item1 = p.GetNodeKey(node).ToSlice();
+            var item1 = p.GetNodeKey<SliceArray>(node);
 
-            if (item1.Compare(key) != 0)
+            if (!SliceComparer.Equals(item1,key))
                 return null;
-            return Tuple.Create(item1,
-                new Slice((byte*)node + node->KeySize + Constants.NodeHeaderSize,
-                    (ushort)node->DataSize));
+
+            return Tuple.Create(item1, new SlicePointer((byte*)node + node->KeySize + Constants.NodeHeaderSize,(ushort)node->DataSize));
         }
     }
 }

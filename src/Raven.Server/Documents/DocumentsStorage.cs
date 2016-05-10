@@ -31,7 +31,7 @@ namespace Raven.Server.Documents
 
         private readonly ILog _log;
         private readonly string _name;
-        private static readonly Slice LastEtagSlice = "LastEtag";
+        private static readonly SliceArray LastEtagSlice = "LastEtag";
 
         // this is only modified by write transactions under lock
         // no need to use thread safe ops
@@ -184,7 +184,7 @@ namespace Raven.Server.Documents
             var changeVector = new ChangeVectorEntry[tree.State.NumberOfEntries];
             using (var iter = tree.Iterate())
             {
-                if (iter.Seek(Slice.BeforeAllKeys) == false)
+                if (iter.Seek(Slices.GetBeforeAllKeys<SlicePointer>()) == false)
                     return changeVector;
                 var buffer = new byte[16];
                 int index = 0;
@@ -208,8 +208,8 @@ namespace Raven.Server.Documents
             for(int i = 0; i < changeVector.Length; i++)
             {
                 var entry = changeVector[i];
-                tree.Add(new Slice((byte*)&entry.DbId, (ushort)sizeof(Guid)),
-                    new Slice((byte*)&entry.Etag, (ushort)sizeof(Guid)));
+                tree.Add(new SlicePointer((byte*)&entry.DbId, (ushort)sizeof(Guid)),
+                         new SlicePointer((byte*)&entry.Etag, (ushort)sizeof(Guid)));
             }
         }
 
@@ -221,7 +221,7 @@ namespace Raven.Server.Documents
             if (readResult != null)
                 lastEtag = readResult.Reader.ReadLittleEndianInt64();
 
-            var fst = new FixedSizeTree(tx.LowLevelTransaction, tx.LowLevelTransaction.RootObjects, "AllDocsEtags",
+            var fst = new FixedSizeTree(tx.LowLevelTransaction, tx.LowLevelTransaction.RootObjects, (SliceArray)"AllDocsEtags",
                 sizeof(long));
 
             using (var it = fst.Iterate())
@@ -451,7 +451,7 @@ namespace Raven.Server.Documents
                     .Count();
         }
 
-        private Slice GetSliceFromKey(DocumentsOperationContext context, string key)
+        private SlicePointer GetSliceFromKey(DocumentsOperationContext context, string key)
         {
             var byteCount = Encoding.UTF8.GetMaxByteCount(key.Length);
             if (byteCount > 255)
@@ -476,7 +476,7 @@ namespace Raven.Server.Documents
                 var keyBytes = buffer + key.Length * sizeof(char);
 
                 size = Encoding.UTF8.GetBytes(destChars, key.Length, keyBytes, byteCount);
-                return new Slice(keyBytes, (ushort)size);
+                return new SlicePointer(keyBytes, (ushort)size);
             }
         }
 
@@ -605,7 +605,7 @@ namespace Raven.Server.Documents
             {
                 var etagTree = context.Transaction.InnerTransaction.ReadTree("Etags");
                 var etag = _lastEtag;
-                etagTree.Add(LastEtagSlice, new Slice((byte*)&etag, sizeof(long)));
+                etagTree.Add(LastEtagSlice, new SlicePointer((byte*)&etag, sizeof(long)));
             }
 
             string originalCollectionName;
@@ -704,7 +704,7 @@ namespace Raven.Server.Documents
                 {document.BasePointer, document.Size}, //3
             };			
 
-            var oldValue = table.ReadByKey(new Slice(lowerKey, (ushort)lowerSize));
+            var oldValue = table.ReadByKey(new SlicePointer(lowerKey, (ushort)lowerSize));
             if (oldValue == null)
             {
                 if (expectedEtag != null && expectedEtag != 0)
@@ -838,11 +838,11 @@ namespace Raven.Server.Documents
         {
             using (var it = context.Transaction.InnerTransaction.LowLevelTransaction.RootObjects.Iterate())
             {
-                if (it.Seek(Slice.BeforeAllKeys) == false)
+                if (it.Seek(Slices.GetBeforeAllKeys<SlicePointer>()) == false)
                     yield break;
                 do
                 {
-                    if (context.Transaction.InnerTransaction.GetRootObjectType(it.CurrentKey) != RootObjectType.VariableSizeTree)
+                    if (context.Transaction.InnerTransaction.GetRootObjectType(it.CurrentKey.Clone<SliceArray>()) != RootObjectType.VariableSizeTree)
                         continue;
 
                     if (it.CurrentKey[0] != '@') // collection prefix
@@ -903,7 +903,7 @@ namespace Raven.Server.Documents
             {
                 it.RequiredPrefix = "#";
 
-                if (it.Seek(Slice.BeforeAllKeys) == false)
+                if (it.Seek(Slices.GetBeforeAllKeys<SlicePointer>()) == false)
                     yield break;
 
                 do

@@ -84,7 +84,7 @@ namespace Raven.Server.Documents.Indexes.MapReduce
                 var state = GetReduceKeyState(mapEntry.ReduceKeyHash, indexContext, create: false);
                 
                 fixed (long* ptr = &mapEntry.Id)
-                    state.Tree.Delete(new Slice((byte*)ptr, sizeof(long)));
+                    state.Tree.Delete(new SlicePointer((byte*)ptr, sizeof(long)));
 
                 _mapReduceWorkContext.EntryDeleted(mapEntry);
             }
@@ -230,7 +230,7 @@ namespace Raven.Server.Documents.Indexes.MapReduce
                         var previousState = GetReduceKeyState(mapEntry.ReduceKeyHash, indexContext, create: false);
 
                         fixed (long* ptr = &mapEntry.Id)
-                            previousState.Tree.Delete(new Slice((byte*)ptr, sizeof(long)));
+                            previousState.Tree.Delete(new SlicePointer((byte*)ptr, sizeof(long)));
 
                         documentMapEntries.Delete(mapEntry.Id);
 
@@ -242,10 +242,10 @@ namespace Raven.Server.Documents.Indexes.MapReduce
             if (id == -1)
             {
                 id = _mapReduceWorkContext.GetNextIdentifier();
-                documentMapEntries.Add(id, new Slice((byte*)&reduceKeyHash, sizeof(ulong)));
+                documentMapEntries.Add(id, new SlicePointer((byte*)&reduceKeyHash, sizeof(ulong)));
             }
 
-            var pos = state.Tree.DirectAdd(new Slice((byte*)&id, sizeof(long)), mappedResult.Size);
+            var pos = state.Tree.DirectAdd(new SlicePointer((byte*)&id, sizeof(long)), mappedResult.Size);
 
             mappedResult.CopyTo(pos);
         }

@@ -6,11 +6,12 @@ using Voron.Impl.FreeSpace;
 
 namespace Voron.Data.BTrees
 {
-    public unsafe class TreePageSplitter
+    public unsafe class TreePageSplitter<T>
+        where T : ISlice
     {
         private readonly TreeCursor _cursor;
         private readonly int _len;
-        private readonly Slice _newKey;
+        private readonly T _newKey;
         private readonly TreeNodeFlags _nodeType;
         private readonly ushort _nodeVersion;
         private readonly TreePage _page;
@@ -21,7 +22,7 @@ namespace Voron.Data.BTrees
 
         public TreePageSplitter(LowLevelTransaction tx,
             Tree tree,
-            Slice newKey,
+            T newKey,
             int len,
             long pageNumber,
             TreeNodeFlags nodeType,
@@ -64,7 +65,7 @@ namespace Voron.Data.BTrees
                     _tree.State.Depth++;
 
                     // now add implicit left page
-                    newRootPage.AddPageRefNode(0, Slice.BeforeAllKeys, _page.PageNumber);
+                    newRootPage.AddPageRefNode(0, Slices.GetBeforeAllKeys<T>(), _page.PageNumber);
                     _parentPage = newRootPage;
                     _parentPage.LastSearchPosition++;
                 }
@@ -99,10 +100,10 @@ namespace Voron.Data.BTrees
 
                             TreeNodeHeader* node = _page.GetNode(_page.NumberOfEntries - 1);
                             Debug.Assert(node->Flags == TreeNodeFlags.PageRef);
-                            rightPage.AddPageRefNode(0, Slice.BeforeAllKeys, node->PageNumber);
+                            rightPage.AddPageRefNode(0, Slices.GetBeforeAllKeys<T>(), node->PageNumber);
                             pos = AddNodeToPage(rightPage, 1);
 
-                            var separatorKey = _page.GetNodeKey(node);
+                            var separatorKey = _page.GetNodeKey<T>(node);
 
                             AddSeparatorToParentPage(rightPage.PageNumber, separatorKey, true, out _);
 
@@ -127,9 +128,9 @@ namespace Voron.Data.BTrees
             }
         }
 
-        private byte* AddNodeToPage(TreePage page, int index, Slice alreadyPreparedNewKey = null)
+        private byte* AddNodeToPage(TreePage page, int index, T alreadyPreparedNewKey = default(T))
         {
-            var newKeyToInsert = alreadyPreparedNewKey ?? _newKey;
+            var newKeyToInsert = alreadyPreparedNewKey.HasValue ? alreadyPreparedNewKey : _newKey;
 
             switch (_nodeType)
             {
@@ -175,12 +176,12 @@ namespace Voron.Data.BTrees
                 splitIndex = AdjustSplitPosition(currentIndex, splitIndex, ref toRight);
             }
 
-            var currentKey = _page.GetNodeKey(splitIndex);
-            Slice seperatorKey;
+            var currentKey = _page.GetNodeKey<T>(splitIndex);
 
+            T seperatorKey;
             if (toRight && splitIndex == currentIndex)
             {
-                seperatorKey = currentKey.Compare(_newKey) < 0 ? currentKey : _newKey;
+                seperatorKey = SliceComparer.Compare(currentKey, _newKey) < 0 ? currentKey : _newKey;
             }
             else
             {
@@ -190,25 +191,23 @@ namespace Voron.Data.BTrees
             TreePage parentOfRight;
             AddSeparatorToParentPage(rightPage.PageNumber, seperatorKey, toRight, out parentOfRight);
 
-            Slice instance = _page.CreateNewEmptyKey();
-
             bool addedAsImplicitRef = false;
-
-            if (_page.IsBranch && toRight && seperatorKey.Equals(_newKey))
+            if (_page.IsBranch && toRight && SliceComparer.Equals(seperatorKey, _newKey))
             {
                 // _newKey needs to be inserted as first key (BeforeAllKeys) to the right page, so we need to add it before we move entries from the current page
-                AddNodeToPage(rightPage, 0, Slice.BeforeAllKeys);
+                AddNodeToPage(rightPage, 0, Slices.GetBeforeAllKeys<T>());
                 addedAsImplicitRef = true;
             }
 
             // move the actual entries from page to right page
+            var instance = default(SlicePointer);
             ushort nKeys = _page.NumberOfEntries;
             for (int i = splitIndex; i < nKeys; i++)
             {
                 TreeNodeHeader* node = _page.GetNode(i);
                 if (_page.IsBranch && rightPage.NumberOfEntries == 0)
                 {
-                    rightPage.CopyNodeDataToEndOfPage(node, Slice.BeforeAllKeys);
+                    rightPage.CopyNodeDataToEndOfPage(node, Slices.GetBeforeAllKeys<T>());
                 }
                 else
                 {
@@ -296,7 +295,7 @@ namespace Voron.Data.BTrees
             {
                 _cursor.Push(p);
 
-                var pageSplitter = new TreePageSplitter(_tx, _tree, _newKey, _len, _pageNumber, _nodeType, _nodeVersion, _cursor);
+                var pageSplitter = new TreePageSplitter<T>(_tx, _tree, _newKey, _len, _pageNumber, _nodeType, _nodeVersion, _cursor);
 
                 return pageSplitter.Execute();
             }
@@ -306,13 +305,13 @@ namespace Voron.Data.BTrees
             return dataPos;
         }
 
-        private byte* AddSeparatorToParentPage(long pageNumber, Slice separatorKey, bool toRight, out TreePage parent)
+        private byte* AddSeparatorToParentPage(long pageNumber, T separatorKey, bool toRight, out TreePage parent)
         {
             var pos = _parentPage.NodePositionFor(separatorKey); // select the appropriate place for this
 
             if (_parentPage.HasSpaceFor(_tx, TreeSizeOf.BranchEntry(separatorKey) + Constants.NodeOffsetSize) == false)
             {
-                var pageSplitter = new TreePageSplitter(_tx, _tree, separatorKey, -1, pageNumber, TreeNodeFlags.PageRef,
+                var pageSplitter = new TreePageSplitter<T>(_tx, _tree, separatorKey, -1, pageNumber, TreeNodeFlags.PageRef,
                     0, _cursor);
                 var posToInsert = pageSplitter.Execute();
 
@@ -340,7 +339,7 @@ namespace Voron.Data.BTrees
 
         private int AdjustSplitPosition(int currentIndex, int splitIndex, ref bool toRight)
         {
-            Slice keyToInsert = _newKey;
+            T keyToInsert = _newKey;
 
             int pageSize = TreeSizeOf.NodeEntry(_tx.DataPager.PageMaxSpace, keyToInsert, _len) + Constants.NodeOffsetSize;
 
@@ -385,13 +384,13 @@ namespace Voron.Data.BTrees
             return splitIndex;
         }
 
-        private string GatherDetailedDebugInfo(TreePage rightPage, Slice currentKey, Slice seperatorKey, int currentIndex, int splitIndex, bool toRight)
+        private string GatherDetailedDebugInfo(TreePage rightPage, T currentKey, T seperatorKey, int currentIndex, int splitIndex, bool toRight)
         {
             var debugInfo = new StringBuilder();
 
             debugInfo.AppendFormat("\r\n_tree.Name: {0}\r\n", _tree.Name);
             debugInfo.AppendFormat("_newKey: {0}, _len: {1}, needed space: {2}\r\n", _newKey, _len, _page.GetRequiredSpace(_newKey, _len));
-            debugInfo.AppendFormat("key at LastSearchPosition: {0}, current key: {1}, seperatorKey: {2}\r\n", _page.GetNodeKey(_page.LastSearchPosition), currentKey, seperatorKey);
+            debugInfo.AppendFormat("key at LastSearchPosition: {0}, current key: {1}, seperatorKey: {2}\r\n", _page.GetNodeKey<SliceArray>(_page.LastSearchPosition), currentKey, seperatorKey);
             debugInfo.AppendFormat("currentIndex: {0}\r\n", currentIndex);
             debugInfo.AppendFormat("splitIndex: {0}\r\n", splitIndex);
             debugInfo.AppendFormat("toRight: {0}\r\n", toRight);
@@ -401,7 +400,7 @@ namespace Voron.Data.BTrees
             for (int i = 0; i < _page.NumberOfEntries; i++)
             {
                 var node = _page.GetNode(i);
-                var key = _page.GetNodeKey(node);
+                var key = _page.GetNodeKey<SliceArray>(node);
                 debugInfo.AppendFormat("{0} - {2} {1}\r\n", key,
                     node->DataSize, node->Flags == TreeNodeFlags.Data ? "Size" : "Page");
             }
@@ -411,7 +410,7 @@ namespace Voron.Data.BTrees
             for (int i = 0; i < rightPage.NumberOfEntries; i++)
             {
                 var node = rightPage.GetNode(i);
-                var key = rightPage.GetNodeKey(node);
+                var key = rightPage.GetNodeKey<SliceArray>(node);
                 debugInfo.AppendFormat("{0} - {2} {1}\r\n", key,
                     node->DataSize, node->Flags == TreeNodeFlags.Data ? "Size" : "Page");
             }

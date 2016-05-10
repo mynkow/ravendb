@@ -49,7 +49,7 @@ namespace SlowTests.Voron
 					var tree = tx.CreateTree("foo");
 					foreach (var buffer in inputData)
 					{						
-						tree.MultiAdd("ChildTreeKey", new Slice(buffer));
+						tree.MultiAdd((SliceArray)"ChildTreeKey", new SliceArray(buffer));
 					}
 					tx.Commit();
 				}
@@ -60,7 +60,7 @@ namespace SlowTests.Voron
 					for (int i = 0; i < inputData.Count; i++)
 					{
 						var buffer = inputData[i];
-						tree.MultiDelete("ChildTreeKey", new Slice(buffer));
+						tree.MultiDelete((SliceArray)"ChildTreeKey", new SliceArray(buffer));
 					}
 
 					tx.Commit();
