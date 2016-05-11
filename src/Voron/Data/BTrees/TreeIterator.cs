@@ -16,7 +16,7 @@ namespace Voron.Data.BTrees
         public event Action<IIterator> OnDisposal;
 
         private SlicePointer _currentKey = null;
-        private SlicePointer _currentInternalKey = null;
+        private SlicePointer _currentInternalKey = new SlicePointer();
 
         public TreeIterator(Tree tree, LowLevelTransaction tx)
         {
@@ -50,7 +50,7 @@ namespace Voron.Data.BTrees
 
             if (node != null)
             {
-                _currentPage.SetNodeKey(node, ref _currentInternalKey);
+                _currentPage.SetNodeKey(node, _currentInternalKey);
                 _currentKey = _currentInternalKey; // TODO: Check here if aliasing via pointer is the intended use.
                 return this.ValidateCurrentKey(Current, _currentPage);
             }
@@ -129,7 +129,7 @@ namespace Voron.Data.BTrees
                     if (this.ValidateCurrentKey(current, _currentPage) == false)
                         return false;
 
-                    _currentPage.SetNodeKey(current, ref _currentInternalKey);
+                    _currentPage.SetNodeKey(current, _currentInternalKey);
                     _currentKey = _currentInternalKey;
                     return true;// there is another entry in this page
                 }
@@ -164,7 +164,7 @@ namespace Voron.Data.BTrees
                     if (this.ValidateCurrentKey(current, _currentPage) == false)
                         return false;
 
-                    _currentPage.SetNodeKey(current, ref _currentInternalKey);
+                    _currentPage.SetNodeKey(current, _currentInternalKey);
                     _currentKey = _currentInternalKey;
                     return true;// there is another entry in this page
                 }

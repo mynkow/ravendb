@@ -19,11 +19,7 @@ namespace Voron.Data.BTrees
         public event Action<long> PageModified;
         public event Action<long> PageFreed;
 
-        private RecentlyFoundTreePages _recentlyFoundPages;
-        public RecentlyFoundTreePages RecentlyFoundPages
-        {
-            get { return _recentlyFoundPages ?? (_recentlyFoundPages = new RecentlyFoundTreePages(_llt.Flags == TransactionFlags.Read ? 8 : 2)); }
-        }
+        private readonly RecentlyFoundTreePages _recentlyFoundPages;
 
         public string Name { get; set; }
 
@@ -44,6 +40,7 @@ namespace Voron.Data.BTrees
         {
             _llt = llt;
             _tx = tx;
+            _recentlyFoundPages = new RecentlyFoundTreePages(llt.Flags == TransactionFlags.Read ? 8 : 2);
             _state = new TreeMutableState(llt)
             {
                 RootPageNumber = root
@@ -54,6 +51,7 @@ namespace Voron.Data.BTrees
         {
             _llt = llt;
             _tx = tx;
+            _recentlyFoundPages = new RecentlyFoundTreePages(llt.Flags == TransactionFlags.Read ? 8 : 2);
             _state = new TreeMutableState(llt);
             _state = state;
         }
@@ -188,7 +186,7 @@ namespace Voron.Data.BTrees
                 throw new ArgumentException("Cannot add a value in a read only transaction");
 
             if (AbstractPager.IsKeySizeValid(key.Size) == false)
-                throw new ArgumentException($"Key size is too big, must be at most {AbstractPager.GetMaxKeySize()} bytes, but was {(key.Size + AbstractPager.RequiredSpaceForNewNode)}", nameof(key));
+                throw new ArgumentException($"Key size is too big, must be at most {AbstractPager.MaxKeySize} bytes, but was {(key.Size + AbstractPager.RequiredSpaceForNewNode)}", nameof(key));
 
             Func<TreeCursor> cursorConstructor;
             TreeNodeHeader* node;
@@ -289,10 +287,9 @@ namespace Voron.Data.BTrees
 
         public TreePage ModifyPage(long pageNumber)
         {
-
             var newPage = _llt.ModifyPage(pageNumber).ToTreePage();
             newPage.Dirty = true;
-            RecentlyFoundPages.Reset(pageNumber);
+            _recentlyFoundPages.Reset(pageNumber);
 
             PageModified?.Invoke(pageNumber);
 
@@ -553,7 +550,7 @@ namespace Voron.Data.BTrees
 
             var foundPage = new RecentlyFoundTreePages.FoundTreePage(p.PageNumber, p, firstKey, lastKey, c.ToArray());
 
-            RecentlyFoundPages.Add(foundPage);
+            _recentlyFoundPages.Add(foundPage);
         }
 
         private void AddToRecentlyFoundPages(TreeCursor c, TreePage p, bool leftmostPage, bool rightmostPage)
@@ -590,7 +587,7 @@ namespace Voron.Data.BTrees
 
             var foundPage = new RecentlyFoundTreePages.FoundTreePage(p.PageNumber, p, firstKey, lastKey, cursorPath);
 
-            RecentlyFoundPages.Add(foundPage);
+            _recentlyFoundPages.Add(foundPage);
         }
 
         private bool TryUseRecentTransactionPage<T>(T key, out TreePage page, out TreeNodeHeader* node) where T : class, ISlice
@@ -598,7 +595,7 @@ namespace Voron.Data.BTrees
             node = null;
             page = null;
 
-            var recentPages = RecentlyFoundPages;
+            var recentPages = _recentlyFoundPages;
             if (recentPages == null)
                 return false;
 
@@ -631,7 +628,7 @@ namespace Voron.Data.BTrees
             page = null;
             cursor = null;
 
-            var recentPages = RecentlyFoundPages;
+            var recentPages = _recentlyFoundPages;
             if (recentPages == null)
                 return false;
 
@@ -672,7 +669,12 @@ namespace Voron.Data.BTrees
                     else
                     {
                         var cursorPage = _llt.GetReadOnlyTreePage(p);
-                        if (key.Options == SliceOptions.BeforeAllKeys)
+                        if (key.Options == SliceOptions.Key)
+                        {
+                            if (cursorPage.Search(key) != null && cursorPage.LastMatch != 0)
+                                cursorPage.LastSearchPosition--;
+                        }
+                        else if (key.Options == SliceOptions.BeforeAllKeys)
                         {
                             cursorPage.LastSearchPosition = 0;
                         }
@@ -680,13 +682,7 @@ namespace Voron.Data.BTrees
                         {
                             cursorPage.LastSearchPosition = (ushort)(cursorPage.NumberOfEntries - 1);
                         }
-                        else if (cursorPage.Search(key) != null)
-                        {
-                            if (cursorPage.LastMatch != 0)
-                            {
-                                cursorPage.LastSearchPosition--;
-                            }
-                        }
+                        else throw new ArgumentException();
 
                         c.Push(cursorPage);
                     }
@@ -702,9 +698,7 @@ namespace Voron.Data.BTrees
             var page = AllocateNewPage(_llt, flags, num);
             State.RecordNewPage(page, num);
 
-            var onPageModified = PageModified;
-            if (onPageModified != null)
-                onPageModified(page.PageNumber);
+            PageModified?.Invoke(page.PageNumber);
 
             return page;
         }
@@ -723,9 +717,7 @@ namespace Voron.Data.BTrees
 
         internal void FreePage(TreePage p)
         {
-            var onPageFreed = PageFreed;
-            if (onPageFreed != null)
-                onPageFreed(p.PageNumber);
+            PageFreed?.Invoke(p.PageNumber);
 
             if (p.IsOverflow)
             {
@@ -876,12 +868,12 @@ namespace Voron.Data.BTrees
             var root = _llt.GetReadOnlyTreePage(State.RootPageNumber);
             stack.Push(root);
 
+            var key = new SlicePointer();
             while (stack.Count > 0)
             {
                 var p = stack.Pop();
                 results.Add(p.PageNumber);
-
-                var key = default(SlicePointer);
+                
                 for (int i = 0; i < p.NumberOfEntries; i++)
                 {
                     var node = p.GetNode(i);
@@ -901,7 +893,7 @@ namespace Voron.Data.BTrees
                     else if (node->Flags == TreeNodeFlags.MultiValuePageRef)
                     {
                         // this is a multi value
-                        p.SetNodeKey(node, ref key);
+                        p.SetNodeKey(node, key);
                         var tree = OpenMultiValueTree(key, node);
                         results.AddRange(tree.AllPages());
                     }

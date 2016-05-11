@@ -181,7 +181,7 @@ namespace Voron.Data.BTrees
             T seperatorKey;
             if (toRight && splitIndex == currentIndex)
             {
-                seperatorKey = SliceComparer.CompareInline(currentKey, _newKey) < 0 ? currentKey : _newKey;
+                seperatorKey = SliceComparer.Compare(currentKey, _newKey) < 0 ? currentKey : _newKey;
             }
             else
             {
@@ -200,7 +200,7 @@ namespace Voron.Data.BTrees
             }
 
             // move the actual entries from page to right page
-            SlicePointer instance = null;
+            var instance = new SlicePointer();
             ushort nKeys = _page.NumberOfEntries;
             for (int i = splitIndex; i < nKeys; i++)
             {
@@ -211,7 +211,7 @@ namespace Voron.Data.BTrees
                 }
                 else
                 {
-                    _page.SetNodeKey(node, ref instance);
+                    _page.SetNodeKey(node, instance);
                     rightPage.CopyNodeDataToEndOfPage(node, instance);
                 }
             }

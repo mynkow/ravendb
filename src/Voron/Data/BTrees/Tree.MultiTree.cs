@@ -161,11 +161,11 @@ namespace Voron.Data.BTrees
                     PageNumber = -1L // mark as invalid page number
                 };
 
-                var nodeKey = default(SlicePointer);
+                var nodeKey = new SlicePointer();
                 for (int i = 0; i < nestedPage.NumberOfEntries; i++)
                 {
                     var nodeHeader = nestedPage.GetNode(i);
-                    nestedPage.SetNodeKey(nodeHeader, ref nodeKey);
+                    nestedPage.SetNodeKey(nodeHeader, nodeKey);
                     newNestedPage.AddDataNode(i, nodeKey, 0, (ushort)(nodeHeader->Version - 1)); // we dec by one because AdddataNode will inc by one, and we don't want to change those values
                 }
 

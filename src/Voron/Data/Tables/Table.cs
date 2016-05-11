@@ -357,13 +357,13 @@ namespace Voron.Data.Tables
         }
 
         private void InsertIndexValuesFor(long id, TableValueReader value)
-        {          
-            if (_schema.Key != null)
+        {
+            var pk = _schema.Key;
+            if (pk != null)
             {
-                var pkval = _schema.Key.GetSlice(value);
+                var pkval = pk.GetSlice(value);
 
-                var pk = _schema.Key;
-                var pkIndex = GetTree(_schema.Key);
+                var pkIndex = GetTree(pk);
                 pkIndex.Add(pkval, new SlicePointer((byte*)&id, sizeof(long)));                      
             }
 

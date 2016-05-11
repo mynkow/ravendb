@@ -10,6 +10,8 @@ namespace Voron.Data.BTrees
     [StructLayout(LayoutKind.Explicit, Pack = 1)]
     public unsafe struct  TreeNodeHeader
     {
+        static readonly int _nodeTypeSize = Constants.NodeHeaderSize + Constants.NodeOffsetSize;
+
         [FieldOffset(0)]
         public int DataSize;
 
@@ -23,12 +25,12 @@ namespace Voron.Data.BTrees
         public ushort KeySize;
 
         [FieldOffset(11)]
-        public ushort Version;
+        public ushort Version;        
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetNodeSize()
         {
-            return Constants.NodeHeaderSize + KeySize + Constants.NodeOffsetSize + (Flags == (TreeNodeFlags.PageRef) ? 0 : DataSize);
+            return _nodeTypeSize + KeySize  + (Flags == (TreeNodeFlags.PageRef) ? 0 : DataSize);
         }
 
         public static byte* DirectAccess(LowLevelTransaction tx, TreeNodeHeader* node)

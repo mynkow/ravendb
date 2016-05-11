@@ -97,14 +97,14 @@ namespace Voron.Data.BTrees
             {
                 case SliceOptions.Key:
                     {
-                        SlicePointer pageKey = default(SlicePointer);
+                        SlicePointer pageKey = new SlicePointer();
 
                         if (numberOfEntries == 1)
                         {
                             var node = GetNode(0);
 
-                            SetNodeKey(node, ref pageKey);
                             LastMatch = SliceComparer.CompareInline(key, pageKey);
+                            SetNodeKey(node, pageKey);
                             LastSearchPosition = LastMatch > 0 ? 1 : 0;
                             return LastSearchPosition == 0 ? node : null;
                         }
@@ -120,7 +120,7 @@ namespace Voron.Data.BTrees
 
                             var node = (TreeNodeHeader*)(Base + offsets[position]);
 
-                            SetNodeKey(node, ref pageKey);
+                            SetNodeKey(node, pageKey);
 
                             LastMatch = SliceComparer.CompareInline(key, pageKey);
                             if (LastMatch == 0)
@@ -167,10 +167,7 @@ namespace Voron.Data.BTrees
         {
             Debug.Assert(n >= 0 && n < NumberOfEntries);
 
-            var nodeOffset = KeysOffsets[n];
-            var nodeHeader = (TreeNodeHeader*)(Base + nodeOffset);
-
-            return nodeHeader;
+            return (TreeNodeHeader*)(Base + KeysOffsets[n]);
         }
 
         public bool IsLeaf
@@ -280,12 +277,10 @@ namespace Voron.Data.BTrees
             var nodeSize = TreeSizeOf.NodeEntry(PageMaxSpace, key, len);
             var node = AllocateNewNode(index, nodeSize, previousNodeVersion);
 
-            node->KeySize = key.Size;
-
-            if (key.Options == SliceOptions.Key && key.Size > 0)
-                key.CopyTo((byte*)node + Constants.NodeHeaderSize);
-
             node->Flags = flags;
+            node->KeySize = key.Size;
+            if (key.Options == SliceOptions.Key && node->KeySize > 0)
+                key.CopyTo((byte*)node + Constants.NodeHeaderSize);
 
             return node;
         }
@@ -335,13 +330,17 @@ namespace Voron.Data.BTrees
             if (newSize > ushort.MaxValue)
                 previousNodeVersion = 0;
 
-            var newNodeOffset = (ushort)(Header->Upper - nodeSize);
-            Debug.Assert(newNodeOffset >= Header->Lower + Constants.NodeOffsetSize);
-            KeysOffsets[index] = newNodeOffset;
-            Header->Upper = newNodeOffset;
-            Header->Lower += (ushort)Constants.NodeOffsetSize;
+            TreePageHeader* header = Header;
+
+            var newNodeOffset = (ushort)(header->Upper - nodeSize);
+            Debug.Assert(newNodeOffset >= header->Lower + Constants.NodeOffsetSize);
 
             var node = (TreeNodeHeader*)(Base + newNodeOffset);
+            KeysOffsets[index] = newNodeOffset;            
+
+            header->Upper = newNodeOffset;
+            header->Lower += Constants.NodeOffsetSize;
+                        
             node->Flags = 0;
             node->Version = ++previousNodeVersion;
             return node;
@@ -350,7 +349,11 @@ namespace Voron.Data.BTrees
         public int SizeLeft
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return Header->Upper - Header->Lower; }
+            get
+            {
+                TreePageHeader* header = Header;
+                return header->Upper - header->Lower;
+            }
         }
 
         public int SizeUsed
@@ -384,17 +387,17 @@ namespace Voron.Data.BTrees
                 var copy = tmp.GetTempPage();
                 copy.TreeFlags = TreeFlags;
 
-                var slice = default(SlicePointer);
+                var slice = new SlicePointer();
                 for (int j = 0; j < i; j++)
                 {
                     var node = GetNode(j);
-                    SetNodeKey(node, ref slice);
+                    SetNodeKey(node, slice);
                     copy.CopyNodeDataToEndOfPage(node, slice);
                 }
 
                 Memory.Copy(Base + Constants.TreePageHeaderSize,
-                                     copy.Base + Constants.TreePageHeaderSize,
-                                     PageSize - Constants.TreePageHeaderSize);
+                            copy.Base + Constants.TreePageHeaderSize,
+                            PageSize - Constants.TreePageHeaderSize);
 
                 Upper = copy.Upper;
                 Lower = copy.Lower;
@@ -496,19 +499,16 @@ namespace Voron.Data.BTrees
         public int PageMaxSpace
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
-            { return PageSize - Constants.TreePageHeaderSize; }
+            get{ return PageSize - Constants.TreePageHeaderSize; }
         }
 
         public PageFlags Flags
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
-            { return Header->Flags; }
+            get { return Header->Flags; }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            set
-            { Header->Flags = value; }
+            set { Header->Flags = value; }
         }
 
         public string this[int i]
@@ -517,9 +517,11 @@ namespace Voron.Data.BTrees
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetNodeKey(TreeNodeHeader* node, ref SlicePointer slice)
+        public void SetNodeKey(TreeNodeHeader* node, SlicePointer slice)
         {
-            slice = new SlicePointer(node);
+            slice.Value = (byte*)node + Constants.NodeHeaderSize;
+            slice._size = node->KeySize;
+            slice._options = SliceOptions.Key;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -627,10 +629,15 @@ namespace Voron.Data.BTrees
 
         public int CalcSizeUsed()
         {
+            int numberOfEntries = NumberOfEntries;
+           
             var size = 0;
-            for (int i = 0; i < NumberOfEntries; i++)
+           
+            byte* basePtr = Base;
+            ushort* keysOffset = KeysOffsets;
+            for (int i = 0; i < numberOfEntries; i++)
             {
-                var node = GetNode(i);
+                var node = (TreeNodeHeader*)(basePtr + keysOffset[i]);
                 var nodeSize = node->GetNodeSize();
                 size += nodeSize + (nodeSize & 1);
             }

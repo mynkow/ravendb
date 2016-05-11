@@ -6,8 +6,9 @@ namespace Voron.Data.BTrees
     public unsafe class TreePageIterator : IIterator
     {
         private readonly TreePage _page;
+        private readonly SlicePointer _currentInternalKey = new SlicePointer();
+
         private SlicePointer _currentKey = null;
-        private SlicePointer _currentInternalKey;
         private bool _disposed;
 
         public TreePageIterator(TreePage page)
@@ -31,7 +32,7 @@ namespace Voron.Data.BTrees
             if (current == null)
                 return false;
 
-            _page.SetNodeKey(current, ref _currentInternalKey);
+            _page.SetNodeKey(current, _currentInternalKey);
             _currentKey = _currentInternalKey;
 
             return this.ValidateCurrentKey(current, _page);
@@ -108,7 +109,7 @@ namespace Voron.Data.BTrees
             {
                 return false;
             }
-            _page.SetNodeKey(current, ref _currentInternalKey);
+            _page.SetNodeKey(current, _currentInternalKey);
             _currentKey = _currentInternalKey;
             return true;
         }

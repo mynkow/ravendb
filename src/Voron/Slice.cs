@@ -14,7 +14,7 @@ namespace Voron
         byte this[int index] { get; }
         SliceOptions Options { get; }
         ushort Size { get; }
-        //bool HasValue { get; }
+        bool HasValue { get; }
 
         void CopyTo(int from, byte* dest, int offset, int count);
         void CopyTo(byte* dest);
@@ -46,9 +46,9 @@ namespace Voron
             return result;
         }
 
-        internal readonly ushort _size;
-        internal readonly SliceOptions _options;
-        internal readonly byte* Value;
+        internal ushort _size;
+        internal SliceOptions _options;
+        internal byte* Value;
 
         static SlicePointer()
         {
@@ -120,11 +120,11 @@ namespace Voron
             get { return _options; }
         }
 
-        //public bool HasValue
-        //{
-        //    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        //    get { return _options != SliceOptions.Uninitialized; }
-        //}
+        public bool HasValue
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return _options != SliceOptions.Uninitialized; }
+        }
 
         public override int GetHashCode()
         {
@@ -358,11 +358,11 @@ namespace Voron
             get { return _options; }
         }
 
-        //public bool HasValue
-        //{
-        //    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        //    get { return _options != SliceOptions.Uninitialized; }
-        //}
+        public bool HasValue
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return _options != SliceOptions.Uninitialized; }
+        }
 
         public override int GetHashCode()
         {
