@@ -103,8 +103,9 @@ namespace Voron.Data.BTrees
                         {
                             var node = GetNode(0);
 
-                            LastMatch = SliceComparer.CompareInline(key, pageKey);
                             SetNodeKey(node, pageKey);
+
+                            LastMatch = SliceComparer.CompareInline(key, pageKey);
                             LastSearchPosition = LastMatch > 0 ? 1 : 0;
                             return LastSearchPosition == 0 ? node : null;
                         }
