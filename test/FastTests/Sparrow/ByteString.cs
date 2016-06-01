@@ -20,14 +20,16 @@ namespace FastTests.Sparrow
 
                 Assert.Equal(512, byteString.Length);
                 Assert.True(byteString.HasValue);
-                Assert.Equal(ByteStringType.Mutable, byteString.Type);
+                Assert.True((ByteStringType.Mutable & byteString.Flags) != 0);
+                Assert.True(byteString.IsMutable);
                 Assert.Equal(1024, byteString._pointer->Size);
 
                 var byteStringWithExactSize = context.Allocate(1024 - sizeof(ByteStringStorage));
 
                 Assert.True(byteStringWithExactSize.HasValue);
                 Assert.Equal(1024 - sizeof(ByteStringStorage), byteStringWithExactSize.Length);
-                Assert.Equal(ByteStringType.Mutable, byteStringWithExactSize.Type);
+                Assert.True((ByteStringType.Mutable & byteStringWithExactSize.Flags) != 0);
+                Assert.True(byteStringWithExactSize.IsMutable);
                 Assert.Equal(1024, byteStringWithExactSize._pointer->Size);
 
                 context.Release(ref byteString);

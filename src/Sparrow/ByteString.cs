@@ -16,11 +16,13 @@ namespace Sparrow
     [Flags]
     public enum ByteStringType : byte
     {
-        Immutable = 0,
-        Mutable = 1,               
+        Immutable = 0x00, // This is a shorthand for an internal-immutable string. 
+        Mutable = 0x01,
+        External = 0x80,        
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    // We use sequential to ensure that validation build is handled apropriately when we implement ByteStringExternalStorage. (DO NOT CHANGE)
+    [StructLayout(LayoutKind.Sequential)] 
     unsafe struct ByteStringStorage
     {
         /// <summary>
@@ -31,17 +33,7 @@ namespace Sparrow
         /// <summary>
         /// The actual type for the byte string
         /// </summary>
-        public ByteStringType Type;
-
-        /// <summary>
-        /// The actual length of the byte string
-        /// </summary>
-        public int Length;
-
-        /// <summary>
-        /// This is the total storage size for this byte string. Length will always be smaller than Size - 1.
-        /// </summary>
-        public int Size;
+        public ByteStringType Flags;
 
 #if VALIDATE
 
@@ -52,6 +44,16 @@ namespace Sparrow
         /// </summary>
         public ulong Key;
 #endif
+
+        /// <summary>
+        /// The actual length of the byte string
+        /// </summary>
+        public int Length;
+
+        /// <summary>
+        /// This is the total storage size for this byte string. Length will always be smaller than Size - 1.
+        /// </summary>
+        public int Size;
     }
 
     public unsafe struct ByteString
@@ -72,7 +74,7 @@ namespace Sparrow
             this._pointer = ptr;
         }
 #endif
-        public ByteStringType Type
+        public ByteStringType Flags
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
@@ -80,7 +82,31 @@ namespace Sparrow
                 Debug.Assert(HasValue);
                 EnsureIsNotBadPointer();
 
-                return _pointer->Type;
+                return _pointer->Flags;
+            }
+        }
+
+        public bool IsMutable
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                Debug.Assert(HasValue);
+                EnsureIsNotBadPointer();
+
+                return (_pointer->Flags & ByteStringType.Mutable) != 0;
+            }
+        }
+
+        public bool IsExternal
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                Debug.Assert(HasValue);
+                EnsureIsNotBadPointer();
+
+                return (_pointer->Flags & ByteStringType.External) != 0;
             }
         }
 
@@ -227,8 +253,8 @@ namespace Sparrow
 
         public const int MinBlockSizeInBytes = 64 * 1024; // If this is changed, we need to change also LogMinBlockSize.
         private const int LogMinBlockSize = 16;
-        public const int DefaultAllocationBlockSizeInBytes = 2 * MinBlockSizeInBytes;
 
+        public const int DefaultAllocationBlockSizeInBytes = 2 * MinBlockSizeInBytes;
         public const int MinReusableBlockSizeInBytes = 8;
 
         private readonly int _allocationBlockSize;
@@ -269,7 +295,7 @@ namespace Sparrow
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ByteString Allocate(int length)
         {
-            return Allocate(length, ByteStringType.Mutable);
+            return AllocateInternal(length, ByteStringType.Mutable);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -278,8 +304,11 @@ namespace Sparrow
             return Bits.CeilLog2(size) - 1; // x^0 = 1 therefore we start counting at 1 instead.
         }
 
-        private ByteString Allocate(int length, ByteStringType type)
+        private ByteString AllocateInternal(int length, ByteStringType type)
         {
+            Debug.Assert((type & ByteStringType.External) == 0, "This allocation routine is only for use with internal storage byte strings.");
+            type &= ~ByteStringType.External; // We are allocating internal, so we will force it (even if we are checking for it in debug).
+
             int allocationSize = length + sizeof(ByteStringStorage);
 
             // This is even bigger than the configured allocation block size. There is no reason why we shouldnt
@@ -361,8 +390,8 @@ namespace Sparrow
                     this._current = segment ?? AllocateSegment(_allocationBlockSize);
                 }                    
 
-                var byteString = Create(_current.Current, length, allocationUnit, type);
-                _current.Current += byteString._pointer->Size;
+                var byteString = Create(_current.Current, length, allocationUnit, type);                
+                _current.Current += byteString._pointer->Size;                
 
                 return byteString;
             }
@@ -374,7 +403,7 @@ namespace Sparrow
             Debug.Assert(length <= size - sizeof(ByteStringStorage));
 
             var basePtr = (ByteStringStorage*)ptr;
-            basePtr->Type = type;
+            basePtr->Flags = type;
             basePtr->Length = length;
             basePtr->Size = size;
             basePtr->Ptr = (byte*)ptr + sizeof(ByteStringStorage);
@@ -449,11 +478,33 @@ namespace Sparrow
             return segment;
         }
 
-        public ByteString From(ByteString value, ByteStringType type = ByteStringType.Mutable)
+        public ByteString Skip(ByteString value, int bytesToSkip, ByteStringType type = ByteStringType.Mutable)
         {
             Debug.Assert(value._pointer != null, "ByteString cant be null.");
 
-            var result = Allocate(value.Length, type);
+            if (bytesToSkip < 0)
+                throw new ArgumentException($"'{nameof(bytesToSkip)}' cannot be smaller than 0.");
+
+            if (bytesToSkip > value.Length)
+                throw new ArgumentException($"'{nameof(bytesToSkip)}' cannot be bigger than '{nameof(value)}.Length' 0.");
+
+            // TODO: If origin and destination are immutable, we can create external references.
+
+            int size = value.Length - bytesToSkip;
+            var result = AllocateInternal(size, type);
+            Memory.CopyInline(result._pointer->Ptr, value._pointer->Ptr + bytesToSkip, size);
+
+            RegisterForValidation(result);
+            return result;
+        }
+
+        public ByteString Clone(ByteString value, ByteStringType type = ByteStringType.Mutable)
+        {
+            Debug.Assert(value._pointer != null, "ByteString cant be null.");
+
+            // TODO: If origin and destination are immutable, we can create external references.
+
+            var result = AllocateInternal(value.Length, type);
             Memory.CopyInline(result._pointer->Ptr, value._pointer->Ptr, value._pointer->Length);
 
             RegisterForValidation(result);
@@ -466,7 +517,7 @@ namespace Sparrow
 
             byte[] utf8 = Encoding.UTF8.GetBytes(value);
 
-            var result = Allocate(utf8.Length, type);
+            var result = AllocateInternal(utf8.Length, type);
             fixed (byte* ptr = utf8)
             {
                 Memory.Copy(result._pointer->Ptr, ptr, utf8.Length);
@@ -482,7 +533,7 @@ namespace Sparrow
 
             byte[] encodedBytes = encoding.GetBytes(value);
 
-            var result = Allocate(encodedBytes.Length, type);
+            var result = AllocateInternal(encodedBytes.Length, type);
             fixed (byte* ptr = encodedBytes)
             {
                 Memory.Copy(result._pointer->Ptr, ptr, encodedBytes.Length);
@@ -496,7 +547,7 @@ namespace Sparrow
         {
             Debug.Assert(value != null, "array cant be null.");
 
-            var result = Allocate(value.Length, type);
+            var result = AllocateInternal(value.Length, type);
             fixed (byte* ptr = value)
             {
                 Memory.Copy(result._pointer->Ptr, ptr, value.Length);
@@ -508,7 +559,7 @@ namespace Sparrow
 
         public ByteString From(int value, ByteStringType type = ByteStringType.Mutable)
         {
-            var result = Allocate(sizeof(int), type);
+            var result = AllocateInternal(sizeof(int), type);
             ((int*)result._pointer->Ptr)[0] = value;
 
             RegisterForValidation(result);
@@ -517,7 +568,7 @@ namespace Sparrow
 
         public ByteString From(long value, ByteStringType type = ByteStringType.Mutable)
         {
-            var result = Allocate(sizeof(long), type);
+            var result = AllocateInternal(sizeof(long), type);
             ((long*)result._pointer->Ptr)[0] = value;
 
             RegisterForValidation(result);
@@ -526,7 +577,7 @@ namespace Sparrow
 
         public ByteString From(short value, ByteStringType type = ByteStringType.Mutable)
         {
-            var result = Allocate(sizeof(short), type);
+            var result = AllocateInternal(sizeof(short), type);
             ((short*)result._pointer->Ptr)[0] = value;
 
             RegisterForValidation(result);
@@ -535,7 +586,7 @@ namespace Sparrow
 
         public ByteString From(byte value, ByteStringType type = ByteStringType.Mutable)
         {
-            var result = Allocate(1, type);
+            var result = AllocateInternal(1, type);
             result._pointer->Ptr[0] = value;
 
             RegisterForValidation(result);
@@ -545,14 +596,14 @@ namespace Sparrow
         public ByteString From(byte* valuePtr, int size, ByteStringType type = ByteStringType.Mutable)
         {
             Debug.Assert(valuePtr != null, "array cant be null.");
+            Debug.Assert((type & ByteStringType.External) == 0, "we cannot support yet external requests, so we will essentially create an internal ByteString");
 
-            var result = Allocate(size, type);
+            var result = AllocateInternal(size, type);
             Memory.Copy(result._pointer->Ptr, valuePtr, size);
 
             RegisterForValidation(result);
             return result;
         }
-
 
 #if VALIDATE
 
@@ -578,7 +629,7 @@ namespace Sparrow
         {
             value.EnsureIsNotBadPointer();
 
-            if (value.Type == ByteStringType.Immutable)
+            if (!value.IsMutable)
                 throw new NotImplementedException("Validation still not implemented for immutable Byte Strings");
         }
 
@@ -592,7 +643,7 @@ namespace Sparrow
             if (value._pointer->Key >> 32 != (ulong)this.ContextId)
                 throw new InvalidOperationException("The owner of the ByteString is a different context. You are mixing contexts, which has undefined behavior.");
 
-            if (value.Type == ByteStringType.Immutable)
+            if (!value.IsMutable)
                 throw new NotImplementedException("Validation still not implemented for immutable Byte Strings");
 
         }
