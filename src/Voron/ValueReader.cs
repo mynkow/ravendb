@@ -110,6 +110,7 @@ namespace Voron
             return val;
         }
 
+        //TODO: Move this to Sparrow Binary
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static long SwapBitShift(long value)
         {
@@ -219,20 +220,20 @@ namespace Voron
             return Length - other.Length;
         }
 
-        public SlicePointer AsSlice()
+        public Slice AsSlice(ByteStringContext context)
         {
             if (_len >= ushort.MaxValue)
                 throw new InvalidOperationException("Cannot convert to slice, len is too big: " + _len);
 
-            return new SlicePointer(_val, (ushort)_len);
+            return Slice.From(context, _val, _len);
         }
 
-        public SlicePointer AsPartialSlice(int removeFromEnd)
+        public Slice AsPartialSlice(ByteStringContext context, int removeFromEnd)
         {
             if (_len >= ushort.MaxValue)
                 throw new InvalidOperationException("Cannot convert to slice, len is too big: " + _len);
 
-            return new SlicePointer(_val, (ushort)(_len - removeFromEnd));
+            return Slice.From(context, _val, _len - removeFromEnd);
         }
     }
 }

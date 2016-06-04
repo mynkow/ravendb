@@ -89,7 +89,7 @@ namespace FastTests.Voron.Bugs
                 {
                     using (var iterator = snapshot.ReadTree(tree).MultiRead( "test/0/user-50"))
                     {
-                        Assert.True(iterator.Seek(Slices.GetBeforeAllKeys<SliceArray>()));
+                        Assert.True(iterator.Seek(Slices.BeforeAllKeys));
 
                         var keys = new HashSet<string>();
 
@@ -141,7 +141,7 @@ namespace FastTests.Voron.Bugs
 
                 using (var iterator = tree.Iterate())
                 {
-                    Assert.True(iterator.Seek(Slices.GetBeforeAllKeys<SliceArray>()));
+                    Assert.True(iterator.Seek(Slices.BeforeAllKeys));
 
                     Assert.Equal(bKey, iterator.CurrentKey.ToString());
                     Assert.True(iterator.MoveNext());
@@ -207,7 +207,7 @@ namespace FastTests.Voron.Bugs
 
                 using (var iterator = tree.Iterate())
                 {
-                    Assert.True(iterator.Seek(Slices.GetBeforeAllKeys<SliceArray>()));
+                    Assert.True(iterator.Seek(Slices.BeforeAllKeys));
 
                     Assert.Equal(aKey, iterator.CurrentKey.ToString());
                     Assert.True(iterator.MoveNext());

@@ -39,11 +39,9 @@ namespace Voron.Data.BTrees
     {
         public bool IsMultiValueTree { get; set; }
 
-        public void MultiAdd<T, W>(T key, W value, ushort? version = null)
-            where T : class, ISlice
-            where W : class, ISlice
+        public void MultiAdd(Slice key, Slice value, ushort? version = null)
         {
-            if (value == null)
+            if (!value.HasValue)
                 throw new ArgumentNullException(nameof(value));
 
             int maxNodeSize = Llt.DataPager.NodeMaxSize;
@@ -97,7 +95,7 @@ namespace Voron.Data.BTrees
             if (existingItem != null)
             {
                 // maybe same value added twice?
-                var tmpKey = page.GetNodeKey<SlicePointer>(item);
+                var tmpKey = page.GetNodeKey(item);
                 if (SliceComparer.Equals( tmpKey, value))
                     return; // already there, turning into a no-op
 
@@ -129,7 +127,7 @@ namespace Voron.Data.BTrees
             var tree = Create(_llt, _tx, TreeFlags.MultiValue);
             for (int i = 0; i < nestedPage.NumberOfEntries; i++)
             {
-                var existingValue = nestedPage.GetNodeKey<SlicePointer>(i);
+                var existingValue = nestedPage.GetNodeKey(i);
                 tree.DirectAdd(existingValue, 0);
             }
             tree.DirectAdd(value, 0, version: version);
@@ -138,9 +136,7 @@ namespace Voron.Data.BTrees
             DirectAdd(key, sizeof (TreeRootHeader), TreeNodeFlags.MultiValuePageRef);
         }
 
-        private void ExpandMultiTreeNestedPageSize<T,W>(T key, W value, byte* nestedPagePtr, ushort newSize, int currentSize)
-            where T : class, ISlice
-            where W : class, ISlice
+        private void ExpandMultiTreeNestedPageSize(Slice key, Slice value, byte* nestedPagePtr, ushort newSize, int currentSize)
         {
             Debug.Assert(newSize > currentSize);
             TemporaryPage tmp;
@@ -161,7 +157,7 @@ namespace Voron.Data.BTrees
                     PageNumber = -1L // mark as invalid page number
                 };
 
-                var nodeKey = new SlicePointer();
+                var nodeKey = new Slice();
                 for (int i = 0; i < nestedPage.NumberOfEntries; i++)
                 {
                     var nodeHeader = nestedPage.GetNode(i);
@@ -174,9 +170,7 @@ namespace Voron.Data.BTrees
             }
         }
 
-        private void MultiAddOnNewValue<T,W>(T key, W value, ushort? version, int maxNodeSize)
-            where T : class, ISlice
-            where W : class, ISlice
+        private void MultiAddOnNewValue(Slice key, Slice value, ushort? version, int maxNodeSize)
         {
             var valueToInsert = value;
 
@@ -211,9 +205,7 @@ namespace Voron.Data.BTrees
             nestedPage.AddDataNode(0, valueToInsert, 0, 0);
         }
 
-        public void MultiDelete<T, W>(T key, W value, ushort? version = null)
-            where T : class, ISlice
-            where W : class, ISlice
+        public void MultiDelete(Slice key, Slice value, ushort? version = null)
         {
             State.IsModified = true;
             TreeNodeHeader* node;
@@ -274,8 +266,7 @@ namespace Voron.Data.BTrees
         }
 
         //TODO: write a test for this
-        public long MultiCount<T>(T key)
-            where T : class, ISlice
+        public long MultiCount(Slice key)
         {
             TreeNodeHeader* node;
             var page = FindPageFor(key, out node);
@@ -284,7 +275,7 @@ namespace Voron.Data.BTrees
 
             Debug.Assert(node != null);
 
-            var fetchedNodeKey = page.GetNodeKey<SlicePointer>(node);
+            var fetchedNodeKey = page.GetNodeKey(node);
             if (!SliceComparer.EqualsInline(fetchedNodeKey,key))
                 throw new InvalidDataException("Was unable to retrieve the correct node. Data corruption possible");
 
@@ -300,8 +291,7 @@ namespace Voron.Data.BTrees
             return nestedPage.NumberOfEntries;
         }
 
-        public IIterator MultiRead<T>(T key)
-            where T : class, ISlice
+        public IIterator MultiRead(Slice key)
         {
             TreeNodeHeader* node;
             var page = FindPageFor(key, out node);
@@ -310,7 +300,7 @@ namespace Voron.Data.BTrees
 
             Debug.Assert(node != null);
 
-            var fetchedNodeKey = page.GetNodeKey<SlicePointer>(node);
+            var fetchedNodeKey = page.GetNodeKey(node);
             if (!SliceComparer.EqualsInline(fetchedNodeKey,key))
                 throw new InvalidDataException("Was unable to retrieve the correct node. Data corruption possible");
 
@@ -326,8 +316,7 @@ namespace Voron.Data.BTrees
             return new TreePageIterator(nestedPage);
         }
 
-        private Tree OpenMultiValueTree<T>(T key, TreeNodeHeader* item)
-            where T : ISlice
+        private Tree OpenMultiValueTree(Slice key, TreeNodeHeader* item)
         {
             Tree tree;
             if (_tx.TryGetMultiValueTree(this, key, out tree))
@@ -345,9 +334,8 @@ namespace Voron.Data.BTrees
             return tree;
         }
 
-        private bool TryOverwriteDataOrMultiValuePageRefNode<T>(TreeNodeHeader* updatedNode, T key, int len,
+        private bool TryOverwriteDataOrMultiValuePageRefNode(TreeNodeHeader* updatedNode, Slice key, int len,
                                                              TreeNodeFlags requestedNodeType, ushort? version, out byte* pos)
-            where T : ISlice
         {
             switch (requestedNodeType)
             {

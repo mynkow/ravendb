@@ -130,7 +130,7 @@ namespace SlowTests.Voron
 						{
 							var multiRead = tree.MultiRead("record/" + i);
 
-							Assert.True(multiRead.Seek(Slices.GetBeforeAllKeys<SlicePointer>()));
+							Assert.True(multiRead.Seek(Slices.BeforeAllKeys));
 
 							int count = 0;
 							do

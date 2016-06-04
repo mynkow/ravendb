@@ -30,8 +30,8 @@ namespace FastTests.Voron.Bugs
                 {
                     var t1 = tx.ReadTree(tree1);
 
-                    t1.MultiAdd<SliceArray, SliceArray>("key", "value/1");
-                    t1.MultiAdd<SliceArray, SliceArray>("key", "value/2");
+                    t1.MultiAdd("key", "value/1");
+                    t1.MultiAdd("key", "value/2");
 
                     tx.Commit();
                 }
@@ -43,14 +43,14 @@ namespace FastTests.Voron.Bugs
 
                     var buffer = new byte[1000];
 
-                    t1.MultiDelete<SliceArray, SliceArray>("key", "value/1");
-                    t1.MultiDelete<SliceArray, SliceArray>("key", "value/2");
+                    t1.MultiDelete("key", "value/1");
+                    t1.MultiDelete("key", "value/2");
 
-                    t2.Add<SliceArray>("key/1", new MemoryStream(buffer));
-                    t2.Add<SliceArray>("key/2", new MemoryStream(buffer));
-                    t2.Add<SliceArray>("key/3", new MemoryStream(buffer));
-                    t2.Add<SliceArray>("key/4", new MemoryStream(buffer));
-                    t2.Add<SliceArray>("key/5", new MemoryStream(buffer));
+                    t2.Add("key/1", new MemoryStream(buffer));
+                    t2.Add("key/2", new MemoryStream(buffer));
+                    t2.Add("key/3", new MemoryStream(buffer));
+                    t2.Add("key/4", new MemoryStream(buffer));
+                    t2.Add("key/5", new MemoryStream(buffer));
 
                     tx.Commit();
                 }

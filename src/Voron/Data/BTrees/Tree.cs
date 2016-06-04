@@ -94,8 +94,7 @@ namespace Voron.Data.BTrees
         /// <summary>
         /// This is using little endian
         /// </summary>
-        public long Increment<T>(T key, long delta, ushort? version = null)
-            where T : class, ISlice
+        public long Increment(Slice key, long delta, ushort? version = null)
         {
             State.IsModified = true;
 
@@ -112,8 +111,7 @@ namespace Voron.Data.BTrees
             return value;
         }
 
-        public void Add<T>(T key, Stream value, ushort? version = null)
-            where T : class, ISlice
+        public void Add(Slice key, Stream value, ushort? version = null)
         {
             if (value == null) throw new ArgumentNullException(nameof(value));
             if (value.Length > int.MaxValue)
@@ -125,8 +123,7 @@ namespace Voron.Data.BTrees
             CopyStreamToPointer(_llt, value, pos);
         }
 
-        public void Add<T>(T key, byte[] value, ushort? version = null)
-            where T : class, ISlice
+        public void Add<T>(Slice key, byte[] value, ushort? version = null)
         {
             if (value == null) throw new ArgumentNullException(nameof(value));
 
@@ -139,11 +136,9 @@ namespace Voron.Data.BTrees
             }
         }
 
-        public void Add<T,W>(T key, W value, ushort? version = null)
-            where T : class, ISlice
-            where W : class, ISlice
+        public void Add(Slice key, Slice value, ushort? version = null)
         {
-            if (value == null)
+            if (!value.HasValue)
                 throw new ArgumentNullException(nameof(value));
 
             State.IsModified = true;
@@ -174,8 +169,7 @@ namespace Voron.Data.BTrees
             }
         }
 
-        public byte* DirectAdd<T>(T key, int len, TreeNodeFlags nodeType = TreeNodeFlags.Data, ushort? version = null)
-            where T : class, ISlice
+        public byte* DirectAdd(Slice key, int len, TreeNodeFlags nodeType = TreeNodeFlags.Data, ushort? version = null)
         {
             Debug.Assert(nodeType == TreeNodeFlags.Data || nodeType == TreeNodeFlags.MultiValuePageRef);
 
@@ -200,7 +194,7 @@ namespace Voron.Data.BTrees
             {
                 node = page.GetNode(page.LastSearchPosition);
 
-                Debug.Assert(SliceComparer.EqualsInline(page.GetNodeKey<SlicePointer>(node),key));
+                Debug.Assert(SliceComparer.EqualsInline(page.GetNodeKey(node),key));
 
                 shouldGoToOverflowPage = ShouldGoToOverflowPage(len);
 
@@ -244,7 +238,7 @@ namespace Voron.Data.BTrees
                 {
                     cursor.Update(cursor.Pages.First, page);
 
-                    var pageSplitter = new TreePageSplitter<T>(_llt, this, key, len, pageNumber, nodeType, nodeVersion, cursor);
+                    var pageSplitter = new TreePageSplitter(_llt, this, key, len, pageNumber, nodeType, nodeVersion, cursor);
                     dataPos = pageSplitter.Execute();
                 }
 
@@ -368,7 +362,7 @@ namespace Voron.Data.BTrees
             }
         }
 
-        internal TreePage FindPageFor<T>(T key, out TreeNodeHeader* node) where T : class, ISlice
+        internal TreePage FindPageFor(Slice key, out TreeNodeHeader* node)
         {
             TreePage p;
 
@@ -380,7 +374,7 @@ namespace Voron.Data.BTrees
             return SearchForPage(key, out node);
         }
 
-        internal TreePage FindPageFor<T>(T key, out TreeNodeHeader* node, out Func<TreeCursor> cursor) where T : class, ISlice
+        internal TreePage FindPageFor(Slice key, out TreeNodeHeader* node, out Func<TreeCursor> cursor)
         {
             TreePage p;
 
@@ -392,8 +386,7 @@ namespace Voron.Data.BTrees
             return SearchForPage(key, out cursor, out node);
         }
 
-        private TreePage SearchForPage<T>(T key, out TreeNodeHeader* node) 
-            where T : class, ISlice
+        private TreePage SearchForPage(Slice key, out TreeNodeHeader* node) 
         {
             var p = _llt.GetReadOnlyTreePage(State.RootPageNumber);
 
@@ -459,7 +452,7 @@ namespace Voron.Data.BTrees
             return p;
         }
 
-        private TreePage SearchForPage<T>(T key, out Func<TreeCursor> cursorConstructor, out TreeNodeHeader* node) where T : ISlice
+        private TreePage SearchForPage(Slice key, out Func<TreeCursor> cursorConstructor, out TreeNodeHeader* node)
         {
             var p = _llt.GetReadOnlyTreePage(State.RootPageNumber);
 
@@ -528,24 +521,24 @@ namespace Voron.Data.BTrees
 
         private void AddToRecentlyFoundPages(List<long> c, TreePage p, bool leftmostPage, bool rightmostPage)
         {
-            SliceArray firstKey;
+            Slice firstKey;
             if (leftmostPage == true)
             {
-                firstKey = Slices.GetBeforeAllKeys<SliceArray>();
+                firstKey = Slices.BeforeAllKeys;
             }
             else
             {
-                firstKey = p.GetNodeKey<SliceArray>(0);
+                firstKey = p.GetNodeKey(0);
             }
 
-            SliceArray lastKey;
+            Slice lastKey;
             if (rightmostPage == true)
             {
-                lastKey = Slices.GetAfterAllKeys<SliceArray>();
+                lastKey = Slices.AfterAllKeys;
             }
             else
             {
-                lastKey = p.GetNodeKey<SliceArray>(p.NumberOfEntries - 1);
+                lastKey = p.GetNodeKey(p.NumberOfEntries - 1);
             }
 
             var foundPage = new RecentlyFoundTreePages.FoundTreePage(p.PageNumber, p, firstKey, lastKey, c.ToArray());
@@ -555,24 +548,24 @@ namespace Voron.Data.BTrees
 
         private void AddToRecentlyFoundPages(TreeCursor c, TreePage p, bool leftmostPage, bool rightmostPage)
         {
-            SliceArray firstKey;
+            Slice firstKey;
             if (leftmostPage == true)
             {
-                firstKey = Slices.GetBeforeAllKeys<SliceArray>();
+                firstKey = Slices.BeforeAllKeys;
             }
             else
             {
-                firstKey = p.GetNodeKey<SliceArray>(0);
+                firstKey = p.GetNodeKey(0);
             }
 
-            SliceArray lastKey;
+            Slice lastKey;
             if (rightmostPage == true)
             {
-                lastKey = Slices.GetAfterAllKeys<SliceArray>();
+                lastKey = Slices.AfterAllKeys;
             }
             else
             {
-                lastKey = p.GetNodeKey<SliceArray>(p.NumberOfEntries - 1);
+                lastKey = p.GetNodeKey(p.NumberOfEntries - 1);
             }
 
             var cursorPath = new long[c.Pages.Count];
@@ -590,7 +583,7 @@ namespace Voron.Data.BTrees
             _recentlyFoundPages.Add(foundPage);
         }
 
-        private bool TryUseRecentTransactionPage<T>(T key, out TreePage page, out TreeNodeHeader* node) where T : class, ISlice
+        private bool TryUseRecentTransactionPage(Slice key, out TreePage page, out TreeNodeHeader* node)
         {
             node = null;
             page = null;
@@ -622,7 +615,7 @@ namespace Voron.Data.BTrees
             return true;
         }
 
-        private bool TryUseRecentTransactionPage<T>(T key, out Func<TreeCursor> cursor, out TreePage page, out TreeNodeHeader* node) where T : class, ISlice
+        private bool TryUseRecentTransactionPage(Slice key, out Func<TreeCursor> cursor, out TreePage page, out TreeNodeHeader* node)
         {
             node = null;
             page = null;
@@ -736,8 +729,7 @@ namespace Voron.Data.BTrees
             }
         }
 
-        public void Delete<T>(T key, ushort? version = null)
-            where T : class, ISlice
+        public void Delete(Slice key, ushort? version = null)
         {
             if (_llt.Flags == (TransactionFlags.ReadWrite) == false)
                 throw new ArgumentException("Cannot delete a value in a read only transaction");
@@ -776,8 +768,7 @@ namespace Voron.Data.BTrees
             return new TreeIterator(this, _llt);
         }
 
-        public ReadResult Read<T>(T key)
-            where T : class, ISlice
+        public ReadResult Read(Slice key)       
         {
             TreeNodeHeader* node;
             var p = FindPageFor(key, out node);
@@ -788,15 +779,14 @@ namespace Voron.Data.BTrees
             return new ReadResult(TreeNodeHeader.Reader(_llt, node), node->Version);
         }
 
-        public int GetDataSize<T>(T key)
-            where T : class, ISlice
+        public int GetDataSize(Slice key)
         {            
             TreeNodeHeader* node;
             var p = FindPageFor(key, out node);
             if (p == null || p.LastMatch != 0)
                 return -1;
 
-            if (node == null || !SliceComparer.EqualsInline(p.GetNodeKey<SlicePointer>(node), key))
+            if (node == null || !SliceComparer.EqualsInline(p.GetNodeKey(node), key))
                 return -1;
 
             return TreeNodeHeader.GetDataSize(_llt, node);
@@ -806,7 +796,7 @@ namespace Voron.Data.BTrees
         {
             Func<TreeCursor> cursorConstructor;
             TreeNodeHeader* node;
-            var p = FindPageFor(page.IsLeaf ? page.GetNodeKey<SlicePointer>(0) : page.GetNodeKey<SlicePointer>(1), out node, out cursorConstructor);
+            var p = FindPageFor(page.IsLeaf ? page.GetNodeKey(0) : page.GetNodeKey(1), out node, out cursorConstructor);
             if (p == null || p.LastMatch != 0)
                 return -1;
 
@@ -828,22 +818,20 @@ namespace Voron.Data.BTrees
             return -1;
         }
 
-        public ushort ReadVersion<T>(T key)
-            where T : class, ISlice
+        public ushort ReadVersion(Slice key)
         {
             TreeNodeHeader* node;
             var p = FindPageFor(key, out node);
             if (p == null || p.LastMatch != 0)
                 return 0;
 
-            if (node == null || !SliceComparer.EqualsInline(p.GetNodeKey<SlicePointer>(node),key))
+            if (node == null || !SliceComparer.EqualsInline(p.GetNodeKey(node),key))
                 return 0;
 
             return node->Version;
         }
 
-        internal byte* DirectRead<T>(T key)
-            where T : class, ISlice
+        internal byte* DirectRead(Slice key)
         {
             TreeNodeHeader* node;
             var p = FindPageFor(key, out node);
@@ -868,7 +856,7 @@ namespace Voron.Data.BTrees
             var root = _llt.GetReadOnlyTreePage(State.RootPageNumber);
             stack.Push(root);
 
-            var key = new SlicePointer();
+            var key = new Slice();
             while (stack.Count > 0)
             {
                 var p = stack.Pop();
@@ -904,7 +892,7 @@ namespace Voron.Data.BTrees
                             var valueReader = TreeNodeHeader.Reader(_llt, node);
                             var valueSize = ((FixedSizeTreeHeader.Embedded*)valueReader.Base)->ValueSize;
 
-                            var fixedSizeTreeName = p.GetNodeKey<SliceArray>(i);
+                            var fixedSizeTreeName = p.GetNodeKey(i);
 
                             var fixedSizeTree = new FixedSizeTree(_llt, this, fixedSizeTreeName, valueSize);
 
@@ -923,8 +911,7 @@ namespace Voron.Data.BTrees
         }
 
 
-        private void CheckConcurrency<T>(T key, ushort? expectedVersion, ushort nodeVersion, TreeActionType actionType)
-            where T : ISlice
+        private void CheckConcurrency(Slice key, ushort? expectedVersion, ushort nodeVersion, TreeActionType actionType)
         {
             if (expectedVersion.HasValue && nodeVersion != expectedVersion.Value)
                 throw new ConcurrencyException(string.Format("Cannot {0} '{1}' to '{4}' tree. Version mismatch. Expected: {2}. Actual: {3}.", actionType.ToString().ToLowerInvariant(), key, expectedVersion.Value, nodeVersion, Name))
@@ -935,9 +922,7 @@ namespace Voron.Data.BTrees
         }
 
 
-        private void CheckConcurrency<T, W>(T key, W value, ushort? expectedVersion, ushort nodeVersion, TreeActionType actionType)
-            where T : ISlice
-            where W : ISlice
+        private void CheckConcurrency(Slice key, Slice value, ushort? expectedVersion, ushort nodeVersion, TreeActionType actionType)
         {
             if (expectedVersion.HasValue && nodeVersion != expectedVersion.Value)
                 throw new ConcurrencyException(string.Format("Cannot {0} value '{5}' to key '{1}' to '{4}' tree. Version mismatch. Expected: {2}. Actual: {3}.", actionType.ToString().ToLowerInvariant(), key, expectedVersion.Value, nodeVersion, Name, value))
@@ -953,8 +938,7 @@ namespace Voron.Data.BTrees
             Delete
         }
         
-        private bool TryOverwriteOverflowPages<T>(TreeNodeHeader* updatedNode, T key, int len, ushort? version, out byte* pos)
-             where T : ISlice
+        private bool TryOverwriteOverflowPages(TreeNodeHeader* updatedNode, Slice key, int len, ushort? version, out byte* pos)
         {
             if (updatedNode->Flags == TreeNodeFlags.PageRef)
             {
@@ -987,9 +971,7 @@ namespace Voron.Data.BTrees
                     writtableOverflowPage.OverflowSize = len;
                     pos = writtableOverflowPage.Base + Constants.TreePageHeaderSize;
 
-                    var onPageModified = PageModified;
-                    if (onPageModified != null)
-                        onPageModified(writtableOverflowPage.PageNumber);
+                    PageModified?.Invoke(writtableOverflowPage.PageNumber);
 
                     return true;
                 }
@@ -998,27 +980,25 @@ namespace Voron.Data.BTrees
             return false;
         }
 
-        public T LastKeyOrDefault<T>()
-            where T : class, ISlice
+        public Slice LastKeyOrDefault()
         {
             using (var it = Iterate())
             {
-                if (it.Seek(Slices.GetAfterAllKeys<SlicePointer>()) == false)
-                    return default(T);
+                if (it.Seek(Slices.AfterAllKeys) == false)
+                    return new Slice();
 
-                return it.CurrentKey.Clone<T>();
+                return it.CurrentKey.Clone();
             }
         }
 
-        public T FirstKeyOrDefault<T>()
-             where T : class, ISlice
+        public Slice FirstKeyOrDefault()
         {
             using (var it = Iterate())
             {
-                if (it.Seek(Slices.GetBeforeAllKeys<SlicePointer>()) == false)
-                    return default(T);
+                if (it.Seek(Slices.BeforeAllKeys) == false)
+                    return new Slice();
 
-                return it.CurrentKey.Clone<T>();
+                return it.CurrentKey.Clone();
             }
         }
 
@@ -1036,7 +1016,8 @@ namespace Voron.Data.BTrees
             FixedSizeTree fixedTree;
             if (_fixedSizeTrees.TryGetValue(key, out fixedTree) == false)
             {
-                _fixedSizeTrees[key] = fixedTree = new FixedSizeTree(_llt, this, (SliceArray)key, valSize);
+                var keySlice = Slice.From(_llt.Allocator, key, ByteStringType.Immutable);
+                _fixedSizeTrees[key] = fixedTree = new FixedSizeTree(_llt, this, keySlice, valSize);
             }
 
             State.Flags |= TreeFlags.FixedSizeTrees;

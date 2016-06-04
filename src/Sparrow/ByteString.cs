@@ -18,7 +18,24 @@ namespace Sparrow
     {
         Immutable = 0x00, // This is a shorthand for an internal-immutable string. 
         Mutable = 0x01,
-        External = 0x80,        
+        External = 0x20,
+        Reserved1 = 0x04, // This bit is reserved for future uses.
+
+        // These flags are unused and can be used by users to store custom information on the instance.
+        UserDefined1 = 0x10,
+        UserDefined2 = 0x20,
+        UserDefined3 = 0x40,
+        UserDefined4 = 0x80,
+
+        /// <summary>
+        /// Use this value to mask out the user defined bits using the & (Bitwise AND) operator.
+        /// </summary>
+        ByteStringMask = 0x0F,
+
+        /// <summary>
+        /// Use this value to mask out the ByteStringType bits using the & (Bitwise AND) operator.
+        /// </summary>
+        UserDefinedMask = 0xF0 
     }
 
     // We use sequential to ensure that validation build is handled apropriately when we implement ByteStringExternalStorage. (DO NOT CHANGE)
@@ -36,7 +53,6 @@ namespace Sparrow
         public ByteStringType Flags;
 
 #if VALIDATE
-
         public const ulong NullKey = unchecked((ulong)-1);
 
         /// <summary>
@@ -56,7 +72,7 @@ namespace Sparrow
         public int Size;
     }
 
-    public unsafe struct ByteString
+    public unsafe struct ByteString : IEquatable<ByteString>
     {
         internal ByteStringStorage* _pointer;
 
@@ -84,6 +100,26 @@ namespace Sparrow
 
                 return _pointer->Flags;
             }
+        }
+
+        public byte* Ptr
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                Debug.Assert(HasValue);
+                EnsureIsNotBadPointer();
+
+                return _pointer->Ptr;
+            }            
+        }
+
+        public void SetUserDefinedFlags( ByteStringType flags)
+        {
+            if ((flags & ByteStringType.ByteStringMask) == 0)
+                throw new ArgumentException("The flags passed contains reserved bits.");
+
+            _pointer->Flags |= flags;
         }
 
         public bool IsMutable
@@ -223,9 +259,33 @@ namespace Sparrow
 
             return new string((char*)_pointer->Ptr, 0, _pointer->Length);
         }
+
+        public override bool Equals(object obj)
+        {
+            return obj is ByteString && this == (ByteString)obj;
+        }
+
+        public override int GetHashCode()
+        {
+            // We use the lower part of the location in memory for the hash-code (fast and effective).
+            return (int)(long)this._pointer;
+        }
+
+        public static bool operator ==(ByteString x, ByteString y)
+        {
+            return x._pointer == y._pointer;
+        }
+        public static bool operator !=(ByteString x, ByteString y)
+        {
+            return !(x == y);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals(ByteString other)
+        {
+            return this == other;
+        }
     }
-
-
 
 
     public unsafe class ByteStringContext : IDisposable
@@ -256,23 +316,22 @@ namespace Sparrow
 
         public const int DefaultAllocationBlockSizeInBytes = 2 * MinBlockSizeInBytes;
         public const int MinReusableBlockSizeInBytes = 8;
-
-        private readonly int _allocationBlockSize;
-        private readonly int[] _reusableStringPoolCount;
-        private readonly Stack<IntPtr>[] _reusableStringPool;
-
+        
         /// <summary>
         /// This list keeps all the segments already instantiated in order to release them after context finalization. 
         /// </summary>
         private readonly List<SegmentInformation> _wholeSegments;
+        private readonly int _allocationBlockSize;
 
         /// <summary>
         /// This list keeps the hot segments released for use. It is important to note that we will never put into this list
         /// a segment with less space than the MinBlockSize value.
         /// </summary>
-        private readonly List<SegmentInformation> _readyToUseMemorySegments;
+        private readonly List<SegmentInformation> _internalReadyToUseMemorySegments;
+        private readonly int[] _internalReusableStringPoolCount;
+        private readonly Stack<IntPtr>[] _internalReusableStringPool;
+        private SegmentInformation _internalCurrent;
 
-        private SegmentInformation _current;
 
         public ByteStringContext(int allocationBlockSize = DefaultAllocationBlockSizeInBytes)
         {
@@ -282,12 +341,12 @@ namespace Sparrow
             this._allocationBlockSize = allocationBlockSize;
 
             this._wholeSegments = new List<SegmentInformation>();
-            this._readyToUseMemorySegments = new List<SegmentInformation>();            
+            this._internalReadyToUseMemorySegments = new List<SegmentInformation>();            
 
-            this._reusableStringPool = new Stack<IntPtr>[LogMinBlockSize];
-            this._reusableStringPoolCount = new int[LogMinBlockSize];
+            this._internalReusableStringPool = new Stack<IntPtr>[LogMinBlockSize];
+            this._internalReusableStringPoolCount = new int[LogMinBlockSize];
 
-            this._current = AllocateSegment(allocationBlockSize);
+            this._internalCurrent = AllocateSegment(allocationBlockSize);
 
             PrepareForValidation();
         }
@@ -302,6 +361,17 @@ namespace Sparrow
         private static int GetPoolIndexFromChunkSize(int size)
         {
             return Bits.CeilLog2(size) - 1; // x^0 = 1 therefore we start counting at 1 instead.
+        }
+
+
+        private ByteString AllocateExternal(byte* valuePtr, int size, ByteStringType type)
+        {
+            Debug.Assert((type & ByteStringType.External) != 0, "This allocation routine is only for use with external storage byte strings.");
+            type |= ByteStringType.External; // We are allocating external, so we will force it (even if we are checking for it in debug).
+
+            int allocationSize = sizeof(ByteStringStorage);
+
+            throw new NotImplementedException();
         }
 
         private ByteString AllocateInternal(int length, ByteStringType type)
@@ -329,33 +399,33 @@ namespace Sparrow
             Debug.Assert(allocationUnit % sizeof(int) == 0);    
 
             // If we can reuse... we retrieve those.
-            if (allocationSize <= MinBlockSizeInBytes && _reusableStringPoolCount[reusablePoolIndex] != 0)
+            if (allocationSize <= MinBlockSizeInBytes && _internalReusableStringPoolCount[reusablePoolIndex] != 0)
             {
                 // This is a stack because hotter memory will be on top. 
-                Stack<IntPtr> pool = _reusableStringPool[reusablePoolIndex];
+                Stack<IntPtr> pool = _internalReusableStringPool[reusablePoolIndex];
 
-                _reusableStringPoolCount[reusablePoolIndex]--;
+                _internalReusableStringPoolCount[reusablePoolIndex]--;
                 void* ptr = pool.Pop().ToPointer();
 
                 return Create(ptr, length, allocationUnit, type);
             }
             else
             {
-                int currentSizeLeft = _current.SizeLeft;
+                int currentSizeLeft = _internalCurrent.SizeLeft;
                 if (allocationUnit > currentSizeLeft) // This shouldnt happen that much, if it does you should increse your default allocation block. 
                 {                   
                     SegmentInformation segment = null;
                     
                     // We will try to find a hot segment with enough space if available.
                     // Older (colder) segments are at the front of the list. That's why we would start scanning backwards.
-                    for ( int i = _readyToUseMemorySegments.Count - 1; i >= 0; i--)
+                    for ( int i = _internalReadyToUseMemorySegments.Count - 1; i >= 0; i--)
                     {
-                        var segmentValue = _readyToUseMemorySegments[i];
+                        var segmentValue = _internalReadyToUseMemorySegments[i];
                         if (segmentValue.SizeLeft >= allocationUnit)
                         {
                             // Put the last where this one is (if it is the same, this is a no-op) and remove it from the list.
-                            _readyToUseMemorySegments[i] = _readyToUseMemorySegments[_readyToUseMemorySegments.Count - 1];
-                            _readyToUseMemorySegments.RemoveAt(_readyToUseMemorySegments.Count - 1);
+                            _internalReadyToUseMemorySegments[i] = _internalReadyToUseMemorySegments[_internalReadyToUseMemorySegments.Count - 1];
+                            _internalReadyToUseMemorySegments.RemoveAt(_internalReadyToUseMemorySegments.Count - 1);
 
                             segment = segmentValue;
                             break;
@@ -365,33 +435,33 @@ namespace Sparrow
                     // If the size left is bigger than MinBlockSize, we release current as a reusable segment
                     if (currentSizeLeft > MinBlockSizeInBytes)
                     {
-                        byte* start = _current.Current;
+                        byte* start = _internalCurrent.Current;
                         byte* end = start + currentSizeLeft;
 
-                        _readyToUseMemorySegments.Add(new SegmentInformation{ Start = start, Current = start, End = end, CanDispose = false });
+                        _internalReadyToUseMemorySegments.Add(new SegmentInformation{ Start = start, Current = start, End = end, CanDispose = false });
                     }
                     else if ( currentSizeLeft > sizeof(ByteStringType) + MinReusableBlockSizeInBytes)
                     {
                         // The memory chunk left is big enough to make sense to reuse it.
                         reusablePoolIndex = GetPoolIndexFromChunkSize(currentSizeLeft);
 
-                        Stack<IntPtr> pool = this._reusableStringPool[reusablePoolIndex];
+                        Stack<IntPtr> pool = this._internalReusableStringPool[reusablePoolIndex];
                         if (pool == null)
                         {
                             pool = new Stack<IntPtr>();
-                            this._reusableStringPool[reusablePoolIndex] = pool;
+                            this._internalReusableStringPool[reusablePoolIndex] = pool;
                         }
 
-                        pool.Push(new IntPtr(_current.Current));
-                        this._reusableStringPoolCount[reusablePoolIndex]++;
+                        pool.Push(new IntPtr(_internalCurrent.Current));
+                        this._internalReusableStringPoolCount[reusablePoolIndex]++;
                     }
 
                     // Use the segment and if there is no segment available that matches the request, just get a new one.
-                    this._current = segment ?? AllocateSegment(_allocationBlockSize);
+                    this._internalCurrent = segment ?? AllocateSegment(_allocationBlockSize);
                 }                    
 
-                var byteString = Create(_current.Current, length, allocationUnit, type);                
-                _current.Current += byteString._pointer->Size;                
+                var byteString = Create(_internalCurrent.Current, length, allocationUnit, type);                
+                _internalCurrent.Current += byteString._pointer->Size;                
 
                 return byteString;
             }
@@ -425,6 +495,17 @@ namespace Sparrow
             return byteString;
         }
 
+        /// <summary>
+        /// This method is intended to be used to release readonly properties in disposing patterns implementations.
+        /// WARNING: Other uses are discouraged because the resulting ByteString will be a dangling pointer that will fail
+        /// when compiled in VALIDATE mode and have an undefined behavior on normal mode of operation. 
+        /// </summary>
+        /// <param name="value"></param>
+        public void ReleaseReadonly(ByteString value)
+        {
+            Release(ref value);
+        }
+
         public void Release(ref ByteString value)
         {
             Debug.Assert(value._pointer != null, "Pointer cannot be null. You have a defect in your code.");
@@ -438,15 +519,15 @@ namespace Sparrow
 
             if (value._pointer->Size <= MinBlockSizeInBytes)
             {
-                Stack<IntPtr> pool = this._reusableStringPool[reusablePoolIndex];
+                Stack<IntPtr> pool = this._internalReusableStringPool[reusablePoolIndex];
                 if (pool == null)
                 {
                     pool = new Stack<IntPtr>();
-                    this._reusableStringPool[reusablePoolIndex] = pool;
+                    this._internalReusableStringPool[reusablePoolIndex] = pool;
                 }
 
                 pool.Push(new IntPtr(value._pointer));
-                this._reusableStringPoolCount[reusablePoolIndex]++;
+                this._internalReusableStringPoolCount[reusablePoolIndex]++;
             }
             else  // The released memory is big enough, we will just release it as a new segment. 
             {
@@ -454,7 +535,7 @@ namespace Sparrow
                 byte* end = start + value._pointer->Size;
 
                 var segment = new SegmentInformation { Start = start, Current = start, End = end, CanDispose = false };
-                _readyToUseMemorySegments.Add(segment);
+                _internalReadyToUseMemorySegments.Add(segment);
             }
 
 #if VALIDATE
@@ -500,7 +581,7 @@ namespace Sparrow
 
         public ByteString Clone(ByteString value, ByteStringType type = ByteStringType.Mutable)
         {
-            Debug.Assert(value._pointer != null, "ByteString cant be null.");
+            Debug.Assert(value._pointer != null, $"{nameof(value)} cant be null.");
 
             // TODO: If origin and destination are immutable, we can create external references.
 
@@ -513,7 +594,7 @@ namespace Sparrow
 
         public ByteString From(string value, ByteStringType type = ByteStringType.Mutable)
         {
-            Debug.Assert(value != null, "string cant be null.");
+            Debug.Assert(value != null, $"{nameof(value)} cant be null.");
 
             byte[] utf8 = Encoding.UTF8.GetBytes(value);
 
@@ -529,7 +610,7 @@ namespace Sparrow
 
         public ByteString From(string value, Encoding encoding, ByteStringType type = ByteStringType.Mutable)
         {
-            Debug.Assert(value != null, "string cant be null.");
+            Debug.Assert(value != null, $"{nameof(value)} cant be null.");
 
             byte[] encodedBytes = encoding.GetBytes(value);
 
@@ -545,12 +626,26 @@ namespace Sparrow
 
         public ByteString From(byte[] value, ByteStringType type = ByteStringType.Mutable)
         {
-            Debug.Assert(value != null, "array cant be null.");
+            Debug.Assert(value != null, $"{nameof(value)} cant be null.");
 
             var result = AllocateInternal(value.Length, type);
             fixed (byte* ptr = value)
             {
                 Memory.Copy(result._pointer->Ptr, ptr, value.Length);
+            }
+
+            RegisterForValidation(result);
+            return result;
+        }
+
+        public ByteString From(byte[] value, int size, ByteStringType type = ByteStringType.Mutable)
+        {
+            Debug.Assert(value != null, $"{nameof(value)} cant be null.");
+
+            var result = AllocateInternal(size, type);
+            fixed (byte* ptr = value)
+            {
+                Memory.Copy(result._pointer->Ptr, ptr, size);
             }
 
             RegisterForValidation(result);
@@ -595,13 +690,25 @@ namespace Sparrow
 
         public ByteString From(byte* valuePtr, int size, ByteStringType type = ByteStringType.Mutable)
         {
-            Debug.Assert(valuePtr != null, "array cant be null.");
-            Debug.Assert((type & ByteStringType.External) == 0, "we cannot support yet external requests, so we will essentially create an internal ByteString");
+            Debug.Assert(valuePtr != null, $"{nameof(valuePtr)} cant be null.");
+            Debug.Assert((type & ByteStringType.External) == 0, $"{nameof(From)} is not expected to be called with the '{nameof(ByteStringType.External)}' requested type, use {nameof(FromPtr)} instead.");
 
             var result = AllocateInternal(size, type);
             Memory.Copy(result._pointer->Ptr, valuePtr, size);
 
             RegisterForValidation(result);
+            return result;
+        }
+
+        public ByteString FromPtr(byte* valuePtr, int size, ByteStringType type = ByteStringType.Mutable | ByteStringType.External)
+        {
+            Debug.Assert(valuePtr != null, $"{nameof(valuePtr)} cant be null.");
+            Debug.Assert(size >= 0, $"{nameof(size)} cannot be negative.");
+
+            var result = AllocateExternal(valuePtr, size, type);
+
+            RegisterForValidation(result);
+
             return result;
         }
 
@@ -683,7 +790,7 @@ namespace Sparrow
                 }
 
                 _wholeSegments.Clear();
-                _readyToUseMemorySegments.Clear();
+                _internalReadyToUseMemorySegments.Clear();
 
                 isDisposed = true;
             }
@@ -703,6 +810,7 @@ namespace Sparrow
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-#endregion
+
+        #endregion
     }
 }

@@ -6,12 +6,12 @@ namespace Voron.Data
 {
     public unsafe class EmptyIterator : IIterator
     {
-        public bool Seek<T>(T key) where T : class, ISlice
+        public bool Seek(Slice key)
         {
             return false;
         }
 
-        public SlicePointer CurrentKey
+        public Slice CurrentKey
         {
             get { throw new InvalidOperationException("No current page"); }
         }
@@ -47,9 +47,9 @@ namespace Voron.Data
             }
         }
 
-        public SliceArray MaxKey { get; set; }
+        public Slice MaxKey { get; set; }
 
-        public SliceArray RequiredPrefix
+        public Slice RequiredPrefix
         {
             get;
             set;

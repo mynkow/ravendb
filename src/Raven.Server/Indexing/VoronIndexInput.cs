@@ -21,17 +21,17 @@ namespace Raven.Server.Indexing
         private readonly long _originalTransactionId;
         private readonly ThreadLocal<Transaction> _currentTransaction;
 
-        private readonly SliceArray _name;
+        private readonly Slice _name;
 
         private byte* _basePtr;
 
         private int _size;
 
-        public VoronIndexInput(ThreadLocal<Transaction> transaction, SliceArray name)
+        public VoronIndexInput(ThreadLocal<Transaction> transaction, string name)
         {
+            _name = Slice.From(_currentTransaction.Value.Allocator, name, ByteStringType.Immutable); 
             _originalTransactionId = transaction.Value.LowLevelTransaction.Id;
             _currentTransaction = transaction;
-            _name = name;
 
             OpenInternal(this);
         }

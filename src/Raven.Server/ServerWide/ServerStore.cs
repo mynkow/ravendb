@@ -13,6 +13,7 @@ using Raven.Server.Utils.Metrics;
 using Sparrow.Json;
 using Voron;
 using Voron.Data;
+using Sparrow;
 
 namespace Raven.Server.ServerWide
 {
@@ -96,7 +97,7 @@ namespace Raven.Server.ServerWide
         public BlittableJsonReaderObject Read(TransactionOperationContext ctx, string id)
         {
             var dbs = ctx.Transaction.InnerTransaction.ReadTree("items");
-            var result = dbs.Read<SliceArray>(id);
+            var result = dbs.Read(id);
             if (result == null)
                 return null;
             return new BlittableJsonReaderObject(result.Reader.Base, result.Reader.Length, ctx);
@@ -105,7 +106,7 @@ namespace Raven.Server.ServerWide
         public void Delete(TransactionOperationContext ctx, string id)
         {
             var dbs = ctx.Transaction.InnerTransaction.ReadTree("items");
-            dbs.Delete<SliceArray>(id);
+            dbs.Delete(id);
         }
 
         public class Item
@@ -119,7 +120,7 @@ namespace Raven.Server.ServerWide
             var dbs = ctx.Transaction.InnerTransaction.ReadTree("items");
             using (var it = dbs.Iterate())
             {
-                it.RequiredPrefix = prefix;
+                it.RequiredPrefix = Slice.From(ctx.Allocator, prefix, ByteStringType.Immutable);
                 if (it.Seek(it.RequiredPrefix) == false)
                     yield break;
 

@@ -76,7 +76,7 @@ namespace FastTests.Voron.Bugs
                     var tree = tx.CreateTree("multi");
                     using (var iterator = tree.MultiRead("0"))
                     {
-                        Assert.True(iterator.Seek(Slices.GetBeforeAllKeys<SliceArray>()));
+                        Assert.True(iterator.Seek(Slices.BeforeAllKeys));
 
                         var count = 0;
                         do
@@ -109,7 +109,7 @@ namespace FastTests.Voron.Bugs
                     var tree = tx.CreateTree("multi");
                     using (var iterator = tree.MultiRead("0"))
                     {
-                        Assert.True(iterator.Seek(Slices.GetBeforeAllKeys<SliceArray>()));
+                        Assert.True(iterator.Seek(Slices.BeforeAllKeys));
 
                         var count = 0;
                         do
@@ -150,7 +150,7 @@ namespace FastTests.Voron.Bugs
                     var tree = tx.CreateTree("multitree0");
                     using (var it = tree.MultiRead("key"))
                     {
-                        Assert.True(it.Seek(Slices.GetBeforeAllKeys<SliceArray>()));
+                        Assert.True(it.Seek(Slices.BeforeAllKeys));
 
                         Assert.Equal("value1", it.CurrentKey.ToString());
                         Assert.True(it.MoveNext());
@@ -173,7 +173,7 @@ namespace FastTests.Voron.Bugs
                         var tree = tx.CreateTree(treeName);
                         using (var iterator = tree.MultiRead((j % 10).ToString()))
                         {
-                            Assert.True(iterator.Seek(Slices.GetBeforeAllKeys<SliceArray>()));
+                            Assert.True(iterator.Seek(Slices.BeforeAllKeys));
 
                             var count = 0;
                             do

@@ -39,7 +39,7 @@ namespace FastTests.Voron.Bugs
                 {
                     using (var iterator = txr.ReadTree(tree).Iterate())
                     {
-                        if (!iterator.Seek(Slices.GetBeforeAllKeys<SliceArray>()))
+                        if (!iterator.Seek(Slices.BeforeAllKeys))
                             continue;
 
                         Env.FlushLogToDataFile();

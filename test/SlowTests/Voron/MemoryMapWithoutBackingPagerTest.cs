@@ -73,7 +73,7 @@ namespace SlowTests.Voron
             {
                 using (var iterator = snapshot.ReadTree(TestTreeName).Iterate())
                 {
-                    Assert.True(iterator.Seek(Slices.GetBeforeAllKeys<SlicePointer>()));
+                    Assert.True(iterator.Seek(Slices.BeforeAllKeys));
 
                     do
                     {

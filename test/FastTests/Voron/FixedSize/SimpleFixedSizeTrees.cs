@@ -19,9 +19,9 @@ namespace FastTests.Voron.FixedSize
             {
                 var fst = tx.FixedTreeFor("watches/12831-12345", valSize: 8);
 
-                fst.Add(DateTime.Today.AddHours(8).Ticks, new SliceArray(BitConverter.GetBytes(80D)));
-                fst.Add(DateTime.Today.AddHours(9).Ticks, new SliceArray(BitConverter.GetBytes(65D)));
-                fst.Add(DateTime.Today.AddHours(10).Ticks, new SliceArray(BitConverter.GetBytes(44D)));
+                fst.Add(DateTime.Today.AddHours(8).Ticks, new Slice(BitConverter.GetBytes(80D)));
+                fst.Add(DateTime.Today.AddHours(9).Ticks, new Slice(BitConverter.GetBytes(65D)));
+                fst.Add(DateTime.Today.AddHours(10).Ticks, new Slice(BitConverter.GetBytes(44D)));
 
                 tx.Commit();
             }
@@ -206,7 +206,7 @@ namespace FastTests.Voron.FixedSize
 
                 for (int i = 1; i <= 10; i++)
                 {
-                    fst.Add(i, new SliceArray(BitConverter.GetBytes(i + 10L)));
+                    fst.Add(i, new Slice(BitConverter.GetBytes(i + 10L)));
                 }
                 tx.Commit();
             }
@@ -252,11 +252,11 @@ namespace FastTests.Voron.FixedSize
 
                 for (int i = 1; i <= 10; i++)
                 {
-                    fst.Add(i, new SliceArray(BitConverter.GetBytes(i + 10L)));
+                    fst.Add(i, new Slice(BitConverter.GetBytes(i + 10L)));
                 }
                 for (int i = 30; i <= 40; i++)
                 {
-                    fst.Add(i, new SliceArray(BitConverter.GetBytes(i + 10L)));
+                    fst.Add(i, new Slice(BitConverter.GetBytes(i + 10L)));
                 }
                 tx.Commit();
             }
@@ -315,7 +315,7 @@ namespace FastTests.Voron.FixedSize
 
                 for (int i = 1; i <= 10; i++)
                 {
-                    fst.Add(i, new SliceArray(BitConverter.GetBytes(i + 10L)));
+                    fst.Add(i, new Slice(BitConverter.GetBytes(i + 10L)));
                 }
                 tx.Commit();
             }
@@ -351,8 +351,8 @@ namespace FastTests.Voron.FixedSize
             {
                 var fst = tx.FixedTreeFor("test", 8);
 
-                fst.Add(1, new SliceArray(BitConverter.GetBytes(1L)));
-                fst.Add(2, new SliceArray(BitConverter.GetBytes(2L)));
+                fst.Add(1, new Slice(BitConverter.GetBytes(1L)));
+                fst.Add(2, new Slice(BitConverter.GetBytes(2L)));
 
                 tx.Commit();
             }
@@ -375,9 +375,9 @@ namespace FastTests.Voron.FixedSize
             {
                 var fst = tx.FixedTreeFor("test", 8);
 
-                fst.Add(1, new SliceArray(BitConverter.GetBytes(1L)));
-                fst.Add(2, new SliceArray(BitConverter.GetBytes(2L)));
-                fst.Add(3, new SliceArray(BitConverter.GetBytes(3L)));
+                fst.Add(1, new Slice(BitConverter.GetBytes(1L)));
+                fst.Add(2, new Slice(BitConverter.GetBytes(2L)));
+                fst.Add(3, new Slice(BitConverter.GetBytes(3L)));
 
                 tx.Commit();
             }

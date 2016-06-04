@@ -43,7 +43,7 @@ namespace FastTests.Voron.Bugs
                     tx.Commit();
                 }
 
-                Assert.True(iterator.Seek(Slices.GetBeforeAllKeys<SliceArray>()));
+                Assert.True(iterator.Seek(Slices.BeforeAllKeys));
 
                 using (var tx = Env.WriteTransaction())
                 {

@@ -15,8 +15,8 @@ namespace Voron.Data.BTrees
 
         public event Action<IIterator> OnDisposal;
 
-        private SlicePointer _currentKey = null;
-        private SlicePointer _currentInternalKey = new SlicePointer();
+        private Slice _currentKey = default(Slice);
+        private Slice _currentInternalKey = new Slice();
 
         public TreeIterator(Tree tree, LowLevelTransaction tx)
         {
@@ -33,11 +33,10 @@ namespace Voron.Data.BTrees
 
         public bool Seek(string key)
         {
-            return Seek<SliceArray>(key);
+            return Seek(key);
         }
 
-        public bool Seek<T>(T key)
-            where T : class, ISlice
+        public bool Seek(Slice key)
         {
             if (_disposed)
                 throw new ObjectDisposedException("TreeIterator " + _tree.Name);
@@ -63,7 +62,7 @@ namespace Voron.Data.BTrees
             return MoveNext();
         }
 
-        public SlicePointer CurrentKey
+        public Slice CurrentKey
         {
             get
             {
@@ -207,9 +206,9 @@ namespace Voron.Data.BTrees
             OnDisposal?.Invoke(this);
         }
 
-        public SliceArray RequiredPrefix { get; set; }
+        public Slice RequiredPrefix { get; set; }
 
-        public SliceArray MaxKey { get; set; }
+        public Slice MaxKey { get; set; }
 
         public long TreeRootPage
         {
@@ -219,29 +218,29 @@ namespace Voron.Data.BTrees
 
     public static class IteratorExtensions
     {
-        public static IEnumerable<string> DumpValues<T>(this IIterator self)
-            where T : class, ISlice
+        public static IEnumerable<string> DumpValues(this IIterator self)
         {                      
-            if (self.Seek(Slices.GetBeforeAllKeys<T>()) == false)
+            if (self.Seek(Slices.BeforeAllKeys) == false)
                 yield break;
 
             do
             {
                 yield return self.CurrentKey.ToString();
-            } while (self.MoveNext());
+            }
+            while (self.MoveNext());
         }
 
         public unsafe static bool ValidateCurrentKey(this IIterator self, TreeNodeHeader* node, TreePage page)
         {
-            if (self.RequiredPrefix != null)
+            if (self.RequiredPrefix.HasValue)
             {
-                var currentKey = page.GetNodeKey<SlicePointer>(node);
+                var currentKey = page.GetNodeKey(node);
                 if (SliceComparer.StartWith(currentKey, self.RequiredPrefix) == false)
                     return false;
             }
-            if (self.MaxKey != null)
+            if (self.MaxKey.HasValue)
             {
-                var currentKey = page.GetNodeKey<SlicePointer>(node);
+                var currentKey = page.GetNodeKey(node);
                 if (SliceComparer.CompareInline(currentKey, self.MaxKey) >= 0)
                     return false;
             }

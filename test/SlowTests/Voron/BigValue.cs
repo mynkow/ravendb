@@ -22,14 +22,14 @@ namespace SlowTests.Voron
             using (var tx = Env.WriteTransaction())
             {
                 var tree = tx.CreateTree("foo");
-                tree.Add<SliceArray>(new SliceArray(BitConverter.GetBytes(1203)), new MemoryStream(buffer));
+                tree.Add(new Slice(BitConverter.GetBytes(1203)), new MemoryStream(buffer));
                 tx.Commit();
             }
 
             using (var tx = Env.ReadTransaction())
             {
                 var tree = tx.CreateTree("foo");
-                var readResult = tree.Read(new SliceArray(BitConverter.GetBytes(1203)));
+                var readResult = tree.Read(new Slice(BitConverter.GetBytes(1203)));
                 Assert.NotNull(readResult);
 
                 var memoryStream = new MemoryStream();

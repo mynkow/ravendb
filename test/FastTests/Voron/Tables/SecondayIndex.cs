@@ -33,7 +33,7 @@ namespace FastTests.Voron.Tables
             {
                 var docs = new Table(DocsSchema, "docs", tx);
 
-                var etag = new SliceArray(EndianBitConverter.Big.GetBytes(1L));
+                var etag = new Slice(EndianBitConverter.Big.GetBytes(1L));
                 var reader = docs.SeekForwardFrom(DocsSchema.Indexes["Etags"], etag)
                                  .First();
 
@@ -78,7 +78,7 @@ namespace FastTests.Voron.Tables
             {
                 var docs = new Table(DocsSchema, "docs", tx);
 
-                var reader = docs.SeekForwardFrom(DocsSchema.Indexes["Etags"], new SliceArray(EndianBitConverter.Big.GetBytes(1)));
+                var reader = docs.SeekForwardFrom(DocsSchema.Indexes["Etags"], new Slice(EndianBitConverter.Big.GetBytes(1)));
                 Assert.Empty(reader);
             }
         }
@@ -116,7 +116,7 @@ namespace FastTests.Voron.Tables
             {
                 var docs = new Table(DocsSchema, "docs", tx);
 
-                var etag = new SliceArray(EndianBitConverter.Big.GetBytes(1L));
+                var etag = new Slice(EndianBitConverter.Big.GetBytes(1L));
                 var reader = docs.SeekForwardFrom(DocsSchema.Indexes["Etags"], etag)
                                  .First();
 

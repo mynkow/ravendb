@@ -84,7 +84,7 @@ namespace FastTests.Voron.ScratchBuffer
                     var read = txr2.CreateTree("foo").Read("bars/1");
 
                     Assert.NotNull(read);
-                    Assert.Equal(new string('c', 1000), read.Reader.AsSlice().ToString());
+                    Assert.Equal(new string('c', 1000), read.Reader.AsSlice(txr2.Allocator).ToString());
                 }
             }
         } 

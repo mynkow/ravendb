@@ -28,7 +28,7 @@ namespace FastTests.Voron.Bugs
 
                     using (var iterator = txr.ReadTree("tree0").MultiRead("key/1"))
                     {
-                        Assert.True(iterator.Seek(Slices.GetBeforeAllKeys<SliceArray>()));
+                        Assert.True(iterator.Seek(Slices.BeforeAllKeys));
 
                         var count = 0;
 
@@ -67,7 +67,7 @@ namespace FastTests.Voron.Bugs
 
                     using (var iterator = txr.ReadTree("tree0").MultiRead("key/1"))
                     {
-                        Assert.True(iterator.Seek(Slices.GetBeforeAllKeys<SliceArray>()));
+                        Assert.True(iterator.Seek(Slices.BeforeAllKeys));
 
                         var keys = new List<string>();
 
@@ -141,7 +141,7 @@ namespace FastTests.Voron.Bugs
                 {
                     using (var iterator = txr.CreateTree("tree0").Iterate())
                     {
-                        Assert.True(iterator.Seek(Slices.GetBeforeAllKeys<SliceArray>())); // all pages are from scratch (one from position 11)
+                        Assert.True(iterator.Seek(Slices.BeforeAllKeys)); // all pages are from scratch (one from position 11)
 
                         var currentKey = iterator.CurrentKey.ToString();
 

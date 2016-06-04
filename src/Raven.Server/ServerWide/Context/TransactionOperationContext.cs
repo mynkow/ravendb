@@ -3,6 +3,7 @@ using Raven.Server.Documents;
 using Raven.Server.Json;
 using Sparrow.Json;
 using Voron;
+using Sparrow;
 
 namespace Raven.Server.ServerWide.Context
 {
@@ -31,6 +32,7 @@ namespace Raven.Server.ServerWide.Context
         where TTransaction : RavenTransaction
     {
         public TTransaction Transaction;
+        public ByteStringContext Allocator;
 
         protected TransactionOperationContext(UnmanagedBuffersPool pool)
             : base(pool)
@@ -42,7 +44,10 @@ namespace Raven.Server.ServerWide.Context
             if (Transaction != null && Transaction.Disposed == false)
                 throw new InvalidOperationException("Transaction is already opened");
 
-            return Transaction = CreateReadTransaction();
+            Transaction = CreateReadTransaction();
+            Allocator = Transaction.InnerTransaction.Allocator;
+
+            return Transaction;
         }
 
         protected abstract TTransaction CreateReadTransaction();
@@ -55,7 +60,11 @@ namespace Raven.Server.ServerWide.Context
             {
                 throw new InvalidOperationException("Transaction is already opened");
             }
-            return Transaction = CreateWriteTransaction();
+
+            Transaction = CreateWriteTransaction();
+            Allocator = Transaction.InnerTransaction.Allocator;
+
+            return Transaction;
         }
 
         public override void Reset()

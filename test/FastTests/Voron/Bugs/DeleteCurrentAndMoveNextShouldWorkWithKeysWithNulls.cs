@@ -31,7 +31,7 @@ namespace FastTests.Voron.Bugs
                 var testTree = tx.ReadTree(treeName);
                 using (var iter = testTree.Iterate())
                 {
-                    iter.Seek(Slices.GetBeforeAllKeys<SliceArray>());
+                    iter.Seek(Slices.BeforeAllKeys);
                     while (iter.DeleteCurrentAndMoveNext())
                     {						
                     }
@@ -43,7 +43,7 @@ namespace FastTests.Voron.Bugs
             {
                 var testTree = tx.ReadTree(treeName);
                 using (var iter = testTree.Iterate())
-                    Assert.False(iter.Seek(Slices.GetBeforeAllKeys<SliceArray>()));				
+                    Assert.False(iter.Seek(Slices.BeforeAllKeys));				
             }
         }
 

@@ -138,7 +138,7 @@ namespace Voron.Debugging
 
             using (var multiTreeIterator = tree.Iterate())
             {
-                if (multiTreeIterator.Seek(Slices.GetBeforeAllKeys<SlicePointer>()))
+                if (multiTreeIterator.Seek(Slices.BeforeAllKeys))
                 {
                     do
                     {

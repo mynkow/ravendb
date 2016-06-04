@@ -284,15 +284,14 @@ namespace Voron.Debugging
             for (int i = 0; i < page.NumberOfEntries; i++)
             {
                 var nodeHeader = page.GetNode(i);
+                var key = nodeHeader->ToSlice(tx.Allocator).ToString();
+
                 if (page.IsLeaf)
-                {
-                    var key = new SlicePointer(nodeHeader).ToString();
+                {               
                     sw.Write("<li>{0} {1} - size: {2:#,#}</li>", key, nodeHeader->Flags, TreeNodeHeader.GetDataSize(tx, nodeHeader));
                 }
                 else
                 {
-                    var key = new SlicePointer(nodeHeader).ToString();
-
                     var pageNum = nodeHeader->PageNumber;
 
                     if (i == 0)

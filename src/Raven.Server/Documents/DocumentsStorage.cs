@@ -19,11 +19,16 @@ using Voron.Data.Fixed;
 using Voron.Data.Tables;
 using Voron.Exceptions;
 using Voron.Impl;
+using Sparrow;
 
 namespace Raven.Server.Documents
 {
     public unsafe class DocumentsStorage : IDisposable
     {
+        private static readonly Slice LastEtagSlice = Slice.From(StorageEnvironment.LabelsContext, "LastEtag", ByteStringType.Immutable);
+        private static readonly Slice AllDocsEtagsSlice = Slice.From(StorageEnvironment.LabelsContext, "AllDocsEtags", ByteStringType.Immutable);
+        private static readonly Slice HashTagSlice = Slice.From(StorageEnvironment.LabelsContext, "#", ByteStringType.Immutable);
+
         private readonly DocumentDatabase _documentDatabase;
 
         private readonly TableSchema _docsSchema = new TableSchema();
@@ -31,7 +36,7 @@ namespace Raven.Server.Documents
 
         private readonly ILog _log;
         private readonly string _name;
-        private static readonly SliceArray LastEtagSlice = "LastEtag";
+      
 
         // this is only modified by write transactions under lock
         // no need to use thread safe ops
@@ -42,6 +47,7 @@ namespace Raven.Server.Documents
         private UnmanagedBuffersPool _unmanagedBuffersPool;
         private const string NoCollectionSpecified = "Raven/Empty";
         private const string SystemDocumentsCollection = "Raven/SystemDocs";
+        
 
         public DocumentsStorage(DocumentDatabase documentDatabase)
         {
@@ -184,7 +190,7 @@ namespace Raven.Server.Documents
             var changeVector = new ChangeVectorEntry[tree.State.NumberOfEntries];
             using (var iter = tree.Iterate())
             {
-                if (iter.Seek(Slices.GetBeforeAllKeys<SlicePointer>()) == false)
+                if (iter.Seek(Slices.BeforeAllKeys) == false)
                     return changeVector;
                 var buffer = new byte[16];
                 int index = 0;
@@ -208,8 +214,8 @@ namespace Raven.Server.Documents
             for(int i = 0; i < changeVector.Length; i++)
             {
                 var entry = changeVector[i];
-                tree.Add(new SlicePointer((byte*)&entry.DbId, (ushort)sizeof(Guid)),
-                         new SlicePointer((byte*)&entry.Etag, (ushort)sizeof(Guid)));
+                tree.Add(Slice.External(context.Allocator, (byte*)&entry.DbId, (ushort)sizeof(Guid)),
+                         Slice.External(context.Allocator, (byte*)&entry.Etag, (ushort)sizeof(Guid)));
             }
         }
 
@@ -221,8 +227,7 @@ namespace Raven.Server.Documents
             if (readResult != null)
                 lastEtag = readResult.Reader.ReadLittleEndianInt64();
 
-            var fst = new FixedSizeTree(tx.LowLevelTransaction, tx.LowLevelTransaction.RootObjects, (SliceArray)"AllDocsEtags",
-                sizeof(long));
+            var fst = new FixedSizeTree(tx.LowLevelTransaction, tx.LowLevelTransaction.RootObjects, AllDocsEtagsSlice, sizeof(long));
 
             using (var it = fst.Iterate())
             {
@@ -451,7 +456,7 @@ namespace Raven.Server.Documents
                     .Count();
         }
 
-        private SlicePointer GetSliceFromKey(DocumentsOperationContext context, string key)
+        private Slice GetSliceFromKey(DocumentsOperationContext context, string key, ByteStringType type = ByteStringType.Mutable | ByteStringType.External)
         {
             var byteCount = Encoding.UTF8.GetMaxByteCount(key.Length);
             if (byteCount > 255)
@@ -476,7 +481,7 @@ namespace Raven.Server.Documents
                 var keyBytes = buffer + key.Length * sizeof(char);
 
                 size = Encoding.UTF8.GetBytes(destChars, key.Length, keyBytes, byteCount);
-                return new SlicePointer(keyBytes, (ushort)size);
+                return Slice.External(context.Allocator, keyBytes, (ushort)size, type);
             }
         }
 
@@ -605,7 +610,7 @@ namespace Raven.Server.Documents
             {
                 var etagTree = context.Transaction.InnerTransaction.ReadTree("Etags");
                 var etag = _lastEtag;
-                etagTree.Add(LastEtagSlice, new SlicePointer((byte*)&etag, sizeof(long)));
+                etagTree.Add(LastEtagSlice, Slice.From(context.Allocator, (byte*)&etag, sizeof(long)));
             }
 
             string originalCollectionName;
@@ -704,7 +709,7 @@ namespace Raven.Server.Documents
                 {document.BasePointer, document.Size}, //3
             };			
 
-            var oldValue = table.ReadByKey(new SlicePointer(lowerKey, (ushort)lowerSize));
+            var oldValue = table.ReadByKey(Slice.From(context.Allocator, lowerKey, (ushort)lowerSize));
             if (oldValue == null)
             {
                 if (expectedEtag != null && expectedEtag != 0)
@@ -838,11 +843,11 @@ namespace Raven.Server.Documents
         {
             using (var it = context.Transaction.InnerTransaction.LowLevelTransaction.RootObjects.Iterate())
             {
-                if (it.Seek(Slices.GetBeforeAllKeys<SlicePointer>()) == false)
+                if (it.Seek(Slices.BeforeAllKeys) == false)
                     yield break;
                 do
                 {
-                    if (context.Transaction.InnerTransaction.GetRootObjectType(it.CurrentKey.Clone<SliceArray>()) != RootObjectType.VariableSizeTree)
+                    if (context.Transaction.InnerTransaction.GetRootObjectType(it.CurrentKey.Clone()) != RootObjectType.VariableSizeTree)
                         continue;
 
                     if (it.CurrentKey[0] != '@') // collection prefix
@@ -901,9 +906,9 @@ namespace Raven.Server.Documents
         {
             using (var it = transaction.LowLevelTransaction.RootObjects.Iterate())
             {
-                it.RequiredPrefix = "#";
+                it.RequiredPrefix = HashTagSlice;
 
-                if (it.Seek(Slices.GetBeforeAllKeys<SlicePointer>()) == false)
+                if (it.Seek(Slices.BeforeAllKeys) == false)
                     yield break;
 
                 do

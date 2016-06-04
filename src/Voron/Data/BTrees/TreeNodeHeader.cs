@@ -33,6 +33,11 @@ namespace Voron.Data.BTrees
             return _nodeTypeSize + KeySize  + (Flags == (TreeNodeFlags.PageRef) ? 0 : DataSize);
         }
 
+        public Slice ToSlice ( ByteStringContext context )
+        {
+            throw new NotImplementedException();
+        }
+
         public static byte* DirectAccess(LowLevelTransaction tx, TreeNodeHeader* node)
         {
             if (node->Flags == (TreeNodeFlags.PageRef))
@@ -57,16 +62,16 @@ namespace Voron.Data.BTrees
             return new ValueReader((byte*)node + node->KeySize + Constants.NodeHeaderSize, node->DataSize);
         }
 
-        public static SlicePointer GetData(LowLevelTransaction tx, TreeNodeHeader* node)
+        public static Slice GetData(LowLevelTransaction tx, TreeNodeHeader* node)
         {
             if (node->Flags == (TreeNodeFlags.PageRef))
             {
                 var overFlowPage = tx.GetPage(node->PageNumber);
                 if (overFlowPage.OverflowSize > ushort.MaxValue)
                     throw new InvalidOperationException("Cannot convert big data to a slice, too big");
-                return new SlicePointer(overFlowPage.Pointer + Constants.TreePageHeaderSize, (ushort)overFlowPage.OverflowSize);
+                return Slice.External(tx.Allocator, overFlowPage.Pointer + Constants.TreePageHeaderSize, (ushort)overFlowPage.OverflowSize, ByteStringType.Immutable);
             }
-            return new SlicePointer((byte*)node + node->KeySize + Constants.NodeHeaderSize, (ushort) node->DataSize);
+            return Slice.External(tx.Allocator, (byte*)node + node->KeySize + Constants.NodeHeaderSize, (ushort) node->DataSize);
         }
 
 

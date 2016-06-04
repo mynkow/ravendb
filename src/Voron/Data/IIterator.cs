@@ -4,11 +4,11 @@ namespace Voron.Data
 {
     public interface IIterator : IDisposable
     {
-        SlicePointer CurrentKey { get; }
-        SliceArray RequiredPrefix { get; set; }
-        SliceArray MaxKey { get; set; }        
+        Slice CurrentKey { get; }
+        Slice RequiredPrefix { get; set; }
+        Slice MaxKey { get; set; }
 
-        bool Seek<T>(T key) where T : class, ISlice;
+        bool Seek(Slice key);
         bool MoveNext();
         bool MovePrev();
         bool Skip(int count);

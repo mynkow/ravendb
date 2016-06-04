@@ -60,7 +60,7 @@ namespace SlowTests.Voron
         public void CanCIterate_ALot_ForPageSplits(int count)
         {
             var bytes = new byte[48];
-            var slice = new SliceArray(bytes);
+            var slice = new Slice(bytes);
             using (var tx = Env.WriteTransaction())
             {
                 var fst = tx.FixedTreeFor("test", valSize: 48);
@@ -99,7 +99,7 @@ namespace SlowTests.Voron
         public void CanRemove_ALot_ForPageSplits(int count)
         {
             var bytes = new byte[48];
-            var slice = new SliceArray(bytes);
+            var slice = new Slice(bytes);
             using (var tx = Env.WriteTransaction())
             {
                 var fst = tx.FixedTreeFor("test", valSize: 48);
@@ -145,7 +145,7 @@ namespace SlowTests.Voron
         public void CanDeleteRange(int count)
         {
             var bytes = new byte[48];
-            var slice = new SliceArray(bytes);
+            var slice = new Slice(bytes);
 
             using (var tx = Env.WriteTransaction())
             {
@@ -208,7 +208,7 @@ namespace SlowTests.Voron
         public void CanDeleteAllRange(int count)
         {
             var bytes = new byte[48];
-            var slice = new SliceArray(bytes);
+            var slice = new Slice(bytes);
 
             using (var tx = Env.WriteTransaction())
             {
@@ -255,7 +255,7 @@ namespace SlowTests.Voron
         public void CanDeleteRange_TryToFindABranchNextToLeaf(int count, int seed)
         {
             var bytes = new byte[48];
-            var slice = new SliceArray(bytes);
+            var slice = new Slice(bytes);
             var status = new BitArray(count + 1);
 
             using (var tx = Env.WriteTransaction())
@@ -338,7 +338,7 @@ namespace SlowTests.Voron
         public void CanDeleteRange_RandomRanges(int count, int seed)
         {
             var bytes = new byte[48];
-            var slice = new SliceArray(bytes);
+            var slice = new Slice(bytes);
 
             var status = new BitArray(count + 1);
             using (var tx = Env.WriteTransaction())
@@ -393,7 +393,7 @@ namespace SlowTests.Voron
         public void CanDeleteRange_RandomRanges_WithGaps(int count, int seed)
         {
             var bytes = new byte[48];
-            var slice = new SliceArray(bytes);
+            var slice = new Slice(bytes);
 
             var status = new BitArray(count * 3);
             using (var tx = Env.WriteTransaction())
@@ -446,7 +446,7 @@ namespace SlowTests.Voron
         public void SeekToLast_ShouldWork(int count)
         {
             var bytes = new byte[48];
-            var slice = new SliceArray(bytes);
+            var slice = new Slice(bytes);
 
 	        int lastId = -1;
 	        using (var tx = Env.WriteTransaction())

@@ -6,9 +6,9 @@ namespace Voron.Data.BTrees
     public unsafe class TreePageIterator : IIterator
     {
         private readonly TreePage _page;
-        private readonly SlicePointer _currentInternalKey = new SlicePointer();
 
-        private SlicePointer _currentKey = null;
+        private Slice _currentInternalKey = default(Slice);    
+        private Slice _currentKey = default(Slice);
         private bool _disposed;
 
         public TreePageIterator(TreePage page)
@@ -23,8 +23,7 @@ namespace Voron.Data.BTrees
             OnDisposal?.Invoke(this);
         }
 
-        public bool Seek<T>(T key)
-            where T : class, ISlice
+        public bool Seek(Slice key)
         {
             if(_disposed)
                 throw new ObjectDisposedException("PageIterator");
@@ -52,7 +51,7 @@ namespace Voron.Data.BTrees
         }
 
 
-        public SlicePointer CurrentKey
+        public Slice CurrentKey
         {
             get
             {
@@ -72,8 +71,8 @@ namespace Voron.Data.BTrees
         }
 
 
-        public SliceArray RequiredPrefix { get; set; }
-        public SliceArray MaxKey { get; set; }
+        public Slice RequiredPrefix { get; set; }
+        public Slice MaxKey { get; set; }
 
         public bool MoveNext()
         {

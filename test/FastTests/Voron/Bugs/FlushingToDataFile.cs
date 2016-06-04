@@ -187,7 +187,7 @@ namespace FastTests.Voron.Bugs
                         {
                             using (var iterator = tx.CreateTree(tree).Iterate())
                             {
-                                if (!iterator.Seek(Slices.GetBeforeAllKeys<SliceArray>()))
+                                if (!iterator.Seek(Slices.BeforeAllKeys))
                                     continue;
 
                                 do

@@ -1,4 +1,5 @@
-﻿using Sparrow.Collections;
+﻿using Sparrow;
+using Sparrow.Collections;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -25,6 +26,12 @@ namespace Voron
 {
     public class StorageEnvironment : IDisposable
     {
+        /// <summary>
+        /// This is the shared storage where we are going to store all the static constants for names. 
+        /// WARNING: This context will never be released, so only static constants should be added here.
+        /// </summary>
+        public static readonly ByteStringContext LabelsContext = new ByteStringContext(ByteStringContext.MinBlockSizeInBytes);
+
         private readonly StorageEnvironmentOptions _options;
 
         private readonly ConcurrentSet<LowLevelTransaction> _activeTransactions = new ConcurrentSet<LowLevelTransaction>();
@@ -122,7 +129,7 @@ namespace Voron
                 if (metadataTree == null)
                     throw new VoronUnrecoverableErrorException("Could not find metadata tree in database, possible mismatch / corruption?");
 
-                var dbId = metadataTree.Read<SliceArray>("db-id");
+                var dbId = metadataTree.Read("db-id");
                 if (dbId == null)
                     throw new VoronUnrecoverableErrorException("Could not find db id in metadata tree, possible mismatch / corruption?");
 
@@ -133,7 +140,7 @@ namespace Voron
 
                 DbId = new Guid(buffer);
 
-                var schemaVersion = metadataTree.Read<SliceArray>("schema-version");
+                var schemaVersion = metadataTree.Read("schema-version");
                 if (schemaVersion == null)
                     throw new VoronUnrecoverableErrorException("Could not find schema version in metadata tree, possible mismatch / corruption?");
 
@@ -170,8 +177,8 @@ namespace Voron
                 DbId = Guid.NewGuid();
 
                 var metadataTree = treesTx.CreateTree(Constants.MetadataTreeName);
-                metadataTree.Add<SliceArray>("db-id", DbId.ToByteArray());
-                metadataTree.Add<SliceArray>("schema-version", EndianBitConverter.Little.GetBytes(Options.SchemaVersion));
+                metadataTree.Add("db-id", DbId.ToByteArray());
+                metadataTree.Add("schema-version", EndianBitConverter.Little.GetBytes(Options.SchemaVersion));
 
                 treesTx.PrepareForCommit();
 
@@ -415,11 +422,11 @@ namespace Voron
             var fixedSizeTrees = new List<FixedSizeTree>();
             using (var rootIterator = tx.LowLevelTransaction.RootObjects.Iterate())
             {
-                if (rootIterator.Seek(SliceArray.BeforeAllKeys))
+                if (rootIterator.Seek(Slices.BeforeAllKeys))
                 {
                     do
                     {
-                        var curretKey = rootIterator.CurrentKey.Clone<SliceArray>();
+                        var curretKey = rootIterator.CurrentKey.Clone();
                         switch (tx.GetRootObjectType(curretKey))
                         {
                             case RootObjectType.VariableSizeTree:

@@ -25,7 +25,7 @@ namespace FastTests.Voron
 
             using (var tx = Env.WriteTransaction())
             {
-                tx.ReadTree("foo").MultiAdd((SliceArray)"ChildTreeKey", new SliceArray(buffer));
+                tx.ReadTree("foo").MultiAdd("ChildTreeKey", new Slice(buffer));
                 tx.Commit();
             }
 
@@ -33,9 +33,9 @@ namespace FastTests.Voron
             {
                 using (var fetchedDataIterator = tx.ReadTree("foo").MultiRead("ChildTreeKey"))
                 {
-                    fetchedDataIterator.Seek(Slices.GetBeforeAllKeys<SliceArray>());
+                    fetchedDataIterator.Seek(Slices.BeforeAllKeys);
 
-                    Assert.True(SliceComparer.Equals(fetchedDataIterator.CurrentKey, new SliceArray(buffer)));
+                    Assert.True(SliceComparer.Equals(fetchedDataIterator.CurrentKey, new Slice(buffer)));
                 }
             }
         }
@@ -113,7 +113,7 @@ namespace FastTests.Voron
             using (var tx = Env.ReadTransaction())
             {
                 var iterator = tx.ReadTree("foo").MultiRead(CHILDTREE_KEY);
-                iterator.Seek(Slices.GetBeforeAllKeys<SliceArray>());
+                iterator.Seek(Slices.BeforeAllKeys);
                 Assert.False(iterator.MoveNext());
             }
         }
@@ -133,13 +133,13 @@ namespace FastTests.Voron
 
             using (var tx = Env.WriteTransaction())
             {
-                tx.CreateTree("foo").MultiAdd((SliceArray)"ChildTreeKey", new SliceArray(buffer));
+                tx.CreateTree("foo").MultiAdd("ChildTreeKey", new Slice(buffer));
                 tx.Commit();
             }
 
             using (var tx = Env.WriteTransaction())
             {
-                tx.CreateTree("foo").MultiDelete((SliceArray)"ChildTreeKey", new SliceArray(buffer));
+                tx.CreateTree("foo").MultiDelete("ChildTreeKey", new Slice(buffer));
                 tx.Commit();
             }
 
@@ -360,7 +360,7 @@ namespace FastTests.Voron
                 var inputEntryCount = inputData.Count;
                 using (var fetchedDataIterator = targetTree.MultiRead(childtreeKey))
                 {
-                    fetchedDataIterator.Seek(Slices.GetBeforeAllKeys<SliceArray>());
+                    fetchedDataIterator.Seek(Slices.BeforeAllKeys);
                     do
                     {
                         Assert.Equal(inputDataSize, fetchedDataIterator.CurrentKey.Size);

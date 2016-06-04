@@ -4,6 +4,7 @@
 //  </copyright>
 // -----------------------------------------------------------------------
 
+using Sparrow;
 using System;
 using Voron.Impl;
 using Voron.Impl.FileHeaders;
@@ -17,7 +18,7 @@ namespace Voron.Data.Fixed
             bool SeekToLast();
             bool Seek(long key);
             long CurrentKey { get; }
-            SlicePointer Value { get; }
+            Slice Value { get; }
             bool MoveNext();
             bool MovePrev();
 
@@ -39,7 +40,7 @@ namespace Voron.Data.Fixed
             }
 
             public long CurrentKey { get { throw new InvalidOperationException("Invalid position, cannot read past end of tree"); } }
-            public SlicePointer Value { get { throw new InvalidOperationException("Invalid position, cannot read past end of tree"); } }
+            public Slice Value { get { throw new InvalidOperationException("Invalid position, cannot read past end of tree"); } }
             public bool MoveNext()
             {
                 return false;
@@ -68,6 +69,7 @@ namespace Voron.Data.Fixed
         public class EmbeddedIterator : IFixedSizeIterator
         {
             private readonly FixedSizeTree _fst;
+            private readonly ByteStringContext _allocator;
             private int _pos;
             private FixedSizeTreeHeader.Embedded* _header;
             private byte* _dataStart;
@@ -76,6 +78,7 @@ namespace Voron.Data.Fixed
             public EmbeddedIterator(FixedSizeTree fst)
             {
                 _fst = fst;
+                _allocator = fst._tx.Allocator;
                 _changesAtStart = _fst._changes;
                 var ptr = _fst._parent.DirectRead(_fst._treeName);
                 _header = (FixedSizeTreeHeader.Embedded*)ptr;
@@ -110,14 +113,14 @@ namespace Voron.Data.Fixed
                 }
             }
 
-            public SlicePointer Value
+            public Slice Value
             {
                 get
                 {
                     if (_pos == _header->NumberOfEntries)
                         throw new InvalidOperationException("Invalid position, cannot read past end of tree");
-
-                    return new SlicePointer(_dataStart + (_pos * _fst._entrySize) + sizeof(long), _fst._valSize);
+  
+                    return Slice.External(_allocator, _dataStart + (_pos * _fst._entrySize) + sizeof(long), _fst._valSize);
                 }
             }
 
@@ -160,12 +163,14 @@ namespace Voron.Data.Fixed
         public class LargeIterator : IFixedSizeIterator
         {
             private readonly FixedSizeTree _parent;
+            private readonly ByteStringContext _allocator;
             private FixedSizeTreePage _currentPage;
             private int _changesAtStart;
 
             public LargeIterator(FixedSizeTree parent)
             {
                 _parent = parent;
+                _allocator = parent._tx.Allocator;               
                 _changesAtStart = _parent._changes;
             }
 
@@ -203,14 +208,14 @@ namespace Voron.Data.Fixed
                 }
             }
 
-            public SlicePointer Value
+            public Slice Value
             {
                 get
                 {
                     if (_currentPage == null)
                         throw new InvalidOperationException("No current page was set");
 
-                    return new SlicePointer(_currentPage.Pointer + _currentPage.StartPosition + (_parent._entrySize * _currentPage.LastSearchPosition) + sizeof(long), _parent._valSize);
+                    return Slice.External(_allocator, _currentPage.Pointer + _currentPage.StartPosition + (_parent._entrySize * _currentPage.LastSearchPosition) + sizeof(long), _parent._valSize);
                 }
             }
 

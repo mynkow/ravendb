@@ -60,7 +60,7 @@ namespace Voron.Impl.Compaction
             using (var txr = existingEnv.ReadTransaction())
             using (var rootIterator = txr.LowLevelTransaction.RootObjects.Iterate())
             {
-                if (rootIterator.Seek(Slices.GetBeforeAllKeys<SlicePointer>()) == false)
+                if (rootIterator.Seek(Slices.BeforeAllKeys) == false)
                     return;
 
                 var totalTreesCount = txr.LowLevelTransaction.RootObjects.State.NumberOfEntries;
@@ -68,7 +68,7 @@ namespace Voron.Impl.Compaction
                 do
                 {
                     var treeName = rootIterator.CurrentKey.ToString();
-                    var currentKey = rootIterator.CurrentKey.Clone<SliceArray>();
+                    var currentKey = rootIterator.CurrentKey.Clone();
                     var objectType = txr.GetRootObjectType(currentKey);
                     switch (objectType)
                     {
@@ -98,7 +98,7 @@ namespace Voron.Impl.Compaction
             TreeIterator rootIterator, string treeName, long copiedTrees, long totalTreesCount)
         {
             
-            var fst = txr.FixedTreeFor(rootIterator.CurrentKey.Clone<SliceArray>(), 0);
+            var fst = txr.FixedTreeFor(rootIterator.CurrentKey.Clone(), 0);
             Report(treeName, copiedTrees, totalTreesCount, 0,
                 fst.NumberOfEntries,
                 progressReport);
@@ -111,7 +111,7 @@ namespace Voron.Impl.Compaction
                 {
                     using (var txw = compactedEnv.WriteTransaction())
                     {
-                        var snd = txw.FixedTreeFor(rootIterator.CurrentKey.Clone<SliceArray>());
+                        var snd = txw.FixedTreeFor(rootIterator.CurrentKey.Clone());
                         var transactionSize = 0L;
                         do
                         {
@@ -143,7 +143,7 @@ namespace Voron.Impl.Compaction
 
             using (var existingTreeIterator = existingTree.Iterate())
             {
-                if (existingTreeIterator.Seek(Slices.GetBeforeAllKeys<SlicePointer>()) == false)
+                if (existingTreeIterator.Seek(Slices.BeforeAllKeys) == false)
                     return copiedTrees;
 
                 using (var txw = compactedEnv.WriteTransaction())
@@ -170,7 +170,7 @@ namespace Voron.Impl.Compaction
                             {
                                 using (var multiTreeIterator = existingTree.MultiRead(key))
                                 {
-                                    if (multiTreeIterator.Seek(Slices.GetBeforeAllKeys<SlicePointer>()) == false)
+                                    if (multiTreeIterator.Seek(Slices.BeforeAllKeys) == false)
                                         continue;
 
                                     do

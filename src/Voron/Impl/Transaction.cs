@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Sparrow;
+using System;
 using System.Collections.Generic;
 
 using Voron.Data;
@@ -9,7 +10,7 @@ namespace Voron.Impl
 {
     public unsafe class Transaction : IDisposable
     {
-        private Dictionary<Tuple<Tree, ISlice>, Tree> _multiValueTrees;
+        private Dictionary<Tuple<Tree, Slice>, Tree> _multiValueTrees;
         private readonly LowLevelTransaction _lowLevelTransaction;
 
         public LowLevelTransaction LowLevelTransaction
@@ -25,13 +26,20 @@ namespace Voron.Impl
             _lowLevelTransaction = lowLevelTransaction;
         }
 
+        public ByteStringContext Allocator
+        {
+            get { return _lowLevelTransaction.Allocator; }
+        }
+
         public Tree ReadTree(string treeName)
         {
             Tree tree;
             if (_trees.TryGetValue(treeName, out tree))
                 return tree;
 
-            var header = (TreeRootHeader*)_lowLevelTransaction.RootObjects.DirectRead<SliceArray>(treeName);
+            Slice treeNameSlice = Slice.From(this.Allocator, treeName, ByteStringType.Immutable);
+
+            var header = (TreeRootHeader*)_lowLevelTransaction.RootObjects.DirectRead(treeNameSlice);
             if (header != null)
             {
                 if (header->RootObjectType != RootObjectType.VariableSizeTree)
@@ -90,7 +98,7 @@ namespace Voron.Impl
                 var treeState = tree.State;
                 if (treeState.IsModified)
                 {
-                    var treePtr = (TreeRootHeader*)_lowLevelTransaction.RootObjects.DirectAdd<SliceArray>(tree.Name, sizeof(TreeRootHeader));
+                    var treePtr = (TreeRootHeader*)_lowLevelTransaction.RootObjects.DirectAdd(tree.Name, sizeof(TreeRootHeader));
                     treeState.CopyTo(treePtr);
                 }
             }
@@ -103,28 +111,25 @@ namespace Voron.Impl
         }
 
 
-        internal void AddMultiValueTree<T>(Tree tree, T key, Tree mvTree)
-            where T : ISlice
+        internal void AddMultiValueTree(Tree tree, Slice key, Tree mvTree)
         {
             if (_multiValueTrees == null)
-                _multiValueTrees = new Dictionary<Tuple<Tree, ISlice>, Tree>(new TreeAndSliceComparer());
+                _multiValueTrees = new Dictionary<Tuple<Tree, Slice>, Tree>(new TreeAndSliceComparer());
             mvTree.IsMultiValueTree = true;
-            _multiValueTrees.Add(Tuple.Create<Tree, ISlice>(tree, key), mvTree);
+            _multiValueTrees.Add(Tuple.Create(tree, key), mvTree);
         }
 
-        internal bool TryGetMultiValueTree<T>(Tree tree, T key, out Tree mvTree)
-            where T : ISlice
+        internal bool TryGetMultiValueTree(Tree tree, Slice key, out Tree mvTree)
         {
             mvTree = null;
             if (_multiValueTrees == null)
                 return false;
-            return _multiValueTrees.TryGetValue(Tuple.Create<Tree, ISlice>(tree, key), out mvTree);
+            return _multiValueTrees.TryGetValue(Tuple.Create(tree, key), out mvTree);
         }
 
-        internal bool TryRemoveMultiValueTree<T>(Tree parentTree, T key)
-            where T : ISlice
+        internal bool TryRemoveMultiValueTree(Tree parentTree, Slice key)
         {
-            var keyToRemove = Tuple.Create<Tree, ISlice>(parentTree, key);
+            var keyToRemove = Tuple.Create(parentTree, key);
             if (_multiValueTrees == null || !_multiValueTrees.ContainsKey(keyToRemove))
                 return false;
 
@@ -158,7 +163,7 @@ namespace Voron.Impl
                 _lowLevelTransaction.FreePage(page);
             }
 
-            _lowLevelTransaction.RootObjects.Delete<SliceArray>(name);
+            _lowLevelTransaction.RootObjects.Delete(name);
 
             _trees.Remove(name);
         }
@@ -178,9 +183,9 @@ namespace Voron.Impl
             if (fromTree == null)
                 throw new ArgumentException("Tree " + fromName + " does not exists");
 
-            SliceArray key = toName;
+            Slice key = Slice.From(this.Allocator, toName, ByteStringType.Immutable);
 
-            _lowLevelTransaction.RootObjects.Delete((SliceArray)fromName);
+            _lowLevelTransaction.RootObjects.Delete(fromName);
             var ptr = _lowLevelTransaction.RootObjects.DirectAdd(key, sizeof(TreeRootHeader));
             fromTree.State.CopyTo((TreeRootHeader*)ptr);
             fromTree.Name = toName;
@@ -201,7 +206,7 @@ namespace Voron.Impl
             if (_lowLevelTransaction.Flags == (TransactionFlags.ReadWrite) == false)
                 throw new InvalidOperationException("No such tree: '" + name + "' and cannot create trees in read transactions");
 
-            SliceArray key = name;
+            Slice key = Slice.From(this.Allocator, name, ByteStringType.Immutable);
 
             tree = Tree.Create(_lowLevelTransaction, this);
             tree.Name = name;
@@ -220,18 +225,18 @@ namespace Voron.Impl
             _lowLevelTransaction?.Dispose();
         }
 
-        public FixedSizeTree FixedTreeFor(SliceArray treeName)
+        public FixedSizeTree FixedTreeFor(Slice treeName)
         {
             var valueSize = FixedSizeTree.GetValueSize(LowLevelTransaction, LowLevelTransaction.RootObjects, treeName);
             return FixedTreeFor(treeName, valueSize);
         }
 
-        public FixedSizeTree FixedTreeFor(SliceArray treeName, ushort valSize)
+        public FixedSizeTree FixedTreeFor(Slice treeName, ushort valSize)
         {
             return new FixedSizeTree(LowLevelTransaction, LowLevelTransaction.RootObjects, treeName, valSize);
         }
 
-        public RootObjectType GetRootObjectType(SliceArray name)
+        public RootObjectType GetRootObjectType(Slice name)
         {
             var val = _lowLevelTransaction.RootObjects.DirectRead(name);
             if (val == null)

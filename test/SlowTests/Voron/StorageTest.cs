@@ -7,6 +7,7 @@ using FastTests;
 using Voron;
 using Voron.Data.BTrees;
 using Voron.Impl;
+using Sparrow;
 
 namespace SlowTests.Voron
 {
@@ -162,7 +163,7 @@ namespace SlowTests.Voron
             return results;
         }
 
-        protected unsafe Tuple<SlicePointer, SlicePointer> ReadKey<T>(Transaction txh, Tree tree, T key) where T : class, ISlice
+        protected unsafe Tuple<Slice, Slice> ReadKey(Transaction txh, Tree tree, Slice key) 
         {
             TreeNodeHeader* node;
             var p = tree.FindPageFor(key, out node);
@@ -171,12 +172,12 @@ namespace SlowTests.Voron
             if (node == null)
                 return null;
 
-            var item1 = p.GetNodeKey<SlicePointer>(node);
+            var item1 = p.GetNodeKey(node);
 
             if (SliceComparer.CompareInline(item1,key) != 0)
                 return null;
 
-            return Tuple.Create(item1, new SlicePointer((byte*)node + node->KeySize + Constants.NodeHeaderSize, (ushort)node->DataSize));
+            return Tuple.Create(item1, Slice.External( txh.Allocator, (byte*)node + node->KeySize + Constants.NodeHeaderSize, (ushort)node->DataSize, ByteStringType.Immutable));
         }
     }
 }

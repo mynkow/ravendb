@@ -15,8 +15,7 @@ namespace Voron.Impl
         /// rounded up to an even number of bytes, to guarantee 2-byte alignment
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int LeafEntry<T>(int pageMaxSpace, T key, int len)
-            where T : ISlice
+        public static int LeafEntry(int pageMaxSpace, Slice key, int len)
         {
             var nodeSize = Constants.NodeHeaderSize;
 
@@ -39,8 +38,7 @@ namespace Voron.Impl
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int BranchEntry<T>(T key)
-            where T : ISlice
+        public static int BranchEntry(Slice key)
         {
             var sz = Constants.NodeHeaderSize + key.Size;
             sz += sz & 1;
@@ -48,8 +46,7 @@ namespace Voron.Impl
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int NodeEntry<T>(int pageMaxSpace, T key, int len)
-            where T : ISlice
+        public static int NodeEntry(int pageMaxSpace, Slice key, int len)
         {
             if (len < 0)
                 return BranchEntry(key);
@@ -70,10 +67,9 @@ namespace Voron.Impl
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int NodeEntryWithAnotherKey<T>(TreeNodeHeader* other, T key)
-            where T : class, ISlice
+        public static int NodeEntryWithAnotherKey(TreeNodeHeader* other, Slice key)
         {
-            var keySize = key != null ? key.Size : other->KeySize;
+            var keySize = !key.HasValue ? key.Size : other->KeySize;
             var sz = keySize + Constants.NodeHeaderSize;
             if (other->Flags == TreeNodeFlags.Data || other->Flags == TreeNodeFlags.MultiValuePageRef)
                 sz += other->DataSize;

@@ -22,6 +22,7 @@ namespace Voron.Impl
         private readonly IVirtualPager _dataPager;
         private readonly StorageEnvironment _env;
         private readonly long _id;
+        private readonly ByteStringContext _allocator;
         private Tree _root;
 
         public bool FlushedToJournal { get; private set; }
@@ -80,6 +81,11 @@ namespace Voron.Impl
             get { return _state; }
         }
 
+        public ByteStringContext Allocator
+        {
+            get { return _allocator; }
+        }
+
         public ulong Hash
         {
             get { return _txHeader->Hash; }
@@ -92,9 +98,11 @@ namespace Voron.Impl
             _journal = env.Journal;
             _id = id;
             _freeSpaceHandling = freeSpaceHandling;
-            Flags = flags;
-            var scratchPagerStates = env.ScratchBufferPool.GetPagerStatesOfAllScratches();
+            _allocator = new ByteStringContext();
 
+            Flags = flags;
+
+            var scratchPagerStates = env.ScratchBufferPool.GetPagerStatesOfAllScratches();
             foreach (var scratchPagerState in scratchPagerStates.Values)
             {
                 scratchPagerState.AddRef();

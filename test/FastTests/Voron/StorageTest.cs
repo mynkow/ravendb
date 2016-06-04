@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Sparrow;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -160,21 +161,20 @@ namespace FastTests.Voron
             return results;
         }
 
-        protected unsafe Tuple<SliceArray, SlicePointer> ReadKey(Transaction txh, Tree tree, SliceArray key)
+        protected unsafe Tuple<Slice, Slice> ReadKey(Transaction txh, Tree tree, Slice key)
         {
             TreeNodeHeader* node;
             var p = tree.FindPageFor(key, out node);
 
-
             if (node == null)
                 return null;
 
-            var item1 = p.GetNodeKey<SliceArray>(node);
+            var item1 = p.GetNodeKey(node);
 
             if (!SliceComparer.Equals(item1,key))
                 return null;
 
-            return Tuple.Create(item1, new SlicePointer((byte*)node + node->KeySize + Constants.NodeHeaderSize,(ushort)node->DataSize));
+            return Tuple.Create(item1, Slice.External( txh.Allocator, (byte*)node + node->KeySize + Constants.NodeHeaderSize,(ushort)node->DataSize, ByteStringType.Immutable));
         }
     }
 }
