@@ -426,7 +426,7 @@ namespace Voron
                 {
                     do
                     {
-                        var curretKey = rootIterator.CurrentKey.Clone();
+                        var curretKey = rootIterator.CurrentKey.Clone(tx.Allocator);
                         switch (tx.GetRootObjectType(curretKey))
                         {
                             case RootObjectType.VariableSizeTree:

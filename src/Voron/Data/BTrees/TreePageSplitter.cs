@@ -102,7 +102,7 @@ namespace Voron.Data.BTrees
                             rightPage.AddPageRefNode(0, Slices.BeforeAllKeys, node->PageNumber);
                             pos = AddNodeToPage(rightPage, 1);
 
-                            var separatorKey = _page.GetNodeKey(node);
+                            var separatorKey = TreeNodeHeader.ToSlicePtr(_tx.Allocator, node);
 
                             AddSeparatorToParentPage(rightPage.PageNumber, separatorKey, true, out _);
 
@@ -175,7 +175,7 @@ namespace Voron.Data.BTrees
                 splitIndex = AdjustSplitPosition(currentIndex, splitIndex, ref toRight);
             }
 
-            var currentKey = _page.GetNodeKey(splitIndex);
+            var currentKey = _page.GetNodeKey(_tx, splitIndex);
 
             Slice seperatorKey;
             if (toRight && splitIndex == currentIndex)
@@ -210,7 +210,7 @@ namespace Voron.Data.BTrees
                 }
                 else
                 {
-                    _page.SetNodeKey(node, instance);
+                    instance = TreeNodeHeader.ToSlicePtr(_tx.Allocator, node);
                     rightPage.CopyNodeDataToEndOfPage(node, instance);
                 }
             }
@@ -286,7 +286,7 @@ namespace Voron.Data.BTrees
 
         private byte* InsertNewKey(TreePage p)
         {
-            int pos = p.NodePositionFor(_newKey);
+            int pos = p.NodePositionFor(_tx, _newKey);
 
             var newKeyToInsert = _newKey;
 
@@ -306,7 +306,7 @@ namespace Voron.Data.BTrees
 
         private byte* AddSeparatorToParentPage(long pageNumber, Slice separatorKey, bool toRight, out TreePage parent)
         {
-            var pos = _parentPage.NodePositionFor(separatorKey); // select the appropriate place for this
+            var pos = _parentPage.NodePositionFor(_tx, separatorKey); // select the appropriate place for this
 
             if (_parentPage.HasSpaceFor(_tx, TreeSizeOf.BranchEntry(separatorKey) + Constants.NodeOffsetSize) == false)
             {
@@ -389,7 +389,7 @@ namespace Voron.Data.BTrees
 
             debugInfo.AppendFormat("\r\n_tree.Name: {0}\r\n", _tree.Name);
             debugInfo.AppendFormat("_newKey: {0}, _len: {1}, needed space: {2}\r\n", _newKey, _len, _page.GetRequiredSpace(_newKey, _len));
-            debugInfo.AppendFormat("key at LastSearchPosition: {0}, current key: {1}, seperatorKey: {2}\r\n", _page.GetNodeKey(_page.LastSearchPosition), currentKey, seperatorKey);
+            debugInfo.AppendFormat("key at LastSearchPosition: {0}, current key: {1}, seperatorKey: {2}\r\n", _page.GetNodeKey(_tx, _page.LastSearchPosition), currentKey, seperatorKey);
             debugInfo.AppendFormat("currentIndex: {0}\r\n", currentIndex);
             debugInfo.AppendFormat("splitIndex: {0}\r\n", splitIndex);
             debugInfo.AppendFormat("toRight: {0}\r\n", toRight);
@@ -399,7 +399,7 @@ namespace Voron.Data.BTrees
             for (int i = 0; i < _page.NumberOfEntries; i++)
             {
                 var node = _page.GetNode(i);
-                var key = _page.GetNodeKey(node);
+                var key = TreeNodeHeader.ToSlicePtr(_tx.Allocator, node);
                 debugInfo.AppendFormat("{0} - {2} {1}\r\n", key,
                     node->DataSize, node->Flags == TreeNodeFlags.Data ? "Size" : "Page");
             }
@@ -409,7 +409,7 @@ namespace Voron.Data.BTrees
             for (int i = 0; i < rightPage.NumberOfEntries; i++)
             {
                 var node = rightPage.GetNode(i);
-                var key = rightPage.GetNodeKey(node);
+                var key = TreeNodeHeader.ToSlicePtr(_tx.Allocator, node);
                 debugInfo.AppendFormat("{0} - {2} {1}\r\n", key,
                     node->DataSize, node->Flags == TreeNodeFlags.Data ? "Size" : "Page");
             }

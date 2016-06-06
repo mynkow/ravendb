@@ -122,11 +122,6 @@ namespace Voron.Data.Tables
             _pageSize = _tx.LowLevelTransaction.DataPager.PageSize;
         }
 
-        public TableValueReader ReadByKey(string key)
-        {
-            return ReadByKey(key);
-        }
-
         public TableValueReader ReadByKey(Slice key)
         {
             long id;
@@ -302,7 +297,7 @@ namespace Voron.Data.Tables
                 // For now we wont create secondary indexes on Compact trees.
                 var indexTree = GetTree(indexDef);
                 var val = indexDef.GetSlice(_tx.Allocator, value);
-                var fst = GetFixedSizeTree(indexTree, val.Clone(), 0);
+                var fst = GetFixedSizeTree(indexTree, val.Clone(_tx.Allocator), 0);
                 fst.Delete(id);
             }
 
@@ -371,7 +366,7 @@ namespace Voron.Data.Tables
                 // For now we wont create secondary indexes on Compact trees.
                 var val = indexDef.GetSlice(_tx.Allocator, value);
                 var indexTree = GetTree(indexDef);
-                var index = GetFixedSizeTree(indexTree, val.Clone(), 0);
+                var index = GetFixedSizeTree(indexTree, val.Clone(_tx.Allocator), 0);
                 index.Add(id);
             }
 
@@ -405,7 +400,7 @@ namespace Voron.Data.Tables
             FixedSizeTree tree;
             if (cache.TryGetValue(name, out tree) == false)
             {
-                var treeName = name.Clone();
+                var treeName = name.Clone(_tx.Allocator);
                 var fixedSizeTree = new FixedSizeTree(_tx.LowLevelTransaction, parent, treeName, valSize);
                 return cache[fixedSizeTree.Name] = fixedSizeTree;
             }
@@ -476,13 +471,7 @@ namespace Voron.Data.Tables
             return GetTree(idx.NameAsSlice);
         }
 
-        public void DeleteByKey(string key)
-        {
-            DeleteByKey(key);
-        }
-
-
-        public void DeleteByKey(Slice key)
+         public void DeleteByKey(Slice key)
         {
             var pk = _schema.Key;
             var pkTree = GetTree(_schema.Key);
@@ -541,7 +530,7 @@ namespace Voron.Data.Tables
             using (var it = tree.Iterate())
             {
                 if (startsWith)
-                    it.RequiredPrefix = value.Clone();
+                    it.RequiredPrefix = value.Clone(_tx.Allocator);
 
                 if (it.Seek(value) == false)
                     yield break;
@@ -551,7 +540,7 @@ namespace Voron.Data.Tables
                     yield return new SeekResult
                     {
                         Key = it.CurrentKey,
-                        Results = GetSecondaryIndexForValue(tree, it.CurrentKey.Clone())
+                        Results = GetSecondaryIndexForValue(tree, it.CurrentKey.Clone(_tx.Allocator))
                     };
                 } while (it.MoveNext());
             }
@@ -726,7 +715,7 @@ namespace Voron.Data.Tables
 
                 do
                 {
-                    var fst = GetFixedSizeTree(tree, it.CurrentKey.Clone(), 0);
+                    var fst = GetFixedSizeTree(tree, it.CurrentKey.Clone(_tx.Allocator), 0);
                     using (var fstIt = fst.Iterate())
                     {
                         if (fstIt.Seek(long.MinValue) == false)

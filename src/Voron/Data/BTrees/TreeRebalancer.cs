@@ -289,7 +289,7 @@ namespace Voron.Data.BTrees
 
                 if (implicitLeftNode == actualKeyNode)
                 {
-                    implicitLeftKeyToInsert = actualKeyNode->ToSlice(_tx.Allocator);
+                    implicitLeftKeyToInsert = TreeNodeHeader.ToSlicePtr(_tx.Allocator, actualKeyNode);
                 }
                 else
                 {
@@ -342,13 +342,13 @@ namespace Voron.Data.BTrees
         private Slice GetActualKey(TreePage page, int pos, out TreeNodeHeader* node)
         {
             node = page.GetNode(pos);
-            var key = page.GetNodeKey(node);
+            var key = TreeNodeHeader.ToSlicePtr(_tx.Allocator, node);
             while (key.Size == 0)
             {
                 Debug.Assert(page.IsBranch);
                 page = _tx.GetReadOnlyTreePage(node->PageNumber);
                 node = page.GetNode(0);
-                key = page.GetNodeKey(node);
+                key = TreeNodeHeader.ToSlicePtr(_tx.Allocator, node);
             }
 
             return key;

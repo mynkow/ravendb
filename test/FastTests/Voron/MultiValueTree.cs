@@ -25,7 +25,7 @@ namespace FastTests.Voron
 
             using (var tx = Env.WriteTransaction())
             {
-                tx.ReadTree("foo").MultiAdd("ChildTreeKey", new Slice(buffer));
+                tx.ReadTree("foo").MultiAdd("ChildTreeKey", Slice.From(Allocator, buffer));
                 tx.Commit();
             }
 
@@ -35,7 +35,7 @@ namespace FastTests.Voron
                 {
                     fetchedDataIterator.Seek(Slices.BeforeAllKeys);
 
-                    Assert.True(SliceComparer.Equals(fetchedDataIterator.CurrentKey, new Slice(buffer)));
+                    Assert.True(SliceComparer.Equals(fetchedDataIterator.CurrentKey, Slice.From(Allocator, buffer)));
                 }
             }
         }
@@ -133,13 +133,13 @@ namespace FastTests.Voron
 
             using (var tx = Env.WriteTransaction())
             {
-                tx.CreateTree("foo").MultiAdd("ChildTreeKey", new Slice(buffer));
+                tx.CreateTree("foo").MultiAdd("ChildTreeKey", Slice.From(Allocator, buffer));
                 tx.Commit();
             }
 
             using (var tx = Env.WriteTransaction())
             {
-                tx.CreateTree("foo").MultiDelete("ChildTreeKey", new Slice(buffer));
+                tx.CreateTree("foo").MultiDelete("ChildTreeKey", Slice.From(Allocator, buffer));
                 tx.Commit();
             }
 

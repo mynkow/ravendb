@@ -68,7 +68,7 @@ namespace Voron.Impl.Compaction
                 do
                 {
                     var treeName = rootIterator.CurrentKey.ToString();
-                    var currentKey = rootIterator.CurrentKey.Clone();
+                    var currentKey = rootIterator.CurrentKey.Clone(txr.Allocator);
                     var objectType = txr.GetRootObjectType(currentKey);
                     switch (objectType)
                     {
@@ -98,7 +98,7 @@ namespace Voron.Impl.Compaction
             TreeIterator rootIterator, string treeName, long copiedTrees, long totalTreesCount)
         {
             
-            var fst = txr.FixedTreeFor(rootIterator.CurrentKey.Clone(), 0);
+            var fst = txr.FixedTreeFor(rootIterator.CurrentKey.Clone(txr.Allocator), 0);
             Report(treeName, copiedTrees, totalTreesCount, 0,
                 fst.NumberOfEntries,
                 progressReport);
@@ -111,7 +111,7 @@ namespace Voron.Impl.Compaction
                 {
                     using (var txw = compactedEnv.WriteTransaction())
                     {
-                        var snd = txw.FixedTreeFor(rootIterator.CurrentKey.Clone());
+                        var snd = txw.FixedTreeFor(rootIterator.CurrentKey.Clone(txr.Allocator));
                         var transactionSize = 0L;
                         do
                         {

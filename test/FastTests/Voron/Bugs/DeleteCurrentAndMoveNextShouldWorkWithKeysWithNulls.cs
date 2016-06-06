@@ -67,7 +67,7 @@ namespace FastTests.Voron.Bugs
                 var testTree = tx.ReadTree(treeName);
                 using (var iter = testTree.Iterate())
                 {
-                    iter.Seek("b");
+                    iter.Seek(Slice.From(tx.Allocator, "b"));
                     while (iter.DeleteCurrentAndMoveNext())
                     {
                     }

@@ -53,7 +53,7 @@ namespace Voron.Data.Fixed
             _tx = tx;
             _parent = parent;
             _valSize = valSize;
-            _treeName = treeName.Clone();
+            _treeName = treeName.Clone(_tx.Allocator);
 
             _entrySize = sizeof(long) + _valSize;
             _maxEmbeddedEntries = 512 / _entrySize;
@@ -108,17 +108,17 @@ namespace Voron.Data.Fixed
 
         public bool Add(long key)
         {
-            return Add(key);
+            return Add(key, default(Slice));
         }
 
         public bool Add(long key, Slice val)
         {
             if (_valSize == 0 && (val.HasValue && val.Size != 0))
                 throw new InvalidOperationException("When the value size is zero, no value can be specified");
-            if (_valSize != 0 && val.HasValue)
+            if (_valSize != 0 && !val.HasValue)
                 throw new InvalidOperationException("When the value size is not zero, the value must be specified");
             if (val.HasValue && val.Size != _valSize)
-                throw new InvalidOperationException("The value size must be " + _valSize + " but was " + val.Size);
+                throw new InvalidOperationException($"The value size must be of size '{_valSize}' but was of size '{val.Size}'.");
 
             bool isNew;
             var pos = DirectAdd(key, out isNew);

@@ -16,6 +16,8 @@ namespace FastTests.Voron
         protected StorageEnvironmentOptions _options;
         protected readonly string DataDir = GenerateDataDir();
 
+        private ByteStringContext _allocator = new ByteStringContext();
+
         public static string GenerateDataDir()
         {
             var tempFileName = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
@@ -37,6 +39,11 @@ namespace FastTests.Voron
                 }
                 return _storageEnvironment;
             }
+        }
+
+        protected ByteStringContext Allocator
+        {
+            get { return _allocator; }
         }
 
         protected StorageTest(StorageEnvironmentOptions options)
@@ -161,6 +168,11 @@ namespace FastTests.Voron
             return results;
         }
 
+        protected unsafe Tuple<Slice, Slice> ReadKey(Transaction txh, Tree tree, string key)
+        {
+            return ReadKey(txh, tree, Slice.From(txh.Allocator, key, ByteStringType.Immutable));
+        }
+
         protected unsafe Tuple<Slice, Slice> ReadKey(Transaction txh, Tree tree, Slice key)
         {
             TreeNodeHeader* node;
@@ -169,7 +181,7 @@ namespace FastTests.Voron
             if (node == null)
                 return null;
 
-            var item1 = p.GetNodeKey(node);
+            var item1 = TreeNodeHeader.ToSlicePtr( txh.Allocator, node);
 
             if (!SliceComparer.Equals(item1,key))
                 return null;

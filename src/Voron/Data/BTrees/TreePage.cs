@@ -81,8 +81,9 @@ namespace Voron.Data.BTrees
         }
 
 
+        // TODO: Refactor this.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public TreeNodeHeader* Search(Slice key)
+        public TreeNodeHeader* Search(LowLevelTransaction tx, Slice key)
         {
             int numberOfEntries = NumberOfEntries;
             if (numberOfEntries == 0)
@@ -102,7 +103,7 @@ namespace Voron.Data.BTrees
                         {
                             var node = GetNode(0);
 
-                            SetNodeKey(node, pageKey);
+                            pageKey = TreeNodeHeader.ToSlicePtr(tx.Allocator, node, ByteStringType.Mutable);
 
                             LastMatch = SliceComparer.CompareInline(key, pageKey);
                             LastSearchPosition = LastMatch > 0 ? 1 : 0;
@@ -120,7 +121,7 @@ namespace Voron.Data.BTrees
 
                             var node = (TreeNodeHeader*)(Base + offsets[position]);
 
-                            SetNodeKey(node, pageKey);
+                            pageKey = TreeNodeHeader.ToSlicePtr(tx.Allocator, node, ByteStringType.Mutable);
 
                             LastMatch = SliceComparer.CompareInline(key, pageKey);
                             if (LastMatch == 0)
@@ -386,7 +387,7 @@ namespace Voron.Data.BTrees
                 for (int j = 0; j < i; j++)
                 {
                     var node = GetNode(j);
-                    SetNodeKey(node, slice);
+                    slice = TreeNodeHeader.ToSlicePtr(tx.Allocator, node, ByteStringType.Mutable);
                     copy.CopyNodeDataToEndOfPage(node, slice);
                 }
 
@@ -402,9 +403,9 @@ namespace Voron.Data.BTrees
                 LastSearchPosition = i;
         }
 
-        public int NodePositionFor(Slice key)
+        public int NodePositionFor(LowLevelTransaction tx, Slice key)
         {
-            Search(key);
+            Search(tx, key);
             return LastSearchPosition;
         }
 
@@ -413,13 +414,13 @@ namespace Voron.Data.BTrees
             return "#" + PageNumber + " (count: " + NumberOfEntries + ") " + TreeFlags;
         }
 
-        public string Dump()
+        public string Dump(LowLevelTransaction tx)
         {
             var sb = new StringBuilder();
 
             for (var i = 0; i < NumberOfEntries; i++)
             {
-                sb.Append(GetNodeKey(i)).Append(", ");
+                sb.Append(GetNodeKey(tx, i)).Append(", ");
             }
             return sb.ToString();
         }
@@ -502,72 +503,27 @@ namespace Voron.Data.BTrees
             set { Header->Flags = value; }
         }
 
-        public string this[int i]
-        {
-            get { return GetNodeKey(i).ToString(); }
-        }
+        //public string this[int i]
+        //{
+        //    get { return GetNodeKey(i).ToString(); }
+        //}
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetNodeKey(TreeNodeHeader* node, Slice slice)
-        {
-            // No need for this anymore. Just create an external ByteString.
-            throw new NotImplementedException();
-            //slice.Value = (byte*)node + Constants.NodeHeaderSize;
-            //slice._size = node->KeySize;
-            //slice._options = SliceOptions.Key;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Slice GetNodeKey(int nodeNumber)
+        public Slice GetNodeKey(LowLevelTransaction tx, int nodeNumber)
         {
             var node = GetNode(nodeNumber);
 
-            return GetNodeKey(node);
-        }
+            return TreeNodeHeader.ToSlicePtr(tx.Allocator, node);
+        }  
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Slice GetNodeKey(TreeNodeHeader* node)
-        {
-            throw new NotImplementedException();
-
-            //// This pattern while it require us to write more code is extremely efficient because the
-            //// JIT will treat the condition as constants when it generates the code. Therefore, the
-            //// only code that will survive is the intended code for the proper type. 
-
-            //if ( typeof(T) == typeof(SliceArray))
-            //{
-            //    var keySize = node->KeySize;
-            //    var key = new byte[keySize];
-
-            //    fixed (byte* ptr = key)
-            //        Memory.CopyInline(ptr, (byte*)node + Constants.NodeHeaderSize, keySize);
-
-            //    return (T) (object) new SliceArray(key);
-            //}
-
-            //if ( typeof(T) == typeof(SlicePointer))
-            //{
-            //    // We do not copy and therefore we do not allocate either.
-            //    return (T)(object)new SlicePointer(node);
-            //}
-
-            //// We do not support any other branch of slice here (like SliceRef<T>).
-            //if (typeof(T) == typeof(ISlice))
-            //{
-            //    throw new InvalidOperationException($"The type for Skip<T> must be a concrete type. Change the {nameof(ISlice)} interface with the proper concrete type you need.");
-            //}
-
-            //throw new NotSupportedException($"The type '{nameof(T)}' is not supported.");
-        }
-
-        public string DebugView()
+        public string DebugView(LowLevelTransaction tx)
         {
             var sb = new StringBuilder();
             for (int i = 0; i < NumberOfEntries; i++)
             {
                 sb.Append(i)
                     .Append(": ")
-                    .Append(GetNodeKey(i))
+                    .Append(GetNodeKey(tx, i))
                     .Append(" - ")
                     .Append(KeysOffsets[i])
                     .AppendLine();
@@ -586,12 +542,12 @@ namespace Voron.Data.BTrees
                 throw new InvalidOperationException("The branch page " + PageNumber + " has " + NumberOfEntries + " entry");
             }
 
-            var prev = GetNodeKey(0);
+            var prev = GetNodeKey(tx, 0);
             var pages = new HashSet<long>();
             for (int i = 1; i < NumberOfEntries; i++)
             {
                 var node = GetNode(i);
-                var current = GetNodeKey(i);
+                var current = GetNodeKey(tx, i);
 
                 if (SliceComparer.CompareInline(prev,current) >= 0)
                 {

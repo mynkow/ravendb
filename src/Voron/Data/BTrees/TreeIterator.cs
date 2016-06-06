@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Sparrow;
+using System;
 using System.Collections.Generic;
 using Voron.Impl;
 
@@ -31,11 +32,6 @@ namespace Voron.Data.BTrees
             return TreeNodeHeader.GetDataSize(_tx, Current);
         }
 
-        public bool Seek(string key)
-        {
-            return Seek(key);
-        }
-
         public bool Seek(Slice key)
         {
             if (_disposed)
@@ -49,9 +45,10 @@ namespace Voron.Data.BTrees
 
             if (node != null)
             {
-                _currentPage.SetNodeKey(node, _currentInternalKey);
+                _currentInternalKey = TreeNodeHeader.ToSlicePtr(_tx.Allocator, node, ByteStringType.Mutable);
                 _currentKey = _currentInternalKey; // TODO: Check here if aliasing via pointer is the intended use.
-                return this.ValidateCurrentKey(Current, _currentPage);
+
+                return this.ValidateCurrentKey(_tx, Current);
             }
             
             // The key is not found in the db, but we are Seek()ing for equals or starts with.
@@ -125,10 +122,10 @@ namespace Voron.Data.BTrees
                         _currentPage.LastSearchPosition = _currentPage.NumberOfEntries - 1;
                     }
                     var current = _currentPage.GetNode(_currentPage.LastSearchPosition);
-                    if (this.ValidateCurrentKey(current, _currentPage) == false)
+                    if (this.ValidateCurrentKey(_tx, current) == false)
                         return false;
 
-                    _currentPage.SetNodeKey(current, _currentInternalKey);
+                    _currentInternalKey = TreeNodeHeader.ToSlicePtr(_tx.Allocator, current, ByteStringType.Mutable);
                     _currentKey = _currentInternalKey;
                     return true;// there is another entry in this page
                 }
@@ -160,10 +157,10 @@ namespace Voron.Data.BTrees
                         _currentPage.LastSearchPosition = 0;
                     }
                     var current = _currentPage.GetNode(_currentPage.LastSearchPosition);
-                    if (this.ValidateCurrentKey(current, _currentPage) == false)
+                    if (this.ValidateCurrentKey(_tx, current) == false)
                         return false;
 
-                    _currentPage.SetNodeKey(current, _currentInternalKey);
+                    _currentInternalKey = TreeNodeHeader.ToSlicePtr(_tx.Allocator, current, ByteStringType.Mutable);
                     _currentKey = _currentInternalKey;
                     return true;// there is another entry in this page
                 }
@@ -188,7 +185,7 @@ namespace Voron.Data.BTrees
                 }
             }
 
-            return _currentPage != null && this.ValidateCurrentKey(Current, _currentPage);
+            return _currentPage != null && this.ValidateCurrentKey(_tx, Current);
         }
 
         public ValueReader CreateReaderForCurrent()
@@ -229,18 +226,18 @@ namespace Voron.Data.BTrees
             }
             while (self.MoveNext());
         }
-
-        public unsafe static bool ValidateCurrentKey(this IIterator self, TreeNodeHeader* node, TreePage page)
+        
+        public unsafe static bool ValidateCurrentKey(this IIterator self, LowLevelTransaction tx, TreeNodeHeader* node)
         {
             if (self.RequiredPrefix.HasValue)
             {
-                var currentKey = page.GetNodeKey(node);
+                var currentKey = TreeNodeHeader.ToSlicePtr(tx.Allocator, node);
                 if (SliceComparer.StartWith(currentKey, self.RequiredPrefix) == false)
                     return false;
             }
             if (self.MaxKey.HasValue)
             {
-                var currentKey = page.GetNodeKey(node);
+                var currentKey = TreeNodeHeader.ToSlicePtr(tx.Allocator, node);
                 if (SliceComparer.CompareInline(currentKey, self.MaxKey) >= 0)
                     return false;
             }

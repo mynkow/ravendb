@@ -115,7 +115,7 @@ namespace FastTests.Voron.Trees
                     return results;
                 do
                 {
-                    results.Add(it.CurrentKey.Clone());
+                    results.Add(it.CurrentKey.Clone(tx.Allocator));
                 }
                 while (it.MoveNext());
             }

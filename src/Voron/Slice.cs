@@ -34,15 +34,28 @@ namespace Voron
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Slice(SliceOptions options, ByteString content)
         {
-            content.SetUserDefinedFlags((ByteStringType)options);
-
-            this.Content = content;            
+            this.Content = content;
+            Content.SetUserDefinedFlags((ByteStringType)options);               
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Slice(ByteString content)
         {
             this.Content = content;
+        }
+
+
+        private static readonly uint[] _lookup32 = CreateLookup32();
+
+        private static uint[] CreateLookup32()
+        {
+            var result = new uint[256];
+            for (int i = 0; i < 256; i++)
+            {
+                string s = i.ToString("X2");
+                result[i] = ((uint)s[0]) + ((uint)s[1] << 16);
+            }
+            return result;
         }
 
         public bool HasValue
@@ -81,34 +94,34 @@ namespace Voron
             }
         }
 
-        public Slice Clone()
+        public Slice Clone(ByteStringContext context, ByteStringType type = ByteStringType.Mutable)
         {
-            throw new NotImplementedException();
+            return new Slice(context.Clone(this.Content, type));
         }
 
-        public Slice Skip()
+        public Slice Skip(ByteStringContext context, int bytesToSkip, ByteStringType type = ByteStringType.Mutable)
         {
-            throw new NotImplementedException();
+            return new Slice(context.Skip(this.Content, bytesToSkip, type));       
         }
 
         public void CopyTo(int from, byte* dest, int offset, int count)
         {
-            throw new NotImplementedException();
+            this.Content.CopyTo(from, dest, offset, count);
         }
 
         public void CopyTo(byte* dest)
         {
-            throw new NotImplementedException();
+            this.Content.CopyTo(dest);
         }   
          
         public void CopyTo(byte[] dest)
         {
-            throw new NotImplementedException();
+            this.Content.CopyTo(dest);
         }
 
         public void CopyTo(int from, byte[] dest, int offset, int count)
         {
-            throw new NotImplementedException();
+            this.Content.CopyTo(from, dest, offset, count);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -146,6 +159,13 @@ namespace Voron
         public ValueReader CreateReader()
         {
             return new ValueReader(Content.Ptr, Size);
+        }
+
+        public override string ToString()
+        {
+            var temp = new byte[this.Content.Length];
+            CopyTo(temp);
+            return Encoding.UTF8.GetString(temp, 0, this.Content.Length);
         }
 
     }

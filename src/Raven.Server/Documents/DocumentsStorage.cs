@@ -847,7 +847,7 @@ namespace Raven.Server.Documents
                     yield break;
                 do
                 {
-                    if (context.Transaction.InnerTransaction.GetRootObjectType(it.CurrentKey.Clone()) != RootObjectType.VariableSizeTree)
+                    if (context.Transaction.InnerTransaction.GetRootObjectType(it.CurrentKey.Clone(context.Allocator)) != RootObjectType.VariableSizeTree)
                         continue;
 
                     if (it.CurrentKey[0] != '@') // collection prefix
