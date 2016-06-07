@@ -63,12 +63,12 @@ namespace Voron
             get { return Content.HasValue; }
         }
 
-        public ushort Size
+        public int Size
         {
             get
             {
-                Debug.Assert(Content.Length >= 0 && Content.Length <= ushort.MaxValue);
-                return (ushort) Content.Length;
+                Debug.Assert(Content.Length >= 0);
+                return Content.Length;
             }
         }
 
@@ -161,13 +161,15 @@ namespace Voron
             return new ValueReader(Content.Ptr, Size);
         }
 
-        public override string ToString()
+        public override int GetHashCode()
         {
-            var temp = new byte[this.Content.Length];
-            CopyTo(temp);
-            return Encoding.UTF8.GetString(temp, 0, this.Content.Length);
+            return this.Content.GetHashCode();
         }
 
+        public override string ToString()
+        {
+            return this.Content.ToString(Encoding.UTF8);
+        }
     }
 
     //// TODO: Implement a debug view for the slice.

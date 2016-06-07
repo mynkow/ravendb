@@ -94,7 +94,7 @@ namespace FastTests.Sparrow
         [Fact]
         public void AllocateAndReleaseShouldReuseAsSegment()
         {
-            int allocationBlockSize = 2 * ByteStringContext.MinBlockSizeInBytes + 128;
+            int allocationBlockSize = 2 * ByteStringContext.MinBlockSizeInBytes + 128 + sizeof(ByteStringStorage);
             using (var context = new ByteStringContext(allocationBlockSize))
             {
                 // Will be only 128 bytes left for the allocation unit.

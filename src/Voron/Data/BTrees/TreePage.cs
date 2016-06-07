@@ -275,7 +275,9 @@ namespace Voron.Data.BTrees
             var node = AllocateNewNode(index, nodeSize, previousNodeVersion);
 
             node->Flags = flags;
-            node->KeySize = key.Size;
+
+            Debug.Assert(key.Size <= ushort.MaxValue);
+            node->KeySize = (ushort) key.Size;
             if (key.Options == SliceOptions.Key && node->KeySize > 0)
                 key.CopyTo((byte*)node + Constants.NodeHeaderSize);
 
@@ -302,7 +304,8 @@ namespace Voron.Data.BTrees
 
             var newNode = AllocateNewNode(index, nodeSize, nodeVersion);
 
-            newNode->KeySize = key.Size;
+            Debug.Assert(key.Size <= ushort.MaxValue);
+            newNode->KeySize = (ushort)key.Size;
             newNode->Flags = other->Flags;
 
             if (key.Options == SliceOptions.Key && key.Size > 0)
@@ -503,17 +506,16 @@ namespace Voron.Data.BTrees
             set { Header->Flags = value; }
         }
 
-        //public string this[int i]
-        //{
-        //    get { return GetNodeKey(i).ToString(); }
-        //}
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Slice GetNodeKey(LowLevelTransaction tx, int nodeNumber)
-        {
+        public Slice GetNodeKey(LowLevelTransaction tx, int nodeNumber, ByteStringType type = ByteStringType.Immutable | ByteStringType.External)
+        {            
             var node = GetNode(nodeNumber);
 
-            return TreeNodeHeader.ToSlicePtr(tx.Allocator, node);
+            // This will ensure that we can create a copy or just use the pointer instead.
+            if ( (type & ByteStringType.External) == 0 )
+                return TreeNodeHeader.ToSlice(tx.Allocator, node, type);
+            else
+                return TreeNodeHeader.ToSlicePtr(tx.Allocator, node, type);
         }  
 
         public string DebugView(LowLevelTransaction tx)

@@ -17,6 +17,8 @@ namespace SlowTests.Voron
         protected StorageEnvironmentOptions _options;
         protected readonly string DataDir = GenerateDataDir();
 
+        private ByteStringContext _allocator = new ByteStringContext();
+
         public static string GenerateDataDir()
         {
             var tempFileName = Path.GetTempFileName();
@@ -39,6 +41,11 @@ namespace SlowTests.Voron
                 }
                 return _storageEnvironment;
             }
+        }
+
+        protected ByteStringContext Allocator
+        {
+            get { return _allocator; }
         }
 
         protected StorageTest(StorageEnvironmentOptions options)
@@ -172,7 +179,7 @@ namespace SlowTests.Voron
             if (node == null)
                 return null;
 
-            var item1 = p.GetNodeKey(node);
+            var item1 = TreeNodeHeader.ToSlicePtr(txh.Allocator, node);
 
             if (SliceComparer.CompareInline(item1,key) != 0)
                 return null;

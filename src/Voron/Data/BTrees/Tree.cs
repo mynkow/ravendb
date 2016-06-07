@@ -520,7 +520,7 @@ namespace Voron.Data.BTrees
         }
 
         private void AddToRecentlyFoundPages(List<long> c, TreePage p, bool leftmostPage, bool rightmostPage)
-        {
+        {            
             Slice firstKey;
             if (leftmostPage == true)
             {
@@ -528,7 +528,8 @@ namespace Voron.Data.BTrees
             }
             else
             {
-                firstKey = p.GetNodeKey(_llt, 0);
+                // We are going to store the slice, therefore we copy.
+                firstKey = p.GetNodeKey(_llt, 0, ByteStringType.Immutable);
             }
 
             Slice lastKey;
@@ -538,7 +539,8 @@ namespace Voron.Data.BTrees
             }
             else
             {
-                lastKey = p.GetNodeKey(_llt, p.NumberOfEntries - 1);
+                // We are going to store the slice, therefore we copy.
+                lastKey = p.GetNodeKey(_llt, p.NumberOfEntries - 1, ByteStringType.Immutable);
             }
 
             var foundPage = new RecentlyFoundTreePages.FoundTreePage(p.PageNumber, p, firstKey, lastKey, c.ToArray());
@@ -555,7 +557,8 @@ namespace Voron.Data.BTrees
             }
             else
             {
-                firstKey = p.GetNodeKey(_llt, 0);
+                // We are going to store the slice, therefore we copy.
+                firstKey = p.GetNodeKey(_llt, 0, ByteStringType.Immutable);
             }
 
             Slice lastKey;
@@ -565,7 +568,8 @@ namespace Voron.Data.BTrees
             }
             else
             {
-                lastKey = p.GetNodeKey(_llt, p.NumberOfEntries - 1);
+                // We are going to store the slice, therefore we copy.
+                lastKey = p.GetNodeKey(_llt, p.NumberOfEntries - 1, ByteStringType.Immutable);
             }
 
             var cursorPath = new long[c.Pages.Count];

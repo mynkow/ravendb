@@ -261,6 +261,16 @@ namespace Sparrow
             return new string((char*)_pointer->Ptr, 0, _pointer->Length);
         }
 
+        public string ToString(Encoding encoding)
+        {
+            if (!HasValue)
+                return string.Empty;
+
+            EnsureIsNotBadPointer();
+
+            return encoding.GetString(_pointer->Ptr, _pointer->Length);
+        }
+
         public override bool Equals(object obj)
         {
             return obj is ByteString && this == (ByteString)obj;
@@ -268,8 +278,23 @@ namespace Sparrow
 
         public override int GetHashCode()
         {
-            // We use the lower part of the location in memory for the hash-code (fast and effective).
-            return (int)(long)this._pointer;
+            // Given how the size of slices can vary it is better to lose a bit (10%) on smaller slices 
+            // (less than 20 bytes) and to win big on the bigger ones. 
+            //
+            // After 24 bytes the gain is 10%
+            // After 64 bytes the gain is 2x
+            // After 128 bytes the gain is 4x.
+            //
+            // We should control the distribution of this over time.
+
+            if (_pointer == null)
+                return 0;
+
+            // JIT will remove the corresponding line based on the target architecture using dead code removal.
+            if (IntPtr.Size == 4)  
+                return (int)Hashing.XXHash32.CalculateInline(_pointer->Ptr, _pointer->Length);
+            else
+                return (int)Hashing.XXHash64.CalculateInline(_pointer->Ptr, _pointer->Length);
         }
 
         public static bool operator ==(ByteString x, ByteString y)
@@ -362,11 +387,16 @@ namespace Sparrow
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int GetPoolIndexFromChunkSize(int size)
+        private static int GetPoolIndexForReuse(int size)
         {
             return Bits.CeilLog2(size) - 1; // x^0 = 1 therefore we start counting at 1 instead.
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int GetPoolIndexForReservation(int size)
+        {
+            return Bits.MostSignificantBit(size) - 1; // x^0 = 1 therefore we start counting at 1 instead.
+        }
 
         private ByteString AllocateExternal(byte* valuePtr, int size, ByteStringType type)
         {
@@ -411,7 +441,7 @@ namespace Sparrow
             if (allocationSize > _allocationBlockSize)
                 return AllocateWholeSegment(length, type); // We will pass the length because this is a whole allocated segment able to hold a length size ByteString.
 
-            int reusablePoolIndex = GetPoolIndexFromChunkSize(allocationSize); 
+            int reusablePoolIndex = GetPoolIndexForReuse(allocationSize); 
             int allocationUnit = Bits.NextPowerOf2(allocationSize);
 
             // The allocation unit is bigger than MinBlockSize (therefore it wont be 2^n aligned).
@@ -467,7 +497,7 @@ namespace Sparrow
                     else if ( currentSizeLeft > sizeof(ByteStringType) + MinReusableBlockSizeInBytes)
                     {
                         // The memory chunk left is big enough to make sense to reuse it.
-                        reusablePoolIndex = GetPoolIndexFromChunkSize(currentSizeLeft);
+                        reusablePoolIndex = GetPoolIndexForReservation(currentSizeLeft);
 
                         Stack<IntPtr> pool = this._internalReusableStringPool[reusablePoolIndex];
                         if (pool == null)
@@ -501,8 +531,6 @@ namespace Sparrow
             basePtr->Length = length;
             basePtr->Ptr = (byte*)ptr + sizeof(ByteStringStorage);                        
             basePtr->Size = size;
-
-            RegisterForValidation(basePtr);
 
             return new ByteString(basePtr);
         }
@@ -546,7 +574,7 @@ namespace Sparrow
             }
             else
             {
-                int reusablePoolIndex = GetPoolIndexFromChunkSize(value._pointer->Size);
+                int reusablePoolIndex = GetPoolIndexForReuse(value._pointer->Size);
 
                 if (value._pointer->Size <= MinBlockSizeInBytes)
                 {

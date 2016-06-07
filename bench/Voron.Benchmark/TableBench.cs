@@ -344,7 +344,7 @@ namespace Voron.Benchmark
                             {
                                 var current = j * currentBase;
                                 var key = current.ToString("0000000000000000");
-                                var tableReader = docs.ReadByKey(key);
+                                var tableReader = docs.ReadByKey(Slice.From(tx.Allocator, key));
 
                                 int size;
                                 byte* buffer = tableReader.Read(1, out size);
@@ -426,7 +426,7 @@ namespace Voron.Benchmark
                     for (int i = 0; i < Configuration.Transactions * Configuration.ItemsPerTransaction; i++)
                     {
                         var key = i.ToString("0000000000000000");
-                        var tableReader = docs.ReadByKey(key);
+                        var tableReader = docs.ReadByKey(Slice.From(tx.Allocator, key));
 
                         int size;
                         byte* buffer = tableReader.Read(1, out size);

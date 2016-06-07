@@ -181,7 +181,7 @@ namespace FastTests.Voron
             if (node == null)
                 return null;
 
-            var item1 = TreeNodeHeader.ToSlicePtr( txh.Allocator, node);
+            var item1 = TreeNodeHeader.ToSlicePtr(txh.Allocator, node);
 
             if (!SliceComparer.Equals(item1,key))
                 return null;

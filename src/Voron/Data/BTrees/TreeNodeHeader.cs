@@ -34,8 +34,14 @@ namespace Voron.Data.BTrees
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Slice ToSlicePtr(ByteStringContext context, TreeNodeHeader* node, ByteStringType type = ByteStringType.Mutable )
-        {   
+        public static Slice ToSlice(ByteStringContext context, TreeNodeHeader* node, ByteStringType type = ByteStringType.Mutable)
+        {
+            return new Slice(SliceOptions.Key, context.From((byte*)node + Constants.NodeHeaderSize, node->KeySize, type));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Slice ToSlicePtr(ByteStringContext context, TreeNodeHeader* node, ByteStringType type = ByteStringType.Mutable)
+        {
             return new Slice(SliceOptions.Key, context.FromPtr((byte*)node + Constants.NodeHeaderSize, node->KeySize, type));
         }
 
