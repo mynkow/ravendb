@@ -115,6 +115,7 @@ namespace Sparrow
             }            
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetUserDefinedFlags( ByteStringType flags)
         {
             if ((flags & ByteStringType.ByteStringMask) != 0)
@@ -356,14 +357,16 @@ namespace Sparrow
         private readonly List<SegmentInformation> _internalReadyToUseMemorySegments;
         private readonly int[] _internalReusableStringPoolCount;
         private readonly Stack<IntPtr>[] _internalReusableStringPool;
-        private SegmentInformation _internalCurrent;
+        private SegmentInformation _internalCurrent;        
+        
 
-        private readonly Stack<IntPtr> _externalStringPool;
-
-        private SegmentInformation _externalCurrent;
+        private const int ExternalFastPoolSize = 16;
         private int _externalAlignedSize = 0;
         private int _externalCurrentLeft = 0;
-
+        private int _externalFastPoolCount = 0;
+        private readonly IntPtr[] _externalFastPool = new IntPtr[ExternalFastPoolSize];
+        private readonly Stack<IntPtr> _externalStringPool;
+        private SegmentInformation _externalCurrent;
 
         public ByteStringContext(int allocationBlockSize = DefaultAllocationBlockSizeInBytes)
         {
@@ -381,7 +384,7 @@ namespace Sparrow
             this._internalCurrent = AllocateSegment(allocationBlockSize);
             this._externalCurrent = AllocateSegment(allocationBlockSize);
 
-            this._externalStringPool = new Stack<IntPtr>(2048);
+            this._externalStringPool = new Stack<IntPtr>(64);
 
             PrepareForValidation();
         }
@@ -411,7 +414,11 @@ namespace Sparrow
             int allocationSize = sizeof(ByteStringStorage);
 
             ByteStringStorage* storagePtr;
-            if (_externalStringPool.Count != 0)
+            if (_externalFastPoolCount > 0)
+            {
+                storagePtr = (ByteStringStorage*)_externalFastPool[--_externalFastPoolCount].ToPointer();
+            }
+            else if (_externalStringPool.Count != 0)
             {
                 storagePtr = (ByteStringStorage*)_externalStringPool.Pop().ToPointer();
             }
@@ -458,7 +465,7 @@ namespace Sparrow
 
             // If we can reuse... we retrieve those.
             if (allocationSize <= MinBlockSizeInBytes && _internalReusableStringPoolCount[reusablePoolIndex] != 0)
-            {
+            {                
                 // This is a stack because hotter memory will be on top. 
                 Stack<IntPtr> pool = _internalReusableStringPool[reusablePoolIndex];
 
@@ -562,6 +569,37 @@ namespace Sparrow
             Release(ref value);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void ReleaseExternal(ref ByteString value)
+        {
+            Debug.Assert(value._pointer != null, "Pointer cannot be null. You have a defect in your code.");
+            if (value._pointer == null)
+                return;
+
+            // We are releasing, therefore we should validate among other things if an immutable string changed and if we are the owners.
+            Validate(value);
+
+            // We release the pointer in the appropriate reuse pool.
+            if (this._externalFastPoolCount < ExternalFastPoolSize)
+            {
+                // Release in the fast pool. 
+                this._externalFastPool[this._externalFastPoolCount++] = new IntPtr(value._pointer);
+            }
+            else
+            {
+                this._externalStringPool.Push(new IntPtr(value._pointer));
+            }
+
+#if VALIDATE
+            // Setting the null key ensures that in between we can validate that no further deallocation
+            // happens on this memory segment.
+            value._pointer->Key = ByteStringStorage.NullKey;
+#endif
+
+            // WE WANT it to happen, no matter what. 
+            value._pointer = null;
+        }
+
         public void Release(ref ByteString value)
         {
             Debug.Assert(value._pointer != null, "Pointer cannot be null. You have a defect in your code.");
@@ -573,8 +611,16 @@ namespace Sparrow
 
             if ( value.IsExternal )
             {
-                // We return the pointer.
-                this._externalStringPool.Push(new IntPtr(value._pointer));
+                // We release the pointer in the appropriate reuse pool.
+                if (this._externalFastPoolCount < ExternalFastPoolSize)
+                {
+                    // Release in the fast pool. 
+                    this._externalFastPool[this._externalFastPoolCount++] = new IntPtr(value._pointer);
+                }
+                else
+                {
+                    this._externalStringPool.Push(new IntPtr(value._pointer));
+                }
             }
             else
             {

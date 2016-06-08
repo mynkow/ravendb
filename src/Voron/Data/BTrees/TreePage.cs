@@ -96,14 +96,12 @@ namespace Voron.Data.BTrees
             switch (key.Options)
             {
                 case SliceOptions.Key:
-                    {
-                        Slice pageKey = default(Slice);
-
+                    {   
                         if (numberOfEntries == 1)
                         {
                             var node = GetNode(0);
 
-                            pageKey = TreeNodeHeader.ToSlicePtr(tx.Allocator, node, ByteStringType.Mutable);
+                            Slice pageKey = TreeNodeHeader.ToSlicePtr(tx.Allocator, node, ByteStringType.Mutable);
 
                             LastMatch = SliceComparer.CompareInline(key, pageKey);
                             LastSearchPosition = LastMatch > 0 ? 1 : 0;
@@ -114,6 +112,7 @@ namespace Voron.Data.BTrees
                         int high = numberOfEntries - 1;
                         int position = 0;
 
+                        ByteStringContext allocator = tx.Allocator;
                         ushort* offsets = KeysOffsets;
                         while (low <= high)
                         {
@@ -121,9 +120,12 @@ namespace Voron.Data.BTrees
 
                             var node = (TreeNodeHeader*)(Base + offsets[position]);
 
-                            pageKey = TreeNodeHeader.ToSlicePtr(tx.Allocator, node, ByteStringType.Mutable);
+                            Slice pageKey = TreeNodeHeader.ToSlicePtr(allocator, node, ByteStringType.Mutable);
 
                             LastMatch = SliceComparer.CompareInline(key, pageKey);
+
+                            pageKey.ReleaseExternal(allocator); // Ensure we will reuse the external reference.
+
                             if (LastMatch == 0)
                                 break;
 
