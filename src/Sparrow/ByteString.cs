@@ -360,6 +360,11 @@ namespace Sparrow
 
         private readonly Stack<IntPtr> _externalStringPool;
 
+        private SegmentInformation _externalCurrent;
+        private int _externalAlignedSize = 0;
+        private int _externalCurrentLeft = 0;
+
+
         public ByteStringContext(int allocationBlockSize = DefaultAllocationBlockSizeInBytes)
         {
             if (allocationBlockSize < MinBlockSizeInBytes)
@@ -374,6 +379,7 @@ namespace Sparrow
             this._internalReusableStringPoolCount = new int[LogMinBlockSize];
 
             this._internalCurrent = AllocateSegment(allocationBlockSize);
+            this._externalCurrent = AllocateSegment(allocationBlockSize);
 
             this._externalStringPool = new Stack<IntPtr>(2048);
 
@@ -404,23 +410,21 @@ namespace Sparrow
 
             int allocationSize = sizeof(ByteStringStorage);
 
-            if (_externalStringPool.Count == 0)
+            ByteStringStorage* storagePtr;
+            if (_externalStringPool.Count != 0)
             {
-                var segment = AllocateSegment(MinBlockSizeInBytes);
-
-                int alignedSize = (sizeof(ByteStringStorage) + (sizeof(long) - sizeof(ByteStringStorage) % sizeof(long)));
-                int count = (int) (segment.End - segment.Start) / alignedSize;
-                for (int i = 0; i < count; i++)
-                {
-                    Debug.Assert((long)segment.Current % sizeof(long) == 0); // Ensure it is aligned.
-                    this._externalStringPool.Push(new IntPtr(segment.Current));
-                    segment.Current += alignedSize;
-                }                    
+                storagePtr = (ByteStringStorage*)_externalStringPool.Pop().ToPointer();
             }
+            else
+            {
+                if (_externalCurrentLeft == 0)
+                    AllocateExternalSegment(_allocationBlockSize);
 
-            IntPtr ptr = _externalStringPool.Pop();
+                storagePtr = (ByteStringStorage*)_externalCurrent.Current;
+                _externalCurrent.Current += _externalAlignedSize;
+                _externalCurrentLeft--;
+            }     
 
-            var storagePtr = (ByteStringStorage*)ptr.ToPointer();
             storagePtr->Flags = type;
             storagePtr->Length = size;
             storagePtr->Ptr = valuePtr;
@@ -617,6 +621,19 @@ namespace Sparrow
             _wholeSegments.Add(segment);
 
             return segment;
+        }
+
+
+        private void AllocateExternalSegment(int size)
+        {
+            byte* start = (byte*)Marshal.AllocHGlobal(size).ToPointer();
+            byte* end = start + size;
+
+            _externalCurrent = new SegmentInformation { Start = start, Current = start, End = end, CanDispose = true };
+            _externalAlignedSize = (sizeof(ByteStringStorage) + (sizeof(long) - sizeof(ByteStringStorage) % sizeof(long)));
+            _externalCurrentLeft = (int)(_externalCurrent.End - _externalCurrent.Start) / _externalAlignedSize;
+
+            _wholeSegments.Add(_externalCurrent);
         }
 
         public ByteString Skip(ByteString value, int bytesToSkip, ByteStringType type = ByteStringType.Mutable)

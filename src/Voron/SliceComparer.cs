@@ -58,9 +58,6 @@ namespace Voron
             Debug.Assert(x.Options == SliceOptions.Key);
             Debug.Assert(y.Options == SliceOptions.Key);
 
-            if (x.Equals(y)) // If we are using the same backing storage (very fast) then it is true.
-                return true;
-
             var srcKey = x.Content.Length;
             var otherKey = y.Content.Length;
             if (srcKey != otherKey)
@@ -79,9 +76,6 @@ namespace Voron
         {
             Debug.Assert(x.Options == SliceOptions.Key);
             Debug.Assert(y.Options == SliceOptions.Key);
-
-            if (x.Equals(y)) // If we are using the same backing storage (very fast) then it is true.
-                return true;
 
             var srcKey = x.Content.Length;
             var otherKey = y.Content.Length;
