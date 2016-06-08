@@ -17,14 +17,14 @@ namespace Raven.Server.ServerWide.Context
             _environment = environment;
         }
 
-        protected override RavenTransaction CreateReadTransaction()
+        protected override RavenTransaction CreateReadTransaction(ByteStringContext context)
         {
-            return new RavenTransaction(_environment.ReadTransaction());
+            return new RavenTransaction(_environment.ReadTransaction(context));
         }
 
-        protected override RavenTransaction CreateWriteTransaction()
+        protected override RavenTransaction CreateWriteTransaction(ByteStringContext context)
         {
-            return new RavenTransaction(_environment.WriteTransaction());
+            return new RavenTransaction(_environment.WriteTransaction(context));
         }
     }
 
@@ -37,6 +37,7 @@ namespace Raven.Server.ServerWide.Context
         protected TransactionOperationContext(UnmanagedBuffersPool pool)
             : base(pool)
         {
+            Allocator = new ByteStringContext();
         }
 
         public RavenTransaction OpenReadTransaction()
@@ -44,15 +45,14 @@ namespace Raven.Server.ServerWide.Context
             if (Transaction != null && Transaction.Disposed == false)
                 throw new InvalidOperationException("Transaction is already opened");
 
-            Transaction = CreateReadTransaction();
-            Allocator = Transaction.InnerTransaction.Allocator;
+            Transaction = CreateReadTransaction(Allocator);
 
             return Transaction;
         }
 
-        protected abstract TTransaction CreateReadTransaction();
+        protected abstract TTransaction CreateReadTransaction(ByteStringContext allocator);
 
-        protected abstract TTransaction CreateWriteTransaction();
+        protected abstract TTransaction CreateWriteTransaction(ByteStringContext allocator);
 
         public virtual RavenTransaction OpenWriteTransaction()
         {
@@ -61,18 +61,24 @@ namespace Raven.Server.ServerWide.Context
                 throw new InvalidOperationException("Transaction is already opened");
             }
 
-            Transaction = CreateWriteTransaction();
-            Allocator = Transaction.InnerTransaction.Allocator;
+            Transaction = CreateWriteTransaction(Allocator);
 
             return Transaction;
+        }
+
+        public override void Dispose()
+        {
+            base.Dispose();
+
+            Allocator?.Dispose();
         }
 
         public override void Reset()
         {
             base.Reset();
 
-            Transaction?.Dispose();
+            Transaction?.Dispose();            
             Transaction = null;
-        }
+        }        
     }
 }

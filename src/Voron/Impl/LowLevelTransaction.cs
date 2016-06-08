@@ -91,14 +91,14 @@ namespace Voron.Impl
             get { return _txHeader->Hash; }
         }
 
-        public LowLevelTransaction(StorageEnvironment env, long id, TransactionFlags flags, IFreeSpaceHandling freeSpaceHandling)
+        public LowLevelTransaction(StorageEnvironment env, long id, TransactionFlags flags, IFreeSpaceHandling freeSpaceHandling, ByteStringContext context = null )
         {
             _dataPager = env.Options.DataPager;
             _env = env;
             _journal = env.Journal;
             _id = id;
             _freeSpaceHandling = freeSpaceHandling;
-            _allocator = new ByteStringContext();
+            _allocator = context ?? new ByteStringContext();
 
             Flags = flags;
 

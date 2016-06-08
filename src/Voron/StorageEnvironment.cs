@@ -296,17 +296,17 @@ namespace Voron
             }
         }
 
-        public Transaction ReadTransaction()
+        public Transaction ReadTransaction(ByteStringContext context = null)
         {
-            return new Transaction(NewLowLevelTransaction(TransactionFlags.Read));
+            return new Transaction(NewLowLevelTransaction(TransactionFlags.Read, context));
         }
 
-        public Transaction WriteTransaction()
+        public Transaction WriteTransaction(ByteStringContext context = null)
         {
-            return new Transaction(NewLowLevelTransaction(TransactionFlags.ReadWrite, null));
+            return new Transaction(NewLowLevelTransaction(TransactionFlags.ReadWrite, context, null));
         }
 
-        internal LowLevelTransaction NewLowLevelTransaction(TransactionFlags flags, TimeSpan? timeout = null)
+        internal LowLevelTransaction NewLowLevelTransaction(TransactionFlags flags, ByteStringContext context = null, TimeSpan? timeout = null)
         {
             bool txLockTaken = false;
             try
@@ -340,7 +340,7 @@ namespace Voron
                 try
                 {
                     long txId = flags == TransactionFlags.ReadWrite ? _transactionsCounter + 1 : _transactionsCounter;
-                    tx = new LowLevelTransaction(this, txId, flags, _freeSpaceHandling);
+                    tx = new LowLevelTransaction(this, txId, flags, _freeSpaceHandling, context);
                 }
                 finally
                 {
