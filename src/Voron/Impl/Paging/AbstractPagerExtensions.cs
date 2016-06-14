@@ -9,7 +9,7 @@ namespace Voron.Impl.Paging
 {
     public static unsafe class VirtualPagerLegacyExtensions
     {
-        public static Page ReadPage(this AbstractPager pager, LowLevelTransaction tx, long pageNumber, PagerState pagerState = null)
+         public static Page ReadPage(this AbstractPager pager, LowLevelTransaction tx, long pageNumber, PagerState pagerState = null)
         {
             return new Page(pager.AcquirePagePointer(tx, pageNumber, pagerState), pager);
         }
@@ -24,7 +24,7 @@ namespace Voron.Impl.Paging
             return requestedPageNumber + numberOfPages > pager.NumberOfAllocatedPages;
         }
 
-        public static int Write(this AbstractPager pager, TreePage page, long? pageNumber = null)
+       public static int Write(this AbstractPager pager, TreePage page, long? pageNumber = null)
         {
             var startPage = pageNumber ?? page.PageNumber;
 
@@ -52,9 +52,11 @@ namespace Voron.Impl.Paging
 
     public static unsafe class VirtualPagerWin32Extensions
     {
+        private static readonly IntPtr _currentProcess = Win32NativeMethods.GetCurrentProcess();
+
         public static void TryPrefetchingWholeFile(this AbstractPager pager)
         {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) == false)
+            if (Sparrow.Platform.Platform.CanPrefetch == false)
                 return; // not supported
 
             var pagerState = pager.PagerState;
@@ -68,14 +70,15 @@ namespace Voron.Impl.Paging
             }
 
 
-            if (Win32MemoryMapNativeMethods.PrefetchVirtualMemory(Win32NativeMethods.GetCurrentProcess(),
+         
+            if (Win32MemoryMapNativeMethods.PrefetchVirtualMemory(_currentProcess,
                 (UIntPtr) pagerState.AllocationInfos.Length, entries, 0) == false)
                 throw new Win32Exception();
         }
 
         public static void MaybePrefetchMemory(this AbstractPager pager, List<TreePage> sortedPages)
         {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) == false)
+            if (Sparrow.Platform.Platform.CanPrefetch == false)
                 return; // not supported
 
             if (sortedPages.Count == 0)
@@ -132,7 +135,7 @@ namespace Voron.Impl.Paging
 
             fixed (Win32MemoryMapNativeMethods.WIN32_MEMORY_RANGE_ENTRY* entries = list.ToArray())
             {
-                Win32MemoryMapNativeMethods.PrefetchVirtualMemory(Win32NativeMethods.GetCurrentProcess(),
+                Win32MemoryMapNativeMethods.PrefetchVirtualMemory(_currentProcess,
                     (UIntPtr) list.Count,
                     entries, 0);
             }
