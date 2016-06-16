@@ -86,23 +86,20 @@ namespace Voron.Data.BTrees
                 switch (key.Options)
                 {
                     case SliceOptions.Key:
-
-                        if (first.Options == SliceOptions.BeforeAllKeys && last.Options == SliceOptions.AfterAllKeys)
+                        if (SliceComparer.InBetween(key, first, last))
                             return page;
+                        break;
 
-                        if (!SliceComparer.InBetween(key, first, last))
-                            break;
-
-                        return page;
-                        
                     case SliceOptions.BeforeAllKeys:
                         if (first.Options == SliceOptions.BeforeAllKeys)
                             return page;
                         break;
+
                     case SliceOptions.AfterAllKeys:
                         if (last.Options == SliceOptions.AfterAllKeys)
                             return page;
                         break;
+
                     default:
                         throw new ArgumentException(key.Options.ToString());
                 }

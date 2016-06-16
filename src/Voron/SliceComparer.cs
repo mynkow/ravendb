@@ -107,6 +107,9 @@ namespace Voron
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe static bool InBetween( Slice value, Slice bottom, Slice upper )
         {
+            if (bottom.Options == SliceOptions.BeforeAllKeys && upper.Options == SliceOptions.AfterAllKeys)
+                return true;
+
             // WARNING: DO NOT REORDER THE INSTRUCTIONS UNLESS YOU CAN PROVE BETTER PERFORMANCE. 
 
             // We do not copy to the stack the ByteStrings because that would introduce a write-read data hazard in the CPU pipeline
@@ -179,23 +182,23 @@ namespace Voron
             // - None can be executed because the lenghts are equal and multiple of 8
             // - Only a single if is executed therefore the one executed correspond to the longest slice.
             // - Both will execute but for that to happen the remaining cannot be bigger than 8 (or it would have been consumed by the ulong loop).
-            if (bInc != 0 && bottomSize != 0)
+            if (bottomSize != 0 )
             {
-                if (InBetweenLastByte(ref vBottomPtr, ref bottomPtr, l % 8) == false)
+                if (bInc != 0 && InBetweenLastByte(ref vBottomPtr, ref bottomPtr, l % 8) == false)
+                    return false;
+
+                if (bottomSize > valueSize)
                     return false;
             }
 
-            if (uInc != 0 && upperSize != 0)
+            if (upperSize != 0)
             {
-                if (InBetweenLastByte(ref upperPtr, ref vUpperPtr, l % 8) == false)
+                if (uInc != 0 && InBetweenLastByte(ref upperPtr, ref vUpperPtr, l % 8) == false)
+                    return false;
+
+                if (upperSize < valueSize)
                     return false;
             }
-
-            if (upperSize < valueSize)
-                return false;
-
-            if (bottomSize > valueSize )
-                return false;
 
             return true;
         }
