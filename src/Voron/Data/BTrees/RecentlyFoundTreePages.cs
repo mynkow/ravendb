@@ -5,6 +5,7 @@
 // -----------------------------------------------------------------------
 
 using System;
+using System.Diagnostics;
 
 namespace Voron.Data.BTrees
 {
@@ -85,11 +86,15 @@ namespace Voron.Data.BTrees
                 switch (key.Options)
                 {
                     case SliceOptions.Key:
-                        if ((first.Options != SliceOptions.BeforeAllKeys && SliceComparer.Compare(key, first) < 0))
+
+                        if (first.Options == SliceOptions.BeforeAllKeys && last.Options == SliceOptions.AfterAllKeys)
+                            return page;
+
+                        if (!SliceComparer.InBetween(key, first, last))
                             break;
-                        if (last.Options != SliceOptions.AfterAllKeys && SliceComparer.Compare(key, last) > 0)
-                            break;
+
                         return page;
+                        
                     case SliceOptions.BeforeAllKeys:
                         if (first.Options == SliceOptions.BeforeAllKeys)
                             return page;
