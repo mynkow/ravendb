@@ -1,14 +1,8 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Threading;
-using System.Threading.Tasks;
-using AsyncFriendlyStackTrace;
-using Raven.Abstractions.Extensions;
 using Raven.Client.Document;
 using Raven.Client.Smuggler;
-using Raven.Server.ServerWide.Context;
-using Raven.SlowTests.Issues;
-using Sparrow.Json;
+using FastTests.Sparrow;
 
 namespace Tryouts
 {
@@ -16,8 +10,19 @@ namespace Tryouts
     {
         private static void Main(string[] args)
         {
-            var x = new FastTests.Server.Documents.Indexing.Static.CollisionsOfReduceKeyHashes();
-            x.Static_index_should_produce_multiple_outputs(4, new[] {"Israel", "Poland"}).Wait();
+            var p = new CedarTrieTests();
+            p.SingleInsert();
+
+            //using (var store = new DocumentStore { Url = "http://localhost:8080", DefaultDatabase = "FreeDB" })
+            //{
+            //    store.Initialize();
+            //    var sw = new Stopwatch();
+            //    sw.Start();
+            //    var task = store.Smuggler.ImportAsync(new DatabaseSmugglerOptions(), @"c:\dumps\freedb.raven.dump");
+            //    task.Wait();
+            //    sw.Stop();
+            //    Console.WriteLine(sw.ElapsedMilliseconds);
+            //}
         }
     }
 }
