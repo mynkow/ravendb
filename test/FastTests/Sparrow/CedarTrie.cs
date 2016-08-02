@@ -154,7 +154,7 @@ namespace FastTests.Sparrow
         private static readonly string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
         private static string GenerateRandomString(Random generator, int size, int clusteredSize)
-        {            
+        {
             var stringChars = new char[size];
 
             var clusterStart = generator.Next(10);
@@ -164,6 +164,26 @@ namespace FastTests.Sparrow
             for (int i = clusteredSize; i < stringChars.Length; i++)
                 stringChars[i] = chars[generator.Next(chars.Length)];
 
+            return new String(stringChars);
+        }
+
+        private static uint _seed = 1;
+
+        private static string GenerateRandomString(int size, int clusteredSize)
+        {
+            var stringChars = new char[size];
+
+            _seed = (_seed * 23 + 7);
+            var clusterStart = _seed % 10;
+            for (int i = 0; i < clusteredSize; i++)
+                stringChars[i] = chars[(int) ( (clusterStart + i) % chars.Length )];
+
+            for (int i = clusteredSize; i < stringChars.Length; i++)
+            {
+                _seed = (_seed * 23 + 7);
+                stringChars[i] = chars[(int) (_seed % chars.Length)];
+            }
+                
             return new String(stringChars);
         }
 
@@ -206,28 +226,35 @@ namespace FastTests.Sparrow
             tree.Test();
         }
 
-        bool @switch = false;
+        //bool @switch = false;
 
         public void TestCaseGenerator(int seed, int size, int count, int prefixSize = 0)
         {
             var generator = new Random(seed);
+
             
             List<string> bestCase = null;
             for ( int iter = 0; iter < 1000; iter++ )
             {
+                iter = 51;
+
                 var keysInOrder = new List<string>();
 
+                _seed = (uint)iter;
+
+                Console.WriteLine($"Trying with seed {iter}.");
+
                 var tree = new CedarTrie<int>();
-                i = 0;
                 try
                 {
-                    int lastEstimatedSize = 0;
+                    //int lastEstimatedSize = 0;
 
                     var keys = new HashSet<string>();
                     for (int i = 0; i < count; i++)
                     {
-                        string key = GenerateSequential();
+                        //string key = GenerateSequential();
                         //string key = GenerateRandomString(generator, size, prefixSize);
+                        string key = GenerateRandomString(size, prefixSize);
 
                         keysInOrder.Add(key);
                         tree.Update(Encoding.UTF8.GetBytes(key), 1);
@@ -236,38 +263,41 @@ namespace FastTests.Sparrow
                         if (keys.Count != tree.NumberOfKeys)
                             throw new Exception();
 
-                        int treeSize = tree.Size;
-                        int estimatedSize = treeSize * ((Unsafe.SizeOf<node>() / 2) + Unsafe.SizeOf<ninfo>()) + (treeSize >> 8) * Unsafe.SizeOf<block>();
+                        int d = tree.NonZeroSize; // Forcing the scanning of the tree for it to die. 
+                        d = tree.NonZeroLength; // Forcing the scanning of the tree for it to die. 
 
-                        if (lastEstimatedSize != estimatedSize)
-                        {
-                            if (estimatedSize > 8 * 1024)
-                            {
-                                Console.WriteLine($"Keys = {tree.NumberOfKeys - 1}");
-                                Console.WriteLine($"Size = {tree.Size}");
-                                Console.WriteLine($"Non Zero Size = {tree.NonZeroSize}");
-                                Console.WriteLine($"Non Zero Length = {tree.NonZeroLength}");
-                                Console.WriteLine($"Total Size = {lastEstimatedSize}");
-                                Console.WriteLine($"UnitSize = {tree.UnitSize}");
-                                Console.WriteLine($"Capacity = {tree.Capacity}");
-                            }
+                        //int treeSize = tree.Size;
+                        //int estimatedSize = treeSize * ((Unsafe.SizeOf<node>() / 2) + Unsafe.SizeOf<ninfo>()) + (treeSize >> 8) * Unsafe.SizeOf<block>();
 
-                            lastEstimatedSize = estimatedSize;
-                        }
+                        //if (lastEstimatedSize != estimatedSize)
+                        //{
+                        //    if (estimatedSize > 8 * 1024)
+                        //    {
+                        //        Console.WriteLine($"Keys = {tree.NumberOfKeys - 1}");
+                        //        Console.WriteLine($"Size = {tree.Size}");
+                        //        Console.WriteLine($"Non Zero Size = {tree.NonZeroSize}");
+                        //        Console.WriteLine($"Non Zero Length = {tree.NonZeroLength}");
+                        //        Console.WriteLine($"Total Size = {lastEstimatedSize}");
+                        //        Console.WriteLine($"UnitSize = {tree.UnitSize}");
+                        //        Console.WriteLine($"Capacity = {tree.Capacity}");
+                        //    }
+
+                        //    lastEstimatedSize = estimatedSize;
+                        //}
 
                         tree.Test();
                     }
 
-                    if (@switch)
-                    {
-                        Console.WriteLine($"Keys = {tree.NumberOfKeys}");
-                        Console.WriteLine($"Size = {tree.Size}");
-                        Console.WriteLine($"Non Zero Size = {tree.NonZeroSize}");
-                        Console.WriteLine($"Non Zero Length = {tree.NonZeroLength}");
-                        Console.WriteLine($"Total Size = {tree.TotalSize}");
-                        Console.WriteLine($"UnitSize = {tree.UnitSize}");
-                        Console.WriteLine($"Capacity = {tree.Capacity}");
-                    }
+                    //if (@switch)
+                    //{
+                    //    Console.WriteLine($"Keys = {tree.NumberOfKeys}");
+                    //    Console.WriteLine($"Size = {tree.Size}");
+                    //    Console.WriteLine($"Non Zero Size = {tree.NonZeroSize}");
+                    //    Console.WriteLine($"Non Zero Length = {tree.NonZeroLength}");
+                    //    Console.WriteLine($"Total Size = {tree.TotalSize}");
+                    //    Console.WriteLine($"UnitSize = {tree.UnitSize}");
+                    //    Console.WriteLine($"Capacity = {tree.Capacity}");
+                    //}
                 }
                 catch
                 {
@@ -275,9 +305,9 @@ namespace FastTests.Sparrow
                     if (bestCase == null || bestCase.Count > keysInOrder.Count )
                     {
                         bestCase = keysInOrder;
-                        Console.WriteLine($"New best case of {bestCase.Count} elements.");
+                        Console.WriteLine($"New best case of {bestCase.Count} elements with seed {iter}.");
                     }                        
-                }
+                }                
             }
 
             if ( bestCase == null )

@@ -254,7 +254,7 @@ namespace Sparrow.Collections
             if ( offset >= sizeof(int) ) // go to _tail
             {
                 long moved;
-                pos_orig = pos;                
+                pos_orig = pos;
 
                 tail = (u1.Tail + offset) - pos;
                 while (pos < len && key[pos] == tail[pos])
@@ -351,11 +351,11 @@ namespace Sparrow.Collections
             if ( pos == len && *u2.Length0 != 0)
             {
                 int offset0 = *(u2.Tail0 + *u2.Length0);
-                tail[offset0] = 0;
+                u1.Tail[offset0] = 0;
                 _array[from].Base = -offset0;
                 (*u2.Length0)--;
 
-                Unsafe.Write(tail + (offset0 + 1), value);
+                Unsafe.Write(u1.Tail + (offset0 + 1), value);
                 return;
             }
 
@@ -521,6 +521,7 @@ namespace Sparrow.Collections
                     // the address is immediately used
                     _push_sibling(from_n, to_pn ^ label_n, label_n);
                     _ninfo[to_].Child = 0; // remember to reset child
+
                     if (label_n != 0)
                     {
                         n_->Base = -1;
@@ -627,9 +628,9 @@ namespace Sparrow.Collections
                     if (b->Trial == _maxTrial)
                         _transfer_block(bi, ref _bheadO, ref _bheadC);
 
-                    //Debug.Assert(b->Trial <= _maxTrial);
                     if (b->Trial > _maxTrial)
                         throw new Exception();
+                    // Debug.Assert(b->Trial <= _maxTrial);
 
                     if (bi == bz)
                         break;
@@ -734,8 +735,10 @@ namespace Sparrow.Collections
             {
                 _array[-(n->Base)].Check = n->Check;
                 _array[-(n->Check)].Base = n->Base;
+
                 if (e == b->Ehead)
                     b->Ehead = -n->Check; // set ehead
+
                 if (bi != 0 && b->Num == 1 && b->Trial != _maxTrial) // Open to Closed
                     _transfer_block(bi, ref _bheadO, ref _bheadC);
             }
@@ -895,12 +898,20 @@ namespace Sparrow.Collections
             if (ptr == null)
             {
                 tmp = (byte*)Marshal.AllocHGlobal(wSize * size_n).ToPointer();                
-                //Console.WriteLine($"allocating: {(long)tmp} with elements of size {wSize}, to size: {size_n} zero from {size_p}");
+                Console.WriteLine($"allocating: {(long)tmp} with elements of size {wSize}, to size: {size_n} zero from {size_p}");
             }
             else
             {
                 tmp = (byte*)Marshal.ReAllocHGlobal((IntPtr)ptr, (IntPtr)(wSize * size_n)).ToPointer();
-                //Console.WriteLine($"ptr: {(long)ptr} with elements of size {wSize}, to size: {size_n} zero from {size_p}");
+                if ( ptr != tmp )
+                {
+                    Console.WriteLine($"moved: {(long)ptr}->{(long)tmp} with elements of size {wSize}, to size: {size_n} zero from {size_p}");
+                }
+                else
+                {
+                    Console.WriteLine($"ptr: {(long)ptr} with elements of size {wSize}, to size: {size_n} zero from {size_p}");
+                }
+                
             }
 
             if (tmp == null)
