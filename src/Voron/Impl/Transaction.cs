@@ -20,6 +20,8 @@ namespace Voron.Impl
         }
 
         private readonly Dictionary<string, Tree> _trees = new Dictionary<string, Tree>();
+        private readonly Dictionary<string, CedarTree> _tries = new Dictionary<string, CedarTree>();
+
         private readonly HashSet<ICommittable> _participants = new HashSet<ICommittable>();
 
         public Transaction(LowLevelTransaction lowLevelTransaction)
@@ -30,6 +32,30 @@ namespace Voron.Impl
         public ByteStringContext Allocator
         {
             get { return _lowLevelTransaction.Allocator; }
+        }
+
+        public CedarTree ReadTrie(string treeName)
+        {
+            CedarTree tree;
+            if (_tries.TryGetValue(treeName, out tree))
+                return tree;
+
+            Slice treeNameSlice = Slice.From(this.Allocator, treeName, ByteStringType.Immutable);
+
+            var header = (CedarRootHeader*)_lowLevelTransaction.RootObjects.DirectRead(treeNameSlice);
+            if (header != null)
+            {
+                if (header->RootObjectType != RootObjectType.VariableSizeTree)
+                    throw new InvalidOperationException("Tried to opened " + treeName + " as a variable size tree, but it is actually a " + header->RootObjectType);
+
+                tree = CedarTree.Open(_lowLevelTransaction, this, header);
+                tree.Name = treeName;
+                _tries.Add(treeName, tree);
+                return tree;
+            }
+
+            _trees.Add(treeName, null);
+            return null;
         }
 
         public Tree ReadTree(string treeName)
@@ -147,6 +173,15 @@ namespace Voron.Impl
             _trees[name] = tree;
         }
 
+        internal void AddTrie(string name, CedarTree tree)
+        {
+            CedarTree value;
+            if (_tries.TryGetValue(name, out value) && value != null)
+                throw new InvalidOperationException("Tree already exists: " + name);
+
+            _tries[name] = tree;
+        }
+
 
 
         public void DeleteTree(string name)
@@ -235,6 +270,28 @@ namespace Voron.Impl
             tree.State.CopyTo((TreeRootHeader*)space);
             tree.State.IsModified = true;
             AddTree(name, tree);
+
+            return tree;
+        }
+
+        public CedarTree CreateTrie(string name)
+        {
+            CedarTree tree = ReadTrie(name);
+            if (tree != null)
+                return tree;
+
+            if (_lowLevelTransaction.Flags == (TransactionFlags.ReadWrite) == false)
+                throw new InvalidOperationException("No such tree: '" + name + "' and cannot create trees in read transactions");
+
+            Slice key = Slice.From(this.Allocator, name, ByteStringType.Immutable);
+
+            tree = CedarTree.Create(_lowLevelTransaction, this);
+            tree.Name = name;
+            var space = _lowLevelTransaction.RootObjects.DirectAdd(key, sizeof(CedarRootHeader));
+
+            tree.State.CopyTo((CedarRootHeader*)space);
+            tree.State.IsModified = true;
+            AddTrie(name, tree);
 
             return tree;
         }

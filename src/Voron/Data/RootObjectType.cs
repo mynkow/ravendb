@@ -6,6 +6,6 @@
         VariableSizeTree = 1,
         EmbeddedFixedSizeTree = 2,
         FixedSizeTree = 3,
-        PrefixTree = 4,
+        CedarTree = 4,
     }
 }

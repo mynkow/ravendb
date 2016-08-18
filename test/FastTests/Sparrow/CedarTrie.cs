@@ -422,10 +422,11 @@ namespace FastTests.Sparrow
                     var keys = new HashSet<string>();
                     for (int i = 0; i < count; i++)
                     {
-                        string key = GenerateSequential();
-                        keyLength = key.Length;
+                        //string key = GenerateSequential(prefixSize);
                         //string key = GenerateRandomString(generator, size, prefixSize);
-                        //string key = GenerateRandomString(size, prefixSize);
+                        string key = GenerateRandomString(size, prefixSize);
+
+                        keyLength = key.Length;
 
                         keysInOrder.Add(key);
                         tree.Update(Encoding.UTF8.GetBytes(key), 1);
@@ -438,7 +439,7 @@ namespace FastTests.Sparrow
                         //d = tree.NonZeroLength; // Forcing the scanning of the tree for it to die. 
 
 
-                        if ( i % 50 == 0)
+                        if ( i % 100 == 0)
                         {
                             Console.Clear();
 
@@ -535,11 +536,31 @@ namespace FastTests.Sparrow
             Console.ReadLine();
         }
 
+
+        private string[] clusteredPrefixes;
+
         static int i = 0;
-        private string GenerateSequential()
+        private string GenerateSequential(int clusteredSize)
         {
+            if ( clusteredPrefixes == null )
+            {
+                clusteredPrefixes = new string[10];
+                
+                for ( int start = 0; start < 10; start++ )
+                {
+                    var stringChars = new char[clusteredSize];
+                    for (int i = 0; i < clusteredSize; i++)
+                        stringChars[i] = chars[(int)((start + i) % chars.Length)];
+
+                    clusteredPrefixes[start] = new string(stringChars);
+                }
+            }
+
+            _seed = (_seed * 23 + 7);
+            var cluster = _seed % 10;
+
             i++;
-            return $"1234567890123{i}";
+            return clusteredPrefixes[cluster] + i;
         }
     }
 }

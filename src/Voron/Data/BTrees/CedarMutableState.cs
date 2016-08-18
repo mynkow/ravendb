@@ -1,27 +1,32 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Threading.Tasks;
 using Voron.Impl;
-using Voron.Impl.FileHeaders;
 
 namespace Voron.Data.BTrees
 {
-    public unsafe class TreeMutableState
+    public unsafe class CedarMutableState
     {
         private readonly LowLevelTransaction _tx;
+        private bool _isModified;
+
+        public long RootPageNumber;
+
+        public long PageCount;
         public long BranchPages;
         public long LeafPages;
         public long OverflowPages;
+
         public int Depth;
-        public long PageCount;
+
         public long NumberOfEntries;
         public TreeFlags Flags;
 
-        public long RootPageNumber;
-        private bool _isModified;
-
         public bool InWriteTransaction;
 
-        public TreeMutableState(LowLevelTransaction tx)
+        public CedarMutableState(LowLevelTransaction tx)
         {
             _tx = tx;
         }
@@ -37,7 +42,7 @@ namespace Voron.Data.BTrees
             }
         }
 
-        public void CopyTo(TreeRootHeader* header)
+        public void CopyTo(CedarRootHeader* header)
         {
             header->RootObjectType = RootObjectType.VariableSizeTree;
             header->Flags = Flags;
@@ -50,9 +55,9 @@ namespace Voron.Data.BTrees
             header->RootPageNumber = RootPageNumber;
         }
 
-        public TreeMutableState Clone()
+        public CedarMutableState Clone()
         {
-            return new TreeMutableState(_tx)
+            return new CedarMutableState(_tx)
             {
                 BranchPages = BranchPages,
                 Depth = Depth,

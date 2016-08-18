@@ -16,7 +16,6 @@ namespace Voron.Data
         bool Skip(int count);
 
         ValueReader CreateReaderForCurrent();
-        int GetCurrentDataSize();
 
         event Action<IIterator> OnDisposal;
     }

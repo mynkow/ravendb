@@ -246,8 +246,6 @@ namespace Voron.Data.BTrees
         {
             get { return  this._tree.State.RootPageNumber; }
         }
-
-
     }
 
     public static class IteratorExtensions
@@ -263,7 +261,7 @@ namespace Voron.Data.BTrees
             }
             while (self.MoveNext());
         }
-        
+
         public unsafe static bool ValidateCurrentKey<T>(this T self, LowLevelTransaction tx, TreeNodeHeader* node) where T : IIterator
         {
             if (self.RequiredPrefix.HasValue)
@@ -275,6 +273,21 @@ namespace Voron.Data.BTrees
             if (self.MaxKey.HasValue)
             {
                 var currentKey = TreeNodeHeader.ToSlicePtr(tx.Allocator, node);
+                if (SliceComparer.CompareInline(currentKey, self.MaxKey) >= 0)
+                    return false;
+            }
+            return true;
+        }
+
+        public unsafe static bool ValidateCurrentKey<T>(this T self, Slice currentKey) where T : IIterator
+        {
+            if (self.RequiredPrefix.HasValue)
+            {
+                if (SliceComparer.StartWith(currentKey, self.RequiredPrefix) == false)
+                    return false;
+            }
+            if (self.MaxKey.HasValue)
+            {
                 if (SliceComparer.CompareInline(currentKey, self.MaxKey) >= 0)
                     return false;
             }

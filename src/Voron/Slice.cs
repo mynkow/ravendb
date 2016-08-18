@@ -61,6 +61,16 @@ namespace Voron
             }
         }
 
+        public bool Same(Slice other)
+        {
+            return this.Size == other.Size && this.Content.Ptr == other.Content.Ptr;
+        }
+
+        public bool Equals(Slice other)
+        {
+            return (this.Size == other.Size) && (this.Content.Ptr == other.Content.Ptr || Memory.CompareInline(this.Content.Ptr, other.Content.Ptr, this.Size) == 0);
+        }
+
         public Slice Clone(ByteStringContext context, ByteStringType type = ByteStringType.Mutable)
         {
             return new Slice(context.Clone(this.Content, type));

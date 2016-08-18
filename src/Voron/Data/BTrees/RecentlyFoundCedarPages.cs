@@ -1,25 +1,22 @@
-// -----------------------------------------------------------------------
-//  <copyright file="BinaryTree.cs" company="Hibernating Rhinos LTD">
-//      Copyright (c) Hibernating Rhinos LTD. All rights reserved.
-//  </copyright>
-// -----------------------------------------------------------------------
-
-using System;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Voron.Data.BTrees
 {
-    public class RecentlyFoundTreePages
+    public class RecentlyFoundCedarPages
     {
-        public class FoundTreePage
+        public class FoundCedarPage
         {
             public readonly long Number;
             public readonly Slice FirstKey;
             public readonly Slice LastKey;
             public readonly long[] CursorPath;
 
-            public TreePage Page;
+            public CedarPage Page;
 
-            public FoundTreePage(long number, TreePage page, Slice firstKey, Slice lastKey, long[] cursorPath)
+            public FoundCedarPage(long number, CedarPage page, Slice firstKey, Slice lastKey, long[] cursorPath)
             {
                 Number = number;
                 Page = page;
@@ -29,19 +26,19 @@ namespace Voron.Data.BTrees
             }
         }
 
-        private readonly FoundTreePage[] _cache;
+        private readonly FoundCedarPage[] _cache;
 
         private readonly int _cacheSize;
 
         private int current = 0;
 
-        public RecentlyFoundTreePages(int cacheSize)
+        public RecentlyFoundCedarPages(int cacheSize)
         {
-            _cache = new FoundTreePage[cacheSize];
+            _cache = new FoundCedarPage[cacheSize];
             _cacheSize = cacheSize;
         }
 
-        public void Add(FoundTreePage page)
+        public void Add(FoundCedarPage page)
         {
             int itemsLeft = _cacheSize;
             int position = current + _cacheSize;
@@ -63,7 +60,7 @@ namespace Voron.Data.BTrees
             _cache[current] = page;
         }
 
-        public FoundTreePage Find(Slice key)
+        public FoundCedarPage Find(Slice key)
         {
             int position = current;
 

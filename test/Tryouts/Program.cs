@@ -14,6 +14,7 @@ using Raven.Client.Extensions;
 using Raven.Imports.Newtonsoft.Json;
 using Raven.Json.Linq;
 using FastTests;
+using Sparrow.Collections;
 
 namespace Tryouts
 {
@@ -22,18 +23,9 @@ namespace Tryouts
     {
         static void Main(string[] args)
         {
-            using (var x = new SlowTests.Core.Indexing.ResultTransformers())
-            {
-                x.CanUseMetadataForInTransformer().Wait();
-            }
-            using (var x = new SlowTests.Core.Indexing.ResultTransformers())
-            {
-                x.CanUseTransformerWithParameterOrDefault().Wait();
-            }
-            using (var x = new SlowTests.Core.Indexing.ResultTransformers())
-            {
-                x.CanUseAsDocumentInTransformer().Wait();
-            }
+            //CedarTrie<int> trie = new CedarTrie<int>();
+            var p = new FastTests.Sparrow.CedarTrieTests();
+            p.TestCaseGenerator(100, 60, 1002400, 45);
         }
     }
 }
