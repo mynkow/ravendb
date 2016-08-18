@@ -123,9 +123,12 @@ namespace Voron.Data.BTrees
             *((long*)pos) = value;                                               
         }
 
-        public long Read(Slice key, ushort? version = null)
+        public long Read(Slice key)
         {
-            throw new NotImplementedException();
+            var pos = DirectRead(key);
+
+            // TODO: Check how to write this (endianess).
+            return *((long*)pos);
         }
 
         private static void CopyStreamToPointer(LowLevelTransaction tx, Stream value, byte* pos)
@@ -150,9 +153,27 @@ namespace Voron.Data.BTrees
             }
         }
 
-        public byte* DirectRead(Slice key, ushort? version = null)
+        public byte* DirectRead(Slice key)
         {
-            throw new NotImplementedException();
+            if (AbstractPager.IsKeySizeValid(key.Size) == false)
+                throw new ArgumentException($"Key size is too big, must be at most {AbstractPager.MaxKeySize} bytes, but was {(key.Size + AbstractPager.RequiredSpaceForNewNode)}", nameof(key));
+
+            // We look for the branch page that is going to host this data. 
+            CedarBranchPageHeader* node;
+            CedarCursor cursor = FindLocationFor(key, out node);
+
+            // This is efficient because we return the very same Slice so checking can be done via pointer comparison. 
+            if (cursor.Key.Same(key))
+            {
+                // We will be able to overwrite the data if the data fit into the allocated space or if we have smaller than 8 bytes data to store.                       
+                return GetDataPointer(cursor);
+            }
+
+            // If this triggers it is signaling a defect on the cursor implementation
+            // This is a checked invariant on debug builds. 
+            Debug.Assert(!cursor.Key.Equals(key));
+
+            return null;
         }
 
         public byte* DirectAdd(Slice key, ushort? version = null)
@@ -170,20 +191,26 @@ namespace Voron.Data.BTrees
             CedarBranchPageHeader* node;
             CedarCursor cursor = FindLocationFor(key, out node);
 
-            // if this is an update operation (key was found)
-            byte* pos;
-            if (cursor.Key.Equals(key))
+            // This is efficient because we return the very same Slice so checking can be done via pointer comparison. 
+            byte* pos;            
+            if (cursor.Key.Same(key)) 
             {
+                // This is an update operation (key was found).               
                 CheckConcurrency(key, version, cursor.NodeVersion, ActionType.Add);
 
                 // We will be able to overwrite the data if the data fit into the allocated space or if we have smaller than 8 bytes data to store.                       
-                return GetDataPointer(cursor, key, version);
+                return GetDataPointer(cursor);
             }
-            
+
+            // If this triggers it is signaling a defect on the cursor implementation
+            // This is a checked invariant on debug builds. 
+            Debug.Assert(!cursor.Key.Equals(key));
+
             // Updates may fail if we have to split the page. 
             OperationStatus status;
             do
             {
+                // It will output the position of the data to be written to. 
                 status = TryUpdate(cursor, key, version, out pos);
                 if (status == OperationStatus.NotEnoughSpace)
                 {
@@ -220,12 +247,7 @@ namespace Voron.Data.BTrees
             throw new NotImplementedException();
         }
 
-        private void RemoveLeafNode(CedarCursor cursor, out ushort nodeVersion)
-        {
-            throw new NotImplementedException();
-        }
-
-        private byte* GetDataPointer(CedarCursor cursor, Slice key, ushort? version)
+        private byte* GetDataPointer(CedarCursor cursor)
         {
             throw new NotImplementedException();
         }

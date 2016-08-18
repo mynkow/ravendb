@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Voron.Impl;
@@ -9,34 +10,52 @@ using Voron.Impl;
 namespace Voron.Data.BTrees
 {
     /// <summary>
-    /// The pointer to the data. A list of these elements can be found on every Cedar Branch Page immediately after the <see cref="CedarBranchHeader"/>    
+    /// The pointer to the data. A list of these elements can be found on every Cedar Branch Page immediately after the <see cref="CedarBranchPageHeader"/>    
     /// </summary>
+    /// <remarks>
+    /// We are willing to pay unaligned access costs here because we are looking for the most efficient storage representation for this data.
+    /// </remarks>
     [StructLayout(LayoutKind.Explicit, Pack = 1)]
     public unsafe struct CedarDataPtr
     {
+        private const byte FlagsMask = 0x80;
+        private const byte SizeMask = 0x0F; // Size mask of total size of 16 is fine because we cannot store bigger than 8 bytes data anyways.
+
+        [FieldOffset(0)]
+        public byte Header;
+
         /// <summary>
-        /// The type of the data pointer that we have. 
+        /// This is used for concurrency checks.
+        /// </summary>
+        [FieldOffset(1)]
+        public ushort Version;
+
+        [FieldOffset(3)]
+        public long PageNumber;
+
+        [FieldOffset(3)]
+        public long Data;
+
+        /// <summary>
+        /// The type of the data pointer that we have.
         /// </summary>
         /// <remarks>
         /// In case the value is <see cref="CedarNodeFlags.Data"/> the value should be smaller or equal to 8 bytes in size.
         /// </remarks>
-        [FieldOffset(0)]
-        public TreeNodeFlags Flags;
-
-        [FieldOffset(1)]
-        public ushort Version;
+        public TreeNodeFlags Flags
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return (Header & FlagsMask) != 0 ? TreeNodeFlags.Data : TreeNodeFlags.PageRef; }
+        }
 
         /// <summary>
-        /// In the case where the data can be stored in the header (up to 8 bytes) we can store it directly and this value will tell how big it is. 
+        /// The data will be stored directly in the header (up to 8 bytes) this value will tell how big it is (the data type). 
         /// </summary>
-        [FieldOffset(3)]
-        public byte DataSize;
-
-        [FieldOffset(4)]
-        public long PageNumber;
-
-        [FieldOffset(4)]
-        public long Data;
+        public byte DataSize
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return (byte)(Header & SizeMask); }
+        }
 
         public static byte* DirectAccess(LowLevelTransaction tx, CedarDataPtr* node)
         {
@@ -50,18 +69,10 @@ namespace Voron.Data.BTrees
 
         public static ValueReader Reader(LowLevelTransaction tx, CedarDataPtr* node)
         {
-            if (node->Flags == (TreeNodeFlags.PageRef))
-            {
-                var overFlowPage = tx.GetPage(node->PageNumber);
+            if (node->Flags == (TreeNodeFlags.PageRef))             
+                return new ValueReader((byte*)&node->PageNumber, sizeof(long));
 
-                Debug.Assert(overFlowPage.IsOverflow, "Requested overflow page but got " + overFlowPage.Flags);
-                Debug.Assert(overFlowPage.OverflowSize > 0, "Overflow page cannot be size equal 0 bytes");
-                Debug.Assert(((CedarLeafPageHeader*)overFlowPage.Pointer)->IsValid, "Overflow page cannot be size equal 0 bytes");
-
-                return new ValueReader(overFlowPage.Pointer + sizeof(CedarLeafPageHeader), overFlowPage.OverflowSize);
-            }
-
-            Debug.Assert(node->DataSize > 0 && node->DataSize <= 8, "The embedded node data size is not compatible with this type of tree");
+            Debug.Assert(node->DataSize > 0 && node->DataSize <= 8, "The embedded node data size is not compatible for this type of tree");
             return new ValueReader((byte*)&node->Data, node->DataSize);
         }
     }
