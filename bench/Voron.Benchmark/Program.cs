@@ -1,13 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Running;
-using Microsoft.VisualBasic;
-using Voron.Benchmark.BTree;
-using Voron.Benchmark.Table;
-using Constants = Voron.Global.Constants;
+﻿using BenchmarkDotNet.Running;
+using Voron.Benchmark.Cedar;
 
 namespace Voron.Benchmark
 {
@@ -23,22 +15,15 @@ namespace Voron.Benchmark
             //BenchmarkRunner.Run<Table.TableFillRandom>();
             //BenchmarkRunner.Run<Table.TableReadAndIterate>();
             //BenchmarkRunner.Run<Table.TableInsertRandom>();
+            //BenchmarkRunner.Run<Cedar.CedarFillRandom>();
+            //BenchmarkRunner.Run<Cedar.CedarFillSequential>();
+            //BenchmarkRunner.Run<Cedar.CedarInsertRandom>();
+            //BenchmarkRunner.Run<Cedar.CedarReadAndIterate>();
 
-            Console.WriteLine("Size " + Constants.Storage.PageSize);
-            var list = new List<long>();
-            for (int i = 0; i < 3; i++)
-            {
-                var a = new BTreeFillRandom();
-                {
-                    a.Setup();
-                    var sp = Stopwatch.StartNew();
-                    a.FillRandomMultipleTransactions();
-                    list.Add(sp.ElapsedMilliseconds);
-                    Console.WriteLine(". " + sp.ElapsedMilliseconds);
-                    a.Cleanup();
-                }
-            }
-            Console.WriteLine($"Min {list.Min()} Max {list.Max()} Avg {list.Average()}");
+            var p = new CedarFillRandom();
+            p.UseAscii = 3;
+            p.Setup();
+            p.FillRandomOneTransaction();
         }
     }
 }

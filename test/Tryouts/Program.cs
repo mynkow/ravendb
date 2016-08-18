@@ -1,13 +1,6 @@
-﻿using System;
+﻿using FastTests.Voron.Cedar;
+using System;
 using System.Diagnostics;
-using System.Threading.Tasks;
-using FastTests.Voron;
-using SlowTests.Voron;
-using StressTests;
-using Voron;
-using Voron.Global;
-using Voron.Impl.Scratch;
-using Xunit;
 
 namespace Tryouts
 {
@@ -15,27 +8,33 @@ namespace Tryouts
     {
         static void Main(string[] args)
         {
-            //Parallel.For(0, 100, i =>
+            var b = new Basic();
+            b.AfterSequentialPageSplitAllDataIsValid();
+
+            //var p = new RandomizedCedarTests();
+            //foreach( var param in RandomizedCedarTests.InsertionParams)
+            //{
+            //    p.InsertionsAndRemovalsSingleTransaction((RandomizedCedarTests.InsertionOptions)param[0]);
+            //}
+
+            //for ( int i = 0; i < 1000; i++ )
+            //{
+            //    var o = new RandomizedCedarTests.InsertionOptions(100, i);
+            //    p.InsertionsAndRemovalsSingleTransaction(o);
+            //}
+
+            //for (int i = 0; i < 1000; i++)
             //{
             //    Console.WriteLine(i);
-            //    using (var a = new SlowTests.Tests.Sorting.AlphaNumericSorting())
+            //    var sp = Stopwatch.StartNew();
+            //    using (var x = new FastTests.Voron.Compaction.StorageCompactionTests())
             //    {
-            //        a.random_words_using_document_query_async().Wait();
+            //        x.ShouldDeleteCurrentJournalEvenThoughItHasAvailableSpace();
             //    }
-            //});
-
-            for (int i = 0; i < 199; i++)
-            {
-                var sp = Stopwatch.StartNew();
-                using (var a = new LongKeys())
-                {
-                    a.NoDebugAssertShouldThrownDuringRebalancing(seed: 4);
-                }
-                Console.WriteLine(sp.ElapsedMilliseconds);
-            }
+            //    Console.WriteLine(sp.Elapsed);
+            //}
         }
     }
-
 
 }
 

@@ -222,7 +222,12 @@ namespace Raven.Server.Documents.Versioning
                 return;
 
             var table = context.Transaction.InnerTransaction.OpenTable(DocsSchema, RevisionDocuments);
-            var prefixKeyMem = context.Allocator.Allocate(loweredKey.Size + 1);
+
+            // TODO: Check if we cannot change this with a clone instead.
+            // TODO: Check if we can deallocate the prefixKeyMem memory. 
+            ByteString prefixKeyMem;
+            context.Allocator.Allocate(loweredKey.Size + 1, out prefixKeyMem); 
+
             loweredKey.CopyTo(0, prefixKeyMem.Ptr, 0, loweredKey.Size);
             prefixKeyMem.Ptr[loweredKey.Size] = (byte)30; // the record separator
             var prefixSlice = new Slice(SliceOptions.Key, prefixKeyMem);

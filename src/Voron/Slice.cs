@@ -55,10 +55,52 @@ namespace Voron
                 Debug.Assert(Content.Ptr != null, "Uninitialized slice!");
 
                 if (!Content.HasValue)
-                    throw new InvalidOperationException("Uninitialized slice!");
+                    ThrowUninitialized();
 
-                return *(Content.Ptr + (sizeof(byte) * index));
+                return *(Content.Ptr + sizeof(byte) * index);
             }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set
+            {
+                Debug.Assert(Content.Ptr != null, "Uninitialized slice!");
+
+                if (!Content.HasValue)
+                    ThrowUninitialized();
+
+                if (!Content.IsMutable)
+                    ThrowImmutableCannotBeModified();
+
+                if (index < 0 || index >= Content.Length)
+                    ThrowArgumentIsOutOfRange(nameof(index));
+
+                *(Content.Ptr + sizeof(byte) * index) = value;
+            }
+        }
+
+        private void ThrowUninitialized()
+        {
+            throw new InvalidOperationException("Uninitialized slice!");
+        }
+
+        private void ThrowImmutableCannotBeModified()
+        {
+            throw new InvalidOperationException("Immutable slice cannot be modified!");
+        }
+
+        private void ThrowArgumentIsOutOfRange(string name)
+        {
+            throw new ArgumentOutOfRangeException(name);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Same(Slice other)
+        {
+            return this.Size == other.Size && this.Content.Ptr == other.Content.Ptr;
+        }
+
+        public bool Equals(Slice other)
+        {
+            return (this.Size == other.Size) && (this.Content.Ptr == other.Content.Ptr || Memory.CompareInline(this.Content.Ptr, other.Content.Ptr, this.Size) == 0);
         }
 
         public Slice Clone(ByteStringContext context, ByteStringType type = ByteStringType.Mutable)
@@ -89,6 +131,25 @@ namespace Voron
         public void CopyTo(int from, byte[] dest, int offset, int count)
         {
             this.Content.CopyTo(from, dest, offset, count);
+        }
+
+        public void CopyTo(Slice dest)
+        {
+            this.Content.CopyTo(dest.Content);
+        }
+
+        public void CopyTo(Slice dest, int count)
+        {
+            this.Content.CopyTo(dest.Content, count);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ByteStringContext.InternalScope Create(ByteStringContext context, int size, out Slice str, SliceOptions options = SliceOptions.Key)
+        {
+            ByteString s;
+            var scope = context.Allocate(size, out s);
+            str = new Slice(options, s);
+            return scope;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -170,6 +231,31 @@ namespace Voron
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Shrink(int length)
+        {
+            this.Content.Shrink(length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Expand(int length)
+        {
+            this.Content.Expand(length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetSize(int length)
+        {
+            this.Content.SetLength(length);
+        }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Reset()
+        {
+            this.Content.Reset();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ValueReader CreateReader()
         {
             return new ValueReader(Content.Ptr, Size);
@@ -184,6 +270,7 @@ namespace Voron
         {
             return this.Content.ToString(Encoding.UTF8);
         }
+
     }
 
     public static class Slices

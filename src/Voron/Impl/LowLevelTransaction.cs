@@ -202,7 +202,6 @@ namespace Voron.Impl
                         $"Tx id = {id}, max id in journal = {maxTxIdInJournal}");
             }
         }
-
         internal void UpdateRootsIfNeeded(Tree root)
         {
             //can only happen during initial transaction that creates Root and FreeSpaceRoot trees
@@ -270,6 +269,8 @@ namespace Voron.Impl
 
         internal Page ModifyPage(long num)
         {
+            Debug.Assert(this.Flags == TransactionFlags.ReadWrite);
+
             _env.AssertNoCatastrophicFailure();
 
             // Check if we can hit the lowest level locality cache.
@@ -385,8 +386,49 @@ namespace Voron.Impl
             return overflowPage;
         }
 
+        /// <summary>
+        /// This method of allocating pages will ensure all pages are going to be allocated one after the other. 
+        /// This way of allocating will ensure that pages have data locality among themselves.
+        /// </summary>
+        /// <param name="numberOfPages">The size of the pages to allocate</param>
+        /// <returns>The actual allocated pages.</returns>
+        public Page[] AllocatePages(int[] numberOfPages, int? totalPages = null, long? pageNumber = null, bool zeroPage = true)
+        {
+            if (pageNumber == null)
+            {
+                if (totalPages == null)
+                {
+                    totalPages = 0;
+                    for (int i = 0; i < numberOfPages.Length; i++)
+                        totalPages += i;
+                }
+
+                pageNumber = _freeSpaceHandling.TryAllocateFromFreeSpace(this, totalPages.Value);
+                if (pageNumber == null) // allocate from end of file
+                {
+                    pageNumber = State.NextPageNumber;
+                    State.NextPageNumber += totalPages.Value;
+                }
+            }
+
+            var result = new Page[numberOfPages.Length];
+            int count = 0;
+            for (int i = 0; i < numberOfPages.Length; i++)
+            {
+                result[i] = AllocatePage(numberOfPages[i], pageNumber + count, zeroPage: zeroPage);
+                count += numberOfPages[i];
+            }
+
+            if (totalPages.HasValue && count != totalPages.Value)
+                throw new InvalidOperationException("The total pages (if passed) must be equal to the actual pages requested.");
+
+            return result;
+        }
+
         private Page AllocatePage(int numberOfPages, long pageNumber, Page? previousVersion, bool zeroPage)
         {
+            Debug.Assert(this.Flags == TransactionFlags.ReadWrite);
+
             if (_disposed)
                 throw new ObjectDisposedException("Transaction");
 
@@ -415,7 +457,7 @@ namespace Voron.Impl
             }
 
             _scratchPagesTable[pageNumber] = pageFromScratchBuffer;
-
+            
             _dirtyPages.Add(pageNumber);
 
             if (numberOfPages > 1)
@@ -431,12 +473,22 @@ namespace Voron.Impl
 
             var newPage = _env.ScratchBufferPool.ReadPage(this, pageFromScratchBuffer.ScratchFileNumber,
                 pageFromScratchBuffer.PositionInScratchBuffer);
-
+            
             if (zeroPage)
                 UnmanagedMemory.Set(newPage.Pointer, 0, Constants.Storage.PageSize * numberOfPages);
 
             newPage.PageNumber = pageNumber;
-            newPage.Flags = PageFlags.Single;
+            
+            if (numberOfPages > 1)
+            {
+                newPage.Flags = PageFlags.Overflow;
+                newPage.OverflowSize = numberOfPages * this.PageSize;
+            }
+            else
+            {
+                newPage.Flags = PageFlags.Single;
+            }
+
 
             TrackWritablePage(newPage);
 
@@ -481,9 +533,12 @@ namespace Voron.Impl
                 _scratchPagesTable[pageNumber + i] = pageFromScratchBuffer;
                 _dirtyOverflowPages.Remove(pageNumber + i);
                 _dirtyPages.Add(pageNumber + i);
+
                 var newPage = _env.ScratchBufferPool.ReadPage(this, value.ScratchFileNumber, value.PositionInScratchBuffer + i);
                 newPage.PageNumber = pageNumber + i;
                 newPage.Flags = PageFlags.Single;
+                newPage.OverflowSize = 0;
+                
                 TrackWritablePage(newPage);
             }
         }

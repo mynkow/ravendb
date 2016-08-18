@@ -83,7 +83,7 @@ namespace Voron.Data.BTrees
             int position = _current;
 
             int itemsLeft = _cacheSize;
-            while ( itemsLeft > 0 )
+            while (itemsLeft > 0)
             {
                 var page = _cache[position % _cacheSize];
                 if (page == null)

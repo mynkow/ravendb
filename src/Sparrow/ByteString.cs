@@ -203,6 +203,34 @@ namespace Sparrow
             }
         }
 
+        public void CopyTo(ByteString dest)
+        {
+            Debug.Assert(HasValue);
+
+            if (dest._pointer->Size < this._pointer->Length)
+                throw new ArgumentException("There is no enough allocated space in the destination byte string to perform the copy.");
+
+            EnsureIsNotBadPointer();
+            Memory.CopyInline(dest._pointer->Ptr, _pointer->Ptr, _pointer->Length);
+            dest._pointer->Length = _pointer->Length;
+        }
+
+        public void CopyTo(ByteString dest, int count)
+        {
+            Debug.Assert(HasValue);
+
+            if (this._pointer->Length <= count)
+                throw new ArgumentOutOfRangeException(nameof(count), "The source byte string is smaller than the requested size to copy.");
+
+            if (dest._pointer->Size < count)
+                    throw new ArgumentException("There is no enough allocated space in the destination byte string to perform the copy.");
+
+            EnsureIsNotBadPointer();
+            Memory.CopyInline(dest._pointer->Ptr, _pointer->Ptr, count);
+            dest._pointer->Length = count;
+        }
+
+
         public void CopyTo(int from, byte* dest, int offset, int count)
         {
             Debug.Assert(HasValue);
@@ -336,6 +364,68 @@ namespace Sparrow
         public bool Equals(ByteString other)
         {
             return this == other;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Shrink(int length)
+        {
+            Debug.Assert(length >= 0);
+
+            if (length > this._pointer->Length || length > this._pointer->Size)
+                ThrowShrinkException(length);
+
+            this._pointer->Length = length;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Expand(int length)
+        {
+            Debug.Assert(length > 0);
+
+            if (length < this._pointer->Length || length > this._pointer->Size)
+                ThrowExpandException(length);
+
+            this._pointer->Length = length;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetLength(int length)
+        {
+            Debug.Assert(length >= 0);
+
+            if (length > this._pointer->Size)
+                ThrowOutOfBoundsSizeChange(length);
+
+            this._pointer->Length = length;
+        }
+
+        private void ThrowShrinkException(int length)
+        {
+            if (length > this._pointer->Length)
+                throw new ArgumentException("Cannot shrink an slice that is smaller than the required size.", nameof(length));
+
+            if (length > this._pointer->Size)
+                throw new ArgumentOutOfRangeException(nameof(length), "Cannot shrink an slice whose allocated size is smaller than the required size.");
+        }
+
+
+        private void ThrowExpandException(int length)
+        {
+            if (length < this._pointer->Length)
+                throw new ArgumentException("Cannot expand an slice that is bigger than the required size.", nameof(length));
+
+            if (length > this._pointer->Size)
+                throw new ArgumentOutOfRangeException(nameof(length), "Cannot expand an slice out of allocated size bounds.");
+        }
+
+        private void ThrowOutOfBoundsSizeChange(int length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(length), "Cannot change size of an slice out of allocated size bounds.");
+        }
+
+        public void Reset()
+        {
+            this._pointer->Length = this._pointer->Size;
         }
     }
 
@@ -599,12 +689,6 @@ namespace Sparrow
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ByteString Allocate(int length)
-        {
-            return AllocateInternal(length, ByteStringType.Mutable);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int GetPoolIndexForReuse(int size)
         {
             return Bits.CeilLog2(size) - 1; // x^0 = 1 therefore we start counting at 1 instead.
@@ -794,7 +878,7 @@ namespace Sparrow
                     // provided, so we must allocate a new string here
                     byteCount > str._pointer->Size)
                 {
-                    str = Allocate(byteCount);
+                    str = AllocateInternal(byteCount, ByteStringType.Mutable);
                 }
                 str._pointer->Length = Encoding.UTF8.GetBytes(pChars, charCount, str._pointer->Ptr, str._pointer->Size);
             }
@@ -983,6 +1067,15 @@ namespace Sparrow
 
             RegisterForValidation(result);
             return result;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public InternalScope Allocate(int length, out ByteString str)
+        {
+            Debug.Assert(length >= 0, $"{nameof(length)} cant be negative.");
+
+            str = AllocateInternal(length, ByteStringType.Mutable);
+            return new InternalScope(this, str);
         }
 
         public InternalScope From(string value, out ByteString str)

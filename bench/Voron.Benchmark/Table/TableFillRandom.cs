@@ -23,23 +23,10 @@ namespace Voron.Benchmark.Table
         /// </summary>
         private List<TableValueBuilder>[] _valueBuilders;
 
-        /// <summary>
-        /// Length of the keys to be inserted when filling randomly (bytes)
-        /// </summary>
-        [Params(100)]
-        public int KeyLength { get; set; } = 100;
-
-        /// <summary>
-        /// Random seed. If -1, uses time for seeding.
-        /// TODO: make this nullable. See https://github.com/PerfDotNet/BenchmarkDotNet/issues/271
-        /// </summary>
-        [Params(-1)]
-        public int RandomSeed { get; set; } = -1;
-
         static TableFillRandom()
         {
-            Slice.From(Configuration.Allocator, "TestTable1", ByteStringType.Immutable, out TableNameSlice);
-            Slice.From(Configuration.Allocator, "TestSchema1", ByteStringType.Immutable, out SchemaPKNameSlice);
+            Slice.From(Configuration.Allocator, "TableFillRandom", ByteStringType.Immutable, out TableNameSlice);
+            Slice.From(Configuration.Allocator, "TableFillRandomSchema", ByteStringType.Immutable, out SchemaPKNameSlice);
 
             Schema = new TableSchema()
                 .DefineKey(new TableSchema.SchemaIndexDef
@@ -66,7 +53,7 @@ namespace Voron.Benchmark.Table
             var totalPairs = Utils.GenerateUniqueRandomSlicePairs(
                 NumberOfTransactions * NumberOfRecordsPerTransaction,
                 KeyLength,
-                RandomSeed == -1 ? null as int? : RandomSeed);
+                RandomSeed);
 
             _valueBuilders = new List<TableValueBuilder>[NumberOfTransactions];
 

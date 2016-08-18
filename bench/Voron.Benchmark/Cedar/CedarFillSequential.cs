@@ -2,12 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Configs;
 using Sparrow;
 
-namespace Voron.Benchmark.BTree
+namespace Voron.Benchmark.Cedar
 {
-    public class BTreeFillRandom : StorageBenchmark
+    public class CedarFillSequential : StorageBenchmark
     {
         private static readonly Slice TreeNameSlice;
 
@@ -19,11 +18,21 @@ namespace Voron.Benchmark.BTree
         /// It is important for them to be lists, this way we can ensure the
         /// order of insertions remains the same throughout runs.
         /// </summary>
-        private List<Tuple<Slice, Slice>>[] _pairs;
+        private List<Tuple<Slice, long>>[] _pairs;
 
-        static BTreeFillRandom()
+        /// <summary>
+        /// First component of the array tells if we should use ASCII. The
+        /// second one is the amount of clustering in the event that we do
+        /// use it.
+        /// </summary>
+        [Params(0, 3)]
+        public long UseAscii { get; set; }
+        public bool ShouldUseAscii => (UseAscii & 0x1) > 0;
+        public int AsciiClusterSize => (int)((UseAscii & ((long)0xFFFFFFFF << 1)) >> 1);
+
+        static CedarFillSequential()
         {
-            Slice.From(Configuration.Allocator, "BTreeRandomFill", ByteStringType.Immutable, out TreeNameSlice);
+            Slice.From(Configuration.Allocator, "CedarFillSequential", ByteStringType.Immutable, out TreeNameSlice);
         }
 
         [Setup]
@@ -33,18 +42,25 @@ namespace Voron.Benchmark.BTree
 
             using (var tx = Env.WriteTransaction())
             {
-                tx.CreateTree(TreeNameSlice);
+                tx.CreateTrie(TreeNameSlice);
                 tx.Commit();
             }
 
-            var totalPairs = Utils.GenerateUniqueRandomSlicePairs(
+            var totalPairs = Utils.GenerateUniqueRandomCedarPairs(
                 NumberOfTransactions * NumberOfRecordsPerTransaction,
                 KeyLength,
-                RandomSeed);
+                RandomSeed,
+                ShouldUseAscii,
+                AsciiClusterSize);
 
-            _pairs = new List<Tuple<Slice, Slice>>[NumberOfTransactions];
+            // This will sort just the KEYS
+            totalPairs.Sort((x, y) => SliceComparer.Compare(x.Item1, y.Item1));
 
-            for (var i = 0; i < NumberOfTransactions; ++i)
+            // Distribute keys in such a way that _pairs[i][k] < _pairs[j][m]
+            // iff i < j, for all k and m.
+            _pairs = new List<Tuple<Slice, long>>[NumberOfTransactions];
+
+            for (var i = 0; i < NumberOfTransactions; i++)
             {
                 _pairs[i] = totalPairs.Take(NumberOfRecordsPerTransaction).ToList();
                 totalPairs.RemoveRange(0, NumberOfRecordsPerTransaction);
@@ -53,17 +69,17 @@ namespace Voron.Benchmark.BTree
 
         // TODO: Fix. See: https://github.com/PerfDotNet/BenchmarkDotNet/issues/258
         [Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions)]
-        public void FillRandomOneTransaction()
+        public void FillSeqOneTransaction()
         {
             using (var tx = Env.WriteTransaction())
             {
-                var tree = tx.CreateTree(TreeNameSlice);
+                var trie = tx.CreateTrie(TreeNameSlice);
 
                 for (var i = 0; i < NumberOfTransactions; i++)
                 {
                     foreach (var pair in _pairs[i])
                     {
-                        tree.Add(pair.Item1, pair.Item2);
+                        trie.Add(pair.Item1, pair.Item2);
                     }
                 }
 
@@ -73,17 +89,17 @@ namespace Voron.Benchmark.BTree
 
         // TODO: Fix. See: https://github.com/PerfDotNet/BenchmarkDotNet/issues/258
         [Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions)]
-        public void FillRandomMultipleTransactions()
+        public void FillSeqMultipleTransaction()
         {
             for (var i = 0; i < NumberOfTransactions; i++)
             {
                 using (var tx = Env.WriteTransaction())
                 {
-                    var tree = tx.CreateTree(TreeNameSlice);
+                    var trie = tx.CreateTrie(TreeNameSlice);
 
                     foreach (var pair in _pairs[i])
                     {
-                        tree.Add(pair.Item1, pair.Item2);
+                        trie.Add(pair.Item1, pair.Item2);
                     }
 
                     tx.Commit();

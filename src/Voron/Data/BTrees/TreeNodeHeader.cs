@@ -56,12 +56,6 @@ namespace Voron.Data.BTrees
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ByteStringContext.ExternalScope ToSlicePtr(ByteStringContext context, TreeNodeHeader* node, out Slice slice)
-        {
-            return ToSlicePtr(context, node, ByteStringType.Mutable | (ByteStringType) SliceOptions.Key, out slice);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ByteStringContext.ExternalScope ToSlicePtr(ByteStringContext context, TreeNodeHeader* node, ByteStringType type, out Slice slice)
         {
             ByteString str;
@@ -69,6 +63,12 @@ namespace Voron.Data.BTrees
                 type, out str);
             slice = new Slice(str);
             return scope;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ByteStringContext.ExternalScope ToSlicePtr(ByteStringContext context, TreeNodeHeader* node, out Slice slice)
+        {
+            return ToSlicePtr(context, node, ByteStringType.Mutable | (ByteStringType) SliceOptions.Key, out slice);
         }
 
         public static ValueReader Reader(LowLevelTransaction tx, TreeNodeHeader* node)

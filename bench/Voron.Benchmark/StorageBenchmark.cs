@@ -19,6 +19,7 @@ namespace Voron.Benchmark
     public class StorageBenchmark
     {
         protected StorageEnvironment Env;
+
         public virtual bool DeleteBeforeSuite { get; protected set; } = true;
         public virtual bool DeleteAfterSuite { get; protected set; } = true;
         public virtual bool DeleteBeforeEachBenchmark { get; protected set; } = true;
@@ -43,6 +44,27 @@ namespace Voron.Benchmark
         /// </summary>
         [Params(Configuration.RecordsPerTransaction)]
         public int NumberOfRecordsPerTransaction { get; set; } = Configuration.RecordsPerTransaction;
+
+        /// <summary>
+        /// Length of the keys (in bytes) to be inserted. This length is used
+        /// both on initialization and testing.
+        /// </summary>
+        [Params(100)]
+        public int KeyLength { get; set; } = 100;
+
+        /// <summary>
+        /// Random seed used to generate values. If -1, uses time for seeding.
+        /// TODO: See https://github.com/PerfDotNet/BenchmarkDotNet/issues/271. Fix RandomSeed.
+        /// 
+        /// </summary>
+        [Params(-1)]
+        public int ActualRandomSeed { get; set; } = -1;
+
+        public int? RandomSeed
+        {
+            get { return ActualRandomSeed; }
+            set { ActualRandomSeed = value ?? -1; }
+        }
 
         /// <summary>
         /// This is the job configuration for storage benchmarks. Changing this
@@ -86,8 +108,12 @@ namespace Voron.Benchmark
             }
         }
 
-        public StorageBenchmark()
+        public StorageBenchmark(bool deleteBeforeSuite = true, bool deleteAfterSuite = true, bool deleteBeforeEachBenchmark = true)
         {
+            DeleteBeforeSuite = deleteBeforeSuite;
+            DeleteBeforeEachBenchmark = deleteBeforeEachBenchmark;
+            DeleteAfterSuite = deleteAfterSuite;
+
             if (DeleteBeforeSuite)
             {
                 DeleteStorage();
@@ -95,7 +121,9 @@ namespace Voron.Benchmark
 
             if (!DeleteBeforeEachBenchmark)
             {
-                Env = new StorageEnvironment(StorageEnvironmentOptions.ForPath(Path));
+                var options = StorageEnvironmentOptions.ForPath(Path);
+                options.ManualFlushing = true;
+                Env = new StorageEnvironment(options);
             }
         }
 
@@ -118,7 +146,10 @@ namespace Voron.Benchmark
             if (DeleteBeforeEachBenchmark)
             {
                 DeleteStorage();
-                Env = new StorageEnvironment(StorageEnvironmentOptions.ForPath(Path));
+
+                var options = StorageEnvironmentOptions.ForPath(Path);
+                options.ManualFlushing = true;
+                Env = new StorageEnvironment(options);
             }
         }
 

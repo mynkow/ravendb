@@ -5,6 +5,8 @@ namespace Voron
 {
     public unsafe struct Page
     {
+        public const long Invalid = -1;
+
         public readonly byte* Pointer;
 
         public Page(byte* pointer)

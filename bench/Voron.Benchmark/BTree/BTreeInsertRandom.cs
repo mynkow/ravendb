@@ -17,9 +17,6 @@ namespace Voron.Benchmark.BTree
 
         private List<Tuple<Slice, Slice>>[] _pairs;
 
-        [Params(100)]
-        public int KeyLength { get; set; } = 100;
-
         /// <summary>
         /// Size of tree to create in order to write from (in number of nodes).
         /// This is the TOTAL SIZE after deletions
@@ -43,13 +40,6 @@ namespace Voron.Benchmark.BTree
         /// </summary>
         [Params(0.1)]
         public double GenerationDeletionProbability { get; set; } = 0.1;
-
-        /// <summary>
-        /// Random seed used to generate values. If -1, uses time for seeding.
-        /// TODO: make this nullable. See https://github.com/PerfDotNet/BenchmarkDotNet/issues/271
-        /// </summary>
-        [Params(-1)]
-        public int RandomSeed { get; set; } = -1;
 
         static BTreeInsertRandom()
         {

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+
 using Voron.Data;
 using Voron.Data.BTrees;
 using Voron.Data.Fixed;
@@ -12,10 +13,10 @@ using Voron.Global;
 namespace Voron.Impl
 {
     public unsafe class Transaction : IDisposable
-    {
-        private Dictionary<Tuple<Tree, Slice>, Tree> _multiValueTrees;
-
+    {        
         private readonly LowLevelTransaction _lowLevelTransaction;
+
+        private Dictionary<Tuple<Tree, Slice>, Tree> _multiValueTrees;
 
         public LowLevelTransaction LowLevelTransaction
         {
@@ -23,21 +24,55 @@ namespace Voron.Impl
             get { return _lowLevelTransaction; }
         }
 
-        public ByteStringContext Allocator => _lowLevelTransaction.Allocator;
-
         private Dictionary<string, Table> _tables;
 
         private Dictionary<Slice, Tree> _trees;
+        private readonly Dictionary<Slice, CedarTree> _tries = new Dictionary<Slice, CedarTree>(SliceComparer.Instance);
+
+        public ByteStringContext Allocator => _lowLevelTransaction.Allocator;
 
         private Dictionary<Slice, FixedSizeTree> _globalFixedSizeTree;
 
         public IEnumerable<Tree> Trees => _trees == null ? Enumerable.Empty<Tree>() : _trees.Values;
 
         public IEnumerable<Table> Tables => _tables == null ? Enumerable.Empty<Table>() : _tables.Values;
+        public IEnumerable<CedarTree> Tries => _tries.Values;
 
         public Transaction(LowLevelTransaction lowLevelTransaction)
         {
             _lowLevelTransaction = lowLevelTransaction;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public CedarTree ReadTrie(string treeName)
+        {
+            Slice treeNameSlice;
+            Slice.From(Allocator, treeName, ByteStringType.Immutable, out treeNameSlice);
+            return ReadTrie(treeNameSlice);
+        }
+
+        public CedarTree ReadTrie(Slice treeName)
+        {
+            CedarTree tree;
+            if (_tries.TryGetValue(treeName, out tree))
+                return tree;
+
+            var header = (CedarRootHeader*)_lowLevelTransaction.RootObjects.DirectRead(treeName);
+            if (header != null)
+            {
+                if (header->RootObjectType != RootObjectType.CedarTree)
+                    throw new InvalidOperationException("Tried to opened " + treeName + " as a Cedar tree, but it is actually a " + header->RootObjectType);
+
+                tree = CedarTree.Open(_lowLevelTransaction, this, header);
+                tree.Name = treeName.Clone(_lowLevelTransaction.Allocator);
+
+                _tries.Add(treeName, tree);
+                return tree;
+            }
+
+            _tries.Add(treeName, null);
+
+            return null;
         }
 
         private void EnsureTrees()
@@ -151,20 +186,37 @@ namespace Voron.Impl
                 }
             }
 
-            if (_tables != null)
+			foreach (var trie in Tries)
             {
-                foreach (var participant in _tables.Values)
+                if (trie == null)
+                    continue;
+
+                trie.State.InWriteTransaction = false;
+                var trieState = trie.State;
+                if (trieState.IsModified)
                 {
-                    participant.PrepareForCommit();
+                    var triePtr = (CedarRootHeader*)_lowLevelTransaction.RootObjects.DirectAdd(trie.Name, sizeof(CedarRootHeader));
+                    trieState.CopyTo(triePtr);
                 }
             }
+
+			
+            if (_tables != null)
+            {
+            	foreach (var participant in _tables.Values)
+            	{
+               		participant.PrepareForCommit();
+            	}
+        	}
         }
 
         internal void AddMultiValueTree(Tree tree, Slice key, Tree mvTree)
         {
             if (_multiValueTrees == null)
                 _multiValueTrees = new Dictionary<Tuple<Tree, Slice>, Tree>(new TreeAndSliceComparer());
+
             mvTree.IsMultiValueTree = true;
+
             _multiValueTrees.Add(Tuple.Create(tree, key.Clone(_lowLevelTransaction.Allocator, ByteStringType.Immutable)), mvTree);
         }
 
@@ -173,6 +225,7 @@ namespace Voron.Impl
             mvTree = null;
             if (_multiValueTrees == null)
                 return false;
+
             return _multiValueTrees.TryGetValue(Tuple.Create(tree, key), out mvTree);
         }
 
@@ -185,6 +238,18 @@ namespace Voron.Impl
             return _multiValueTrees.Remove(keyToRemove);
         }
 
+        internal void AddTree(Slice name, Tree tree)
+        {
+            EnsureTrees();
+
+            Tree value;
+            if (_trees.TryGetValue(name, out value) && value != null)
+                throw new InvalidOperationException("Tree already exists: " + name);
+
+            // Either we haven't added this tree, or we added it as null (meaning it didn't exist)
+            _trees[name] = tree;
+        }
+
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal void AddTree(string name, Tree tree)
@@ -194,27 +259,13 @@ namespace Voron.Impl
             AddTree(treeName, tree);
         }
 
-        internal void AddTree(Slice name, Tree tree)
+        internal void AddTrie(Slice name, CedarTree tree)
         {
-            EnsureTrees();
-
-            Tree value;
-            if (_trees.TryGetValue(name, out value) && value != null)
-            {
+            CedarTree value;
+            if (_tries.TryGetValue(name, out value) && value != null)
                 throw new InvalidOperationException("Tree already exists: " + name);
-            }
 
-            // Either we haven't added this tree, or we added it as null (meaning it didn't exist)
-            _trees[name] = tree;
-        }
-
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public void DeleteTree(string name)
-        {
-            Slice nameSlice;
-            Slice.From(Allocator, name, ByteStringType.Immutable, out nameSlice);
-            DeleteTree(nameSlice);
+            _tries[name] = tree;
         }
 
         public void DeleteTree(Slice name)
@@ -256,14 +307,13 @@ namespace Voron.Impl
             _trees.Remove(name);
         }
 
+
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public void RenameTree(string fromName, string toName)
+        public void DeleteTree(string name)
         {
-            Slice fromNameSlice;
-            Slice toNameSlice;
-            Slice.From(Allocator, fromName, ByteStringType.Immutable, out fromNameSlice);
-            Slice.From(Allocator, toName, ByteStringType.Immutable, out toNameSlice);
-            RenameTree(fromNameSlice, toNameSlice);
+            Slice nameSlice;
+            Slice.From(Allocator, name, ByteStringType.Immutable, out nameSlice);
+            DeleteTree(nameSlice);
         }
 
         public void RenameTree(Slice fromName, Slice toName)
@@ -296,11 +346,13 @@ namespace Voron.Impl
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public Tree CreateTree(string name, RootObjectType type = RootObjectType.VariableSizeTree, TreeFlags flags = TreeFlags.None, PageLocator pageLocator = null)
+        public void RenameTree(string fromName, string toName)
         {
-            Slice treeNameSlice;
-            Slice.From(Allocator, name, ByteStringType.Immutable, out treeNameSlice);
-            return CreateTree(treeNameSlice, type, flags, pageLocator);
+            Slice fromNameSlice;
+            Slice toNameSlice;
+            Slice.From(Allocator, fromName, ByteStringType.Immutable, out fromNameSlice);
+            Slice.From(Allocator, toName, ByteStringType.Immutable, out toNameSlice);
+            RenameTree(fromNameSlice, toNameSlice);
         }
 
         public Tree CreateTree(Slice name, RootObjectType type = RootObjectType.VariableSizeTree, TreeFlags flags = TreeFlags.None, PageLocator pageLocator = null)
@@ -322,6 +374,43 @@ namespace Voron.Impl
 
             tree.State.IsModified = true;
             AddTree(name, tree);
+
+            return tree;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public Tree CreateTree(string name, RootObjectType type = RootObjectType.VariableSizeTree, TreeFlags flags = TreeFlags.None, PageLocator pageLocator = null)
+        {
+            Slice treeNameSlice;
+            Slice.From(Allocator, name, ByteStringType.Immutable, out treeNameSlice);
+            return CreateTree(treeNameSlice, type, flags, pageLocator);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public CedarTree CreateTrie(string name)
+        {
+            Slice treeName;
+            Slice.From(Allocator, name, ByteStringType.Immutable, out treeName);
+            return CreateTrie (treeName);
+        }
+
+        public CedarTree CreateTrie(Slice treeName)
+        {
+            CedarTree tree = ReadTrie(treeName);
+            if (tree != null)
+                return tree;
+
+            if (_lowLevelTransaction.Flags == (TransactionFlags.ReadWrite) == false)
+                throw new InvalidOperationException("No such tree: '" + treeName + "' and cannot create trees in read transactions");
+
+            tree = CedarTree.Create(_lowLevelTransaction, this);
+            tree.Name = treeName;
+
+            var space = _lowLevelTransaction.RootObjects.DirectAdd(treeName, sizeof(CedarRootHeader));
+            tree.State.CopyTo((CedarRootHeader*)space);
+            tree.State.IsModified = true;
+
+            AddTrie(treeName, tree);
 
             return tree;
         }
@@ -367,7 +456,7 @@ namespace Voron.Impl
 
         public FixedSizeTree FixedTreeFor(Slice treeName)
         {
-            var valueSize = FixedSizeTree.GetValueSize(LowLevelTransaction, LowLevelTransaction.RootObjects, treeName);
+            ushort valueSize = FixedSizeTree.GetValueSize(LowLevelTransaction, LowLevelTransaction.RootObjects, treeName);
             return FixedTreeFor(treeName, valueSize);
         }
 
@@ -378,11 +467,8 @@ namespace Voron.Impl
 
         public RootObjectType GetRootObjectType(Slice name)
         {
-            var val = (RootHeader*)_lowLevelTransaction.RootObjects.DirectRead(name);
-            if (val == null)
-                return RootObjectType.None;
-
-            return val->RootObjectType;
+            var val = (RootHeader*) _lowLevelTransaction.RootObjects.DirectRead(name);
+            return val == null ? RootObjectType.None : val->RootObjectType;
         }
 
         public FixedSizeTree GetGlobalFixedSizeTree(Slice name, ushort valSize)

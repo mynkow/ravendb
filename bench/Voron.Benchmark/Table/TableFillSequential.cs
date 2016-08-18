@@ -22,23 +22,10 @@ namespace Voron.Benchmark.Table
         /// </summary>
         private List<TableValueBuilder>[] _valueBuilders;
 
-        /// <summary>
-        /// Length of the keys to be inserted when filling randomly (bytes)
-        /// </summary>
-        [Params(100)]
-        public int KeyLength { get; set; } = 100;
-
-        /// <summary>
-        /// Random seed. If -1, uses time for seeding.
-        /// TODO: make this nullable. See https://github.com/PerfDotNet/BenchmarkDotNet/issues/271
-        /// </summary>
-        [Params(-1)]
-        public int RandomSeed { get; set; } = -1;
-
         static TableFillSequential()
         {
-            Slice.From(Configuration.Allocator, "TestTable1", ByteStringType.Immutable, out TableNameSlice);
-            Slice.From(Configuration.Allocator, "TestSchema1", ByteStringType.Immutable, out SchemaPKNameSlice);
+            Slice.From(Configuration.Allocator, "TableFillSequential", ByteStringType.Immutable, out TableNameSlice);
+            Slice.From(Configuration.Allocator, "TableFillSequentialSchema", ByteStringType.Immutable, out SchemaPKNameSlice);
 
             Schema = new TableSchema()
                 .DefineKey(new TableSchema.SchemaIndexDef
@@ -65,7 +52,7 @@ namespace Voron.Benchmark.Table
             var totalPairs = Utils.GenerateUniqueRandomSlicePairs(
                 NumberOfTransactions * NumberOfRecordsPerTransaction,
                 KeyLength,
-                RandomSeed == -1 ? null as int? : RandomSeed);
+                RandomSeed);
 
             // This will sort just the KEYS
             totalPairs.Sort((x, y) => SliceComparer.Compare(x.Item1, y.Item1));

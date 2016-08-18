@@ -226,7 +226,6 @@ namespace Voron.Data.BTrees
             {
                 var tempPageBuffer = tmp.TempPageBuffer;
                 var tempPagePointer = tmp.TempPagePointer;
-
                 while (true)
                 {
                     var read = value.Read(tempPageBuffer, 0, tempPageBuffer.Length);
@@ -576,7 +575,7 @@ namespace Voron.Data.BTrees
                 var pageNode = p.GetNode(nodePos);
                 p = GetReadOnlyTreePage(pageNode->PageNumber);
                 Debug.Assert(pageNode->PageNumber == p.PageNumber,
-                    string.Format("Requested Page: #{0}. Got Page: #{1}", pageNode->PageNumber, p.PageNumber));
+                    string.Format("Requested Page: #{0}. Got CurrentPage: #{1}", pageNode->PageNumber, p.PageNumber));
 
                 cursorPath.Add(p.PageNumber);
             }
@@ -644,7 +643,7 @@ namespace Voron.Data.BTrees
                 var pageNode = p.GetNode(nodePos);
                 p = GetReadOnlyTreePage(pageNode->PageNumber);
                 Debug.Assert(pageNode->PageNumber == p.PageNumber,
-                    string.Format("Requested Page: #{0}. Got Page: #{1}", pageNode->PageNumber, p.PageNumber));
+                    string.Format("Requested Page: #{0}. Got CurrentPage: #{1}", pageNode->PageNumber, p.PageNumber));
 
                 cursor.Push(p);
             }
@@ -784,9 +783,7 @@ namespace Voron.Data.BTrees
             page = null;
             cursor = null;
 
-            var recentPages = _recentlyFoundPages;
-
-            var foundPage = recentPages?.Find(key);
+            var foundPage = _recentlyFoundPages?.Find(key);
             if (foundPage == null)
                 return false;
 

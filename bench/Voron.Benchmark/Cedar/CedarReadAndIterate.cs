@@ -1,21 +1,13 @@
-﻿using System.IO;
-using Voron.Data;
-using Voron.Data.Tables;
+﻿using System.Collections.Generic;
+using System.Threading;
+using BenchmarkDotNet.Attributes;
+using Sparrow;
 
-namespace Voron.Benchmark.Table
+namespace Voron.Benchmark.Cedar
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Threading;
-    using BenchmarkDotNet.Attributes;
-    using Sparrow;
-
-    public class TableReadAndIterate : StorageBenchmark
+    public class CedarReadAndIterate : StorageBenchmark
     {
-        private static readonly Slice TableNameSlice;
-        private static readonly Slice SchemaPKNameSlice;
-        private static readonly TableSchema Schema;
-
+        private static readonly Slice TrieNameSlice;
         private readonly Dictionary<int, List<Slice>> _keysPerThread = new Dictionary<int, List<Slice>>();
         private readonly Dictionary<int, List<Slice>> _sortedKeysPerThread = new Dictionary<int, List<Slice>>();
 
@@ -24,7 +16,7 @@ namespace Voron.Benchmark.Table
         /// This is the TOTAL SIZE after deletions
         /// </summary>
         [Params(Configuration.RecordsPerTransaction * Configuration.Transactions / 2)]
-        public int GenerationTableSize { get; set; } = Configuration.RecordsPerTransaction * Configuration.Transactions / 2;
+        public int GenerationTrieSize { get; set; }
 
         /// <summary>
         /// Size of batches to divide the insertion into. A lower number will
@@ -35,37 +27,39 @@ namespace Voron.Benchmark.Table
         /// converge.
         /// </summary>
         [Params(50000)]
-        public int GenerationBatchSize { get; set; } = 50000;
+        public int GenerationBatchSize { get; set; }
 
         /// <summary>
         /// Probability that a node will be deleted after insertion.
         /// </summary>
         [Params(0.1)]
-        public double GenerationDeletionProbability { get; set; } = 0.5;
+        public double GenerationDeletionProbability { get; set; }
 
         [Params(1, 2)]
-        public int ReadParallelism { get; set; } = 1;
+        public int ReadParallelism { get; set; }
 
-        static TableReadAndIterate()
+        [Params(100)]
+        public int ReadBufferSize { get; set; }
+
+        /// <summary>
+        /// First component of the array tells if we should use ASCII. The
+        /// second one is the amount of clustering in the event that we do
+        /// use it.
+        /// </summary>
+        [Params(0, 3)]
+        public long UseAscii { get; set; }
+        public bool ShouldUseAscii => (UseAscii & 0x1) > 0;
+        public int AsciiClusterSize => (int)((UseAscii & ((long)0xFFFFFFFF << 1)) >> 1);
+
+        static CedarReadAndIterate()
         {
-            Slice.From(Configuration.Allocator, "TableReadAndIterate", ByteStringType.Immutable, out TableNameSlice);
-            Slice.From(Configuration.Allocator, "TableReadAndIterateSchema", ByteStringType.Immutable, out SchemaPKNameSlice);
-
-            Schema = new TableSchema()
-                .DefineKey(new TableSchema.SchemaIndexDef
-                {
-                    StartIndex = 0,
-                    Count = 0,
-                    IsGlobal = false,
-                    Name = SchemaPKNameSlice,
-                    Type = TableIndexType.BTree
-                });
+            Slice.From(Configuration.Allocator, "CedarReadAndIterate", ByteStringType.Immutable, out TrieNameSlice);
         }
 
         /// <summary>
-        /// Ensure we don't have to re-create the Table between benchmarks
+        /// Ensure we don't have to re-create the Trie between benchmarks
         /// </summary>
-        public TableReadAndIterate() : base(true, true, false)
+        public CedarReadAndIterate() : base(true, true, false)
         {
 
         }
@@ -75,16 +69,16 @@ namespace Voron.Benchmark.Table
         {
             base.Setup();
 
-            var tableKeys = Utils.GenerateWornoutTable(
+            var trieKeys = Utils.GenerateWornoutTrie(
                 Env,
-                TableNameSlice,
-                Schema,
-                GenerationTableSize,
+                TrieNameSlice,
+                GenerationTrieSize,
                 GenerationBatchSize,
                 KeyLength,
                 GenerationDeletionProbability,
-                RandomSeed
-            );
+                RandomSeed,
+                ShouldUseAscii,
+                AsciiClusterSize);
 
             // Distribute work amount, each one of the buckets is sorted
             for (var i = 0; i < ReadParallelism; i++)
@@ -93,13 +87,13 @@ namespace Voron.Benchmark.Table
                 _sortedKeysPerThread[i] = new List<Slice>();
             }
 
-            int treeKeyIndex = 0;
+            int trieKeyIndex = 0;
 
-            foreach (var key in tableKeys)
+            foreach (var key in trieKeys)
             {
-                _keysPerThread[treeKeyIndex % ReadParallelism].Add(key);
-                _sortedKeysPerThread[treeKeyIndex % ReadParallelism].Add(key);
-                treeKeyIndex++;
+                _keysPerThread[trieKeyIndex % ReadParallelism].Add(key);
+                _sortedKeysPerThread[trieKeyIndex % ReadParallelism].Add(key);
+                trieKeyIndex++;
             }
 
             // TODO: parallell maybe?
@@ -123,23 +117,11 @@ namespace Voron.Benchmark.Table
 
                     using (var tx = Env.ReadTransaction())
                     {
-                        var table = tx.OpenTable(Schema, TableNameSlice);
+                        var trie = tx.ReadTrie(TrieNameSlice);
 
                         foreach (var key in _keysPerThread[currentThreadIndex])
                         {
-                            var reader = table.ReadByKey(key);
-
-                            for (var f = 0; f < reader.Count; f++)
-                            {
-                                unsafe
-                                {
-                                    int size;
-                                    byte* buffer = reader.Read(f, out size);
-
-                                    while (size > 0)
-                                        size--;
-                                }
-                            }
+                            trie.Read(key);
                         }
 
                         tx.Commit();
@@ -166,23 +148,11 @@ namespace Voron.Benchmark.Table
 
                     using (var tx = Env.ReadTransaction())
                     {
-                        var table = tx.OpenTable(Schema, TableNameSlice);
+                        var trie = tx.ReadTrie(TrieNameSlice);
 
                         foreach (var key in _sortedKeysPerThread[currentThreadIndex])
                         {
-                            var reader = table.ReadByKey(key);
-
-                            for (var f = 0; f < reader.Count; f++)
-                            {
-                                unsafe
-                                {
-                                    int size;
-                                    byte* buffer = reader.Read(f, out size);
-
-                                    while (size > 0)
-                                        size--;
-                                }
-                            }
+                            trie.Read(key);
                         }
 
                         tx.Commit();
@@ -206,19 +176,20 @@ namespace Voron.Benchmark.Table
             {
                 ThreadPool.QueueUserWorkItem(state =>
                 {
+                    int localSizeCount = 0;
+
                     using (var tx = Env.ReadTransaction())
                     {
-                        var table = tx.OpenTable(Schema, TableNameSlice);
+                        var trie = tx.ReadTrie(TrieNameSlice);
 
-                        foreach (var reader in table.SeekByPrimaryKey(Slices.BeforeAllKeys))
+                        using (var it = trie.Iterate(false))
                         {
-                            for (var f = 0; f < reader.Count; f++)
+                            if (it.Seek(Slices.BeforeAllKeys))
                             {
-                                unsafe
+                                do
                                 {
-                                    int size;
-                                    reader.Read(f, out size);
-                                }
+                                    localSizeCount += it.CurrentKey.Size;
+                                } while (it.MoveNext());
                             }
                         }
 
@@ -243,20 +214,20 @@ namespace Voron.Benchmark.Table
                 ThreadPool.QueueUserWorkItem(state =>
                 {
                     var currentThreadIndex = (int)state;
+                    int localSizeCount = 0;
 
                     using (var tx = Env.ReadTransaction())
                     {
-                        var table = tx.OpenTable(Schema, TableNameSlice);
+                        var trie = tx.ReadTrie(TrieNameSlice);
 
-                        foreach (var reader in table.SeekByPrimaryKey(_sortedKeysPerThread[currentThreadIndex][0]))
+                        using (var it = trie.Iterate(false))
                         {
-                            for (var f = 0; f < reader.Count; f++)
+                            if (it.Seek(_sortedKeysPerThread[currentThreadIndex][0]))
                             {
-                                unsafe
+                                do
                                 {
-                                    int size;
-                                    reader.Read(f, out size);
-                                }
+                                    localSizeCount += it.CurrentKey.Size;
+                                } while (it.MoveNext());
                             }
                         }
 

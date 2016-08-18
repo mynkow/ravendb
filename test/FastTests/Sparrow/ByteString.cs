@@ -5,16 +5,18 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
+
 namespace FastTests.Sparrow
 {
-    public unsafe class ByteString
+    public unsafe class ByteStringTests
     {
 
         public void Lifecycle()
         {
             using (var context = new ByteStringContext<ByteStringDirectAllocator>())
             {
-                var byteString = context.Allocate(512);
+                ByteString byteString;
+                context.Allocate(512, out byteString);
 
                 Assert.Equal(512, byteString.Length);
                 Assert.True(byteString.HasValue);
@@ -22,7 +24,8 @@ namespace FastTests.Sparrow
                 Assert.True(byteString.IsMutable);
                 Assert.Equal(1024, byteString._pointer->Size);
 
-                var byteStringWithExactSize = context.Allocate(1024 - sizeof(ByteStringStorage));
+                ByteString byteStringWithExactSize;
+                context.Allocate(1024 - sizeof(ByteStringStorage), out byteStringWithExactSize);
 
                 Assert.True(byteStringWithExactSize.HasValue);
                 Assert.Equal(1024 - sizeof(ByteStringStorage), byteStringWithExactSize.Length);
@@ -40,9 +43,12 @@ namespace FastTests.Sparrow
         {
             using (var context = new ByteStringContext<ByteStringDirectAllocator>(ByteStringContext.MinBlockSizeInBytes))
             {
-                var byteStringInFirstSegment = context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage));
-                var byteStringWholeSegment = context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage));
-                var byteStringNextSegment = context.Allocate(1);
+                ByteString byteStringInFirstSegment;
+                context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage), out byteStringInFirstSegment);
+                ByteString byteStringWholeSegment;
+                context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage), out byteStringWholeSegment);
+                ByteString byteStringNextSegment;
+                context.Allocate(1, out byteStringNextSegment);
 
                 long startLocation = (long)byteStringInFirstSegment._pointer;
                 Assert.InRange((long)byteStringWholeSegment._pointer, startLocation, startLocation + ByteStringContext.MinBlockSizeInBytes);
@@ -56,16 +62,20 @@ namespace FastTests.Sparrow
             {
                 for (int i = 0; i < 10; i++)
                 {
-                    context.Allocate(ByteStringContext.MinBlockSizeInBytes * 2);
+                    ByteString str;
+                    context.Allocate(ByteStringContext.MinBlockSizeInBytes * 2, out str);
                 }
             }
             using (new ByteStringContext<ByteStringDirectAllocator>(ByteStringContext.MinBlockSizeInBytes))
             using (var context = new ByteStringContext<ByteStringDirectAllocator>(ByteStringContext.MinBlockSizeInBytes))
             {
-                var byteStringInFirstSegment = context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage));
-                var byteStringWholeSegment = context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage));
-                var byteStringNextSegment = context.Allocate(1);
-
+                ByteString byteStringInFirstSegment;
+                context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage), out byteStringInFirstSegment);
+                ByteString byteStringWholeSegment;
+                context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage), out byteStringWholeSegment);
+                ByteString byteStringNextSegment;
+                context.Allocate(1,out byteStringNextSegment);
+               
                 long startLocation = (long)byteStringInFirstSegment._pointer;
                 Assert.InRange((long)byteStringWholeSegment._pointer, startLocation, startLocation + ByteStringContext.MinBlockSizeInBytes);
                 Assert.NotInRange((long)byteStringNextSegment._pointer, startLocation, startLocation + ByteStringContext.MinBlockSizeInBytes);
@@ -76,9 +86,12 @@ namespace FastTests.Sparrow
         {
             using (var context = new ByteStringContext<ByteStringDirectAllocator>(ByteStringContext.MinBlockSizeInBytes))
             {
-                var byteStringInFirstSegment = context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage));
-                var byteStringInNewSegment = context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage) + 1);
-                var byteStringInReusedSegment = context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage));
+                ByteString byteStringInFirstSegment;
+                context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage), out byteStringInFirstSegment);
+                ByteString byteStringInNewSegment;
+                context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage) + 1, out byteStringInNewSegment);
+                ByteString byteStringInReusedSegment;
+                context.Allocate((ByteStringContext.MinBlockSizeInBytes / 2) - sizeof(ByteStringStorage), out byteStringInReusedSegment);
 
                 long startLocation = (long)byteStringInFirstSegment._pointer;
                 Assert.NotInRange((long)byteStringInNewSegment._pointer, startLocation, startLocation + ByteStringContext.MinBlockSizeInBytes);
@@ -90,20 +103,24 @@ namespace FastTests.Sparrow
         {
             using (var context = new ByteStringContext<ByteStringDirectAllocator>(ByteStringContext.MinBlockSizeInBytes))
             {
-                var byteStringInFirst = context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage));
-                var byteStringInSecond = context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage));
+                ByteString byteStringInFirst;
+                context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage), out byteStringInFirst);
+                ByteString byteStringInSecond;
+                context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage), out byteStringInSecond);
 
                 long ptrLocation = (long)byteStringInFirst._pointer;
                 Assert.InRange((long)byteStringInSecond._pointer, ptrLocation, ptrLocation + ByteStringContext.MinBlockSizeInBytes);
 
                 context.Release(ref byteStringInFirst);
 
-                var byteStringReused = context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage));
+                ByteString byteStringReused;
+                context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage), out byteStringReused);
 
                 Assert.InRange((long)byteStringReused._pointer, ptrLocation, ptrLocation + ByteStringContext.MinBlockSizeInBytes);
                 Assert.Equal(ptrLocation, (long)byteStringReused._pointer);
 
-                var byteStringNextSegment = context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage));
+                ByteString byteStringNextSegment;
+                context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage), out byteStringNextSegment);
                 Assert.NotInRange((long)byteStringNextSegment._pointer, ptrLocation, ptrLocation + ByteStringContext.MinBlockSizeInBytes);
             }
         }
@@ -114,7 +131,8 @@ namespace FastTests.Sparrow
             using (var context = new ByteStringContext<ByteStringDirectAllocator>(allocationBlockSize))
             {
                 // Will be only 128 bytes left for the allocation unit.
-                var byteStringInFirst = context.Allocate(2 * ByteStringContext.MinBlockSizeInBytes - sizeof(ByteStringStorage));
+                ByteString byteStringInFirst;
+                context.Allocate(2 * ByteStringContext.MinBlockSizeInBytes - sizeof(ByteStringStorage), out byteStringInFirst);
 
                 long ptrLocation = (long)byteStringInFirst._pointer;
                 long nextPtrLocation = ptrLocation + byteStringInFirst._pointer->Size;
@@ -122,14 +140,16 @@ namespace FastTests.Sparrow
                 context.Release(ref byteStringInFirst); // After the release the block should be reserved as a new segment. 
 
                 // We use a different size to ensure we are not reusing a reuse bucket but big enough to avoid having space available. 
-                var byteStringReused = context.Allocate(512);
+                ByteString byteStringReused;
+                context.Allocate(512, out byteStringReused);
 
                 Assert.InRange((long)byteStringReused._pointer, ptrLocation, ptrLocation + allocationBlockSize);
                 Assert.Equal(ptrLocation, (long)byteStringReused._pointer); // We are the first in the segment.
 
                 // This allocation will have an allocation unit size of 128 and fit into the rest of the initial segment, which should be 
                 // available for an exact reuse bucket allocation. 
-                var byteStringReusedFromBucket = context.Allocate(64);
+                ByteString byteStringReusedFromBucket;
+                context.Allocate(64, out byteStringReusedFromBucket);
 
                 Assert.Equal((long)byteStringReusedFromBucket._pointer, nextPtrLocation);
             }
@@ -139,13 +159,15 @@ namespace FastTests.Sparrow
         {
             using (var context = new ByteStringContext<ByteStringDirectAllocator>(ByteStringContext.MinBlockSizeInBytes))
             {
-                var first = context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage));
+                ByteString first;
+                context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage), out first);
                 long ptrLocation = (long)first._pointer;
                 context.Release(ref first);
 
                 for (int i = 0; i < 100; i++)
                 {
-                    var repeat = context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage));
+                    ByteString repeat;
+                    context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage), out repeat);
                     Assert.Equal(ptrLocation, (long)repeat._pointer);
                     context.Release(ref repeat);
                 }
@@ -157,10 +179,12 @@ namespace FastTests.Sparrow
         {
             using (var context = new ByteStringContext<ByteStringDirectAllocator>(ByteStringContext.MinBlockSizeInBytes))
             {
-                var first = context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage));
+                ByteString first;
+                context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage), out first);
                 context.Release(ref first);
 
-                var repeat = context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage));
+                ByteString repeat;
+                context.Allocate(ByteStringContext.MinBlockSizeInBytes / 2 - sizeof(ByteStringStorage), out repeat);
                 Assert.NotEqual(first.Key, repeat._pointer->Key);
                 Assert.Equal(first.Key >> 32, repeat._pointer->Key >> 32);
                 context.Release(ref repeat);
@@ -172,7 +196,8 @@ namespace FastTests.Sparrow
             using (var context = new ByteStringContext<ByteStringDirectAllocator>(ByteStringContext.MinBlockSizeInBytes))
             using (var otherContext = new ByteStringContext<ByteStringDirectAllocator>(ByteStringContext.MinBlockSizeInBytes))
             {
-                var first = context.Allocate(1);
+                ByteString first;
+                context.Allocate(1, out first);
                 Assert.Throws<ByteStringValidationException>(() => otherContext.Release(ref first));
             }
         }
@@ -181,7 +206,8 @@ namespace FastTests.Sparrow
         {
             using (var context = new ByteStringContext<ByteStringDirectAllocator>(ByteStringContext.MinBlockSizeInBytes))
             {
-                var first = context.Allocate(1);
+                ByteString first;
+                context.Allocate(1, out first);
                 var firstAlias = first;
                 context.Release(ref first);
 
@@ -193,7 +219,8 @@ namespace FastTests.Sparrow
         {
             using (var context = new ByteStringContext<ByteStringDirectAllocator>(ByteStringContext.MinBlockSizeInBytes))
             {
-                var value = context.From("string", ByteStringType.Immutable);
+                ByteString value;
+                context.From("string", ByteStringType.Immutable, out value);
                 value.Ptr[2] = (byte)'t';
 
                 Assert.Throws<ByteStringValidationException>(() => context.Release(ref value));
@@ -206,7 +233,8 @@ namespace FastTests.Sparrow
             {
                 using (var context = new ByteStringContext<ByteStringDirectAllocator>(ByteStringContext.MinBlockSizeInBytes))
                 {
-                    var value = context.From("string", ByteStringType.Immutable);
+                    ByteString value;
+                    context.From("string", ByteStringType.Immutable, out value);
                     value.Ptr[2] = (byte)'t';
                 }
             });

@@ -3,24 +3,21 @@ using System.Collections.Generic;
 using System.Linq;
 using BenchmarkDotNet.Attributes;
 using Sparrow;
-using Voron.Data.Tables;
 
-namespace Voron.Benchmark.Table
+namespace Voron.Benchmark.Cedar
 {
-    public class TableInsertRandom : StorageBenchmark
+    public class CedarInsertRandom : StorageBenchmark
     {
-        private static readonly Slice TableNameSlice;
-        private static readonly Slice SchemaPKNameSlice;
-        private static readonly TableSchema Schema;
+        private static readonly Slice TrieNameSlice;
 
-        private List<TableValueBuilder>[] _valueBuilders;
+        private List<Tuple<Slice, long>>[] _pairs;
 
         /// <summary>
         /// Size of tree to create in order to write from (in number of nodes).
         /// This is the TOTAL SIZE after deletions
         /// </summary>
         [Params(Configuration.RecordsPerTransaction * Configuration.Transactions / 2)]
-        public int GenerationTableSize { get; set; } = Configuration.RecordsPerTransaction * Configuration.Transactions / 2;
+        public int GenerationTrieSize { get; set; }
 
         /// <summary>
         /// Size of batches to divide the insertion into. A lower number will
@@ -31,34 +28,33 @@ namespace Voron.Benchmark.Table
         /// converge.
         /// </summary>
         [Params(50000)]
-        public int GenerationBatchSize { get; set; } = 50000;
+        public int GenerationBatchSize { get; set; }
 
         /// <summary>
         /// Probability that a node will be deleted after insertion.
         /// </summary>
         [Params(0.1)]
-        public double GenerationDeletionProbability { get; set; } = 0.1;
+        public double GenerationDeletionProbability { get; set; }
 
-        static TableInsertRandom()
+        /// <summary>
+        /// First component of the array tells if we should use ASCII. The
+        /// second one is the amount of clustering in the event that we do
+        /// use it.
+        /// </summary>
+        [Params(0, 3)]
+        public long UseAscii { get; set; }
+        public bool ShouldUseAscii => (UseAscii & 0x1) > 0;
+        public int AsciiClusterSize => (int)((UseAscii & ((long)0xFFFFFFFF << 1)) >> 1);
+
+        static CedarInsertRandom()
         {
-            Slice.From(Configuration.Allocator, "TestTable2", ByteStringType.Immutable, out TableNameSlice);
-            Slice.From(Configuration.Allocator, "TestSchema2", ByteStringType.Immutable, out SchemaPKNameSlice);
-
-            Schema = new TableSchema()
-                .DefineKey(new TableSchema.SchemaIndexDef
-                {
-                    StartIndex = 0,
-                    Count = 0,
-                    IsGlobal = false,
-                    Name = SchemaPKNameSlice,
-                    Type = TableIndexType.BTree
-                });
+            Slice.From(Configuration.Allocator, "CedarInsertRandom", ByteStringType.Immutable, out TrieNameSlice);
         }
 
         /// <summary>
-        /// Ensure we don't have to re-create the Table between benchmarks
+        /// Ensure we don't have to re-create the Trie between benchmarks
         /// </summary>
-        public TableInsertRandom() : base(true, true, false)
+        public CedarInsertRandom() : base(true, true, false)
         {
 
         }
@@ -68,36 +64,29 @@ namespace Voron.Benchmark.Table
         {
             base.Setup();
 
-            Utils.GenerateWornoutTable(
+            Utils.GenerateWornoutTrie(
                 Env,
-                TableNameSlice,
-                Schema,
-                GenerationTableSize,
+                TrieNameSlice,
+                GenerationTrieSize,
                 GenerationBatchSize,
                 KeyLength,
                 GenerationDeletionProbability,
-                RandomSeed);
+                RandomSeed,
+                ShouldUseAscii,
+                AsciiClusterSize);
 
-            var totalPairs = Utils.GenerateUniqueRandomSlicePairs(
+            var totalPairs = Utils.GenerateUniqueRandomCedarPairs(
                 NumberOfTransactions * NumberOfRecordsPerTransaction,
                 KeyLength,
-                RandomSeed);
+                RandomSeed,
+                ShouldUseAscii,
+                AsciiClusterSize);
 
-            _valueBuilders = new List<TableValueBuilder>[NumberOfTransactions];
+            _pairs = new List<Tuple<Slice, long>>[NumberOfTransactions];
 
             for (var i = 0; i < NumberOfTransactions; ++i)
             {
-                _valueBuilders[i] = new List<TableValueBuilder>();
-
-                foreach (var pair in totalPairs.Take(NumberOfRecordsPerTransaction))
-                {
-                    _valueBuilders[i].Add(new TableValueBuilder
-                    {
-                        pair.Item1,
-                        pair.Item2
-                    });
-                }
-
+                _pairs[i] = totalPairs.Take(NumberOfRecordsPerTransaction).ToList();
                 totalPairs.RemoveRange(0, NumberOfRecordsPerTransaction);
             }
         }
@@ -108,13 +97,13 @@ namespace Voron.Benchmark.Table
         {
             using (var tx = Env.WriteTransaction())
             {
-                var table = tx.OpenTable(Schema, TableNameSlice);
+                var trie = tx.CreateTrie(TrieNameSlice);
 
                 for (var i = 0; i < NumberOfTransactions; i++)
                 {
-                    foreach (var value in _valueBuilders[i])
+                    foreach (var pair in _pairs[i])
                     {
-                        table.Insert(value);
+                        trie.Add(pair.Item1, pair.Item2);
                     }
                 }
 
@@ -130,11 +119,11 @@ namespace Voron.Benchmark.Table
             {
                 using (var tx = Env.WriteTransaction())
                 {
-                    var table = tx.OpenTable(Schema, TableNameSlice);
+                    var trie = tx.CreateTrie(TrieNameSlice);
 
-                    foreach (var value in _valueBuilders[i])
+                    foreach (var pair in _pairs[i])
                     {
-                        table.Insert(value);
+                        trie.Add(pair.Item1, pair.Item2);
                     }
 
                     tx.Commit();

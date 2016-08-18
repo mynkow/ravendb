@@ -80,7 +80,7 @@ namespace Voron.Data.BTrees
 
                 if (_currentPage.LastSearchPosition >= _currentPage.NumberOfEntries)
                     throw new InvalidOperationException(string.Format("Current page is invalid. Search position ({0}) exceeds number of entries ({1}). Page: {2}.", _currentPage.LastSearchPosition, _currentPage.NumberOfEntries, _currentPage));
-                    
+
                 return _currentKey;
             }
         }
@@ -194,7 +194,8 @@ namespace Voron.Data.BTrees
 
                 for (int i = 0; i < Math.Abs(count); i++)
                 {
-                    if (!moveMethod()) break;
+                    if (!moveMethod())
+                        break;
                 }
             }
 
@@ -255,8 +256,6 @@ namespace Voron.Data.BTrees
         {
             get { return  this._tree.State.RootPageNumber; }
         }
-
-
     }
 
     public static class IteratorExtensions
@@ -277,17 +276,32 @@ namespace Voron.Data.BTrees
         {
             Slice currentKey;
             using (TreeNodeHeader.ToSlicePtr(tx.Allocator, node, out currentKey))
+        {
+            if (self.RequiredPrefix.HasValue)
             {
-                if (self.RequiredPrefix.HasValue)
-                {
-                    if (SliceComparer.StartWith(currentKey, self.RequiredPrefix) == false)
-                        return false;
-                }
-                if (self.MaxKey.HasValue)
-                {
-                    if (SliceComparer.CompareInline(currentKey, self.MaxKey) >= 0)
-                        return false;
-                }
+                if (SliceComparer.StartWith(currentKey, self.RequiredPrefix) == false)
+                    return false;
+            }
+            if (self.MaxKey.HasValue)
+            {
+                if (SliceComparer.CompareInline(currentKey, self.MaxKey) >= 0)
+                    return false;
+            }
+            }
+            return true;
+        }
+
+        public static bool ValidateCurrentKey<T>(this T self, Slice currentKey) where T : IIterator
+        {
+            if (self.RequiredPrefix.HasValue)
+            {
+                if (SliceComparer.StartWith(currentKey, self.RequiredPrefix) == false)
+                    return false;
+            }
+            if (self.MaxKey.HasValue)
+            {
+                if (SliceComparer.CompareInline(currentKey, self.MaxKey) >= 0)
+                    return false;
             }
             return true;
         }

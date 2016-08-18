@@ -20,22 +20,9 @@ namespace Voron.Benchmark.BTree
         /// </summary>
         private List<Tuple<Slice, Slice>>[] _pairs;
 
-        /// <summary>
-        /// Length of the keys to be inserted when filling randomly (bytes)
-        /// </summary>
-        [Params(100)]
-        public int KeyLength { get; set; } = 100;
-
-        /// <summary>
-        /// Random seed. If -1, uses time for seeding.
-        /// TODO: make this nullable. See https://github.com/PerfDotNet/BenchmarkDotNet/issues/271
-        /// </summary>
-        [Params(-1)]
-        public int RandomSeed { get; set; } = -1;
-
         static BTreeFillSequential()
         {
-            Slice.From(Configuration.Allocator, "TestTreeSequential", ByteStringType.Immutable, out TreeNameSlice);
+            Slice.From(Configuration.Allocator, "BTreeSequentialFill", ByteStringType.Immutable, out TreeNameSlice);
         }
 
         [Setup]
@@ -52,7 +39,7 @@ namespace Voron.Benchmark.BTree
             var totalPairs = Utils.GenerateUniqueRandomSlicePairs(
                 NumberOfTransactions*NumberOfRecordsPerTransaction,
                 KeyLength,
-                RandomSeed == -1 ? null as int? : RandomSeed);
+                RandomSeed);
 
             // This will sort just the KEYS
             totalPairs.Sort((x, y) => SliceComparer.Compare(x.Item1, y.Item1));
