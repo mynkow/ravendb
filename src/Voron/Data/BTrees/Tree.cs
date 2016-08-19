@@ -647,11 +647,7 @@ namespace Voron.Data.BTrees
             page = null;
             cursor = null;
 
-            var recentPages = _recentlyFoundPages;
-            if (recentPages == null)
-                return false;
-
-            var foundPage = recentPages.Find(key);
+            var foundPage = _recentlyFoundPages?.Find(key);
             if (foundPage == null)
                 return false;
 
@@ -670,7 +666,7 @@ namespace Voron.Data.BTrees
 
             if (page.IsLeaf == false)
                 throw new InvalidDataException("Index points to a non leaf page");
-            
+
             node = page.Search(_llt, key); // will set the LastSearchPosition
 
             var cursorPath = foundPage.CursorPath;

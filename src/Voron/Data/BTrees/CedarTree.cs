@@ -207,6 +207,38 @@ namespace Voron.Data.BTrees
 
         internal CedarCursor FindLocationFor(Slice key, out CedarPageHeader* node)
         {
+            CedarCursor cursor;
+            if (TryUseRecentTransactionPage(key, out cursor, out node))
+            {
+                return cursor;
+            }
+
+            return SearchForKey(key, out node);
+        }
+
+        private CedarCursor SearchForKey(Slice key, out CedarPageHeader* node)
+        {
+            throw new NotImplementedException();
+        }
+
+        private bool TryUseRecentTransactionPage(Slice key, out CedarCursor cursor, out CedarPageHeader* node)
+        {
+            node = null;
+            cursor = null;
+
+            var foundPage = _recentlyFoundPages?.Find(key);
+            if (foundPage == null)
+                return false;
+
+            // This is the page where the header lives.
+            var page = new CedarPage(_llt, foundPage.Number, foundPage.Page);
+            if ( page.IsBranch )
+                throw new InvalidDataException("Index points to a non leaf page");
+
+            node = page.Header;
+            cursor = new CedarCursor(_llt, page, foundPage.CursorPath);
+
+
             throw new NotImplementedException();
         }
 

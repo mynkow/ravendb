@@ -2,14 +2,67 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Voron.Impl;
 
 namespace Voron.Data.BTrees
 {
-    public class CedarCursor : IDisposable
+    /// <summary>
+    /// The Cedar cursor is able to navigate inside all the keys on a page and also move to the next page to continue moving forward.
+    /// </summary>
+    public unsafe class CedarCursor : IDisposable
     {
-        public Slice Key { get; private set; }
+        private readonly LowLevelTransaction _llt;        
+        private readonly long[] _path;
 
-        public ushort NodeVersion { get; internal set; }
+        private CedarPage _currentPage;
+
+        public CedarCursor(LowLevelTransaction llt, CedarPage currentPage, long[] pathFromRoot)
+        {
+            this._llt = llt;
+            this._currentPage = currentPage;
+            this._path = pathFromRoot;
+        }
+
+        public Slice Key
+        {
+            get
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        public ushort NodeVersion
+        {
+            get
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        public int ValueSize
+        {
+            get
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        public byte* Value
+        {
+            get
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        internal CedarDataPtr* Pointer
+        {
+            get
+            {
+                throw new NotImplementedException();
+            }
+        }
+
 
         #region IDisposable Support
 

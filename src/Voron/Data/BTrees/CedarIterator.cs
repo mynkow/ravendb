@@ -7,6 +7,9 @@ using Voron.Impl;
 
 namespace Voron.Data.BTrees
 {
+    /// <summary>
+    /// The iteration allow us to iterate and seek over a Cedar Tree.
+    /// </summary>
     public unsafe class CedarIterator : IIterator
     {
         private readonly CedarTree _tree;
