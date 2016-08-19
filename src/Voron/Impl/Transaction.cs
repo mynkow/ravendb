@@ -10,28 +10,23 @@ using Voron.Global;
 namespace Voron.Impl
 {
     public unsafe class Transaction : IDisposable
-    {
-        private Dictionary<Tuple<Tree, Slice>, Tree> _multiValueTrees;
+    {        
         private readonly LowLevelTransaction _lowLevelTransaction;
-
-        public LowLevelTransaction LowLevelTransaction
-        {
-            get { return _lowLevelTransaction; }
-        }
-
         private readonly Dictionary<string, Tree> _trees = new Dictionary<string, Tree>();
         private readonly Dictionary<string, CedarTree> _tries = new Dictionary<string, CedarTree>();
-
         private readonly HashSet<ICommittable> _participants = new HashSet<ICommittable>();
+
+        private Dictionary<Tuple<Tree, Slice>, Tree> _multiValueTrees;
+
+        public LowLevelTransaction LowLevelTransaction => _lowLevelTransaction;
+        public ByteStringContext Allocator => _lowLevelTransaction.Allocator;
+
+        public IEnumerable<Tree> Trees => _trees.Values;
+        public IEnumerable<CedarTree> Tries => _tries.Values;
 
         public Transaction(LowLevelTransaction lowLevelTransaction)
         {
             _lowLevelTransaction = lowLevelTransaction;
-        }
-
-        public ByteStringContext Allocator
-        {
-            get { return _lowLevelTransaction.Allocator; }
         }
 
         public CedarTree ReadTrie(string treeName)
@@ -45,8 +40,8 @@ namespace Voron.Impl
             var header = (CedarRootHeader*)_lowLevelTransaction.RootObjects.DirectRead(treeNameSlice);
             if (header != null)
             {
-                if (header->RootObjectType != RootObjectType.VariableSizeTree)
-                    throw new InvalidOperationException("Tried to opened " + treeName + " as a variable size tree, but it is actually a " + header->RootObjectType);
+                if (header->RootObjectType != RootObjectType.CedarTree)
+                    throw new InvalidOperationException("Tried to opened " + treeName + " as a Cedar tree, but it is actually a " + header->RootObjectType);
 
                 tree = CedarTree.Open(_lowLevelTransaction, this, header);
                 tree.Name = treeName;
@@ -54,7 +49,7 @@ namespace Voron.Impl
                 return tree;
             }
 
-            _trees.Add(treeName, null);
+            _tries.Add(treeName, null);
             return null;
         }
 
@@ -80,11 +75,6 @@ namespace Voron.Impl
 
             _trees.Add(treeName, null);
             return null;
-        }
-
-        public IEnumerable<Tree> Trees
-        {
-            get { return _trees.Values; }
         }
 
         public void Commit()
@@ -130,6 +120,20 @@ namespace Voron.Impl
                 }
             }
 
+            foreach (var trie in Tries)
+            {
+                if (trie == null)
+                    continue;
+
+                trie.State.InWriteTransaction = false;
+                var trieState = trie.State;
+                if (trieState.IsModified)
+                {
+                    var triePtr = (CedarRootHeader*)_lowLevelTransaction.RootObjects.DirectAdd(trie.Name, sizeof(CedarRootHeader));
+                    trieState.CopyTo(triePtr);
+                }
+            }
+
             foreach (var participant in _participants)
             {
                 if (participant.RequiresParticipation)
@@ -141,7 +145,9 @@ namespace Voron.Impl
         {
             if (_multiValueTrees == null)
                 _multiValueTrees = new Dictionary<Tuple<Tree, Slice>, Tree>(new TreeAndSliceComparer());
+
             mvTree.IsMultiValueTree = true;
+
             _multiValueTrees.Add(Tuple.Create(tree, key.Clone(_lowLevelTransaction.Allocator, ByteStringType.Immutable)), mvTree);
         }
 
@@ -150,6 +156,7 @@ namespace Voron.Impl
             mvTree = null;
             if (_multiValueTrees == null)
                 return false;
+
             return _multiValueTrees.TryGetValue(Tuple.Create(tree, key), out mvTree);
         }
 
@@ -167,9 +174,8 @@ namespace Voron.Impl
         {
             Tree value;
             if (_trees.TryGetValue(name, out value) && value != null)
-            {
                 throw new InvalidOperationException("Tree already exists: " + name);
-            }
+
             _trees[name] = tree;
         }
 
@@ -291,6 +297,7 @@ namespace Voron.Impl
 
             tree.State.CopyTo((CedarRootHeader*)space);
             tree.State.IsModified = true;
+
             AddTrie(name, tree);
 
             return tree;
@@ -304,7 +311,7 @@ namespace Voron.Impl
 
         public FixedSizeTree FixedTreeFor(Slice treeName)
         {
-            var valueSize = FixedSizeTree.GetValueSize(LowLevelTransaction, LowLevelTransaction.RootObjects, treeName);
+            ushort valueSize = FixedSizeTree.GetValueSize(LowLevelTransaction, LowLevelTransaction.RootObjects, treeName);
             return FixedTreeFor(treeName, valueSize);
         }
 
@@ -316,10 +323,7 @@ namespace Voron.Impl
         public RootObjectType GetRootObjectType(Slice name)
         {
             var val = _lowLevelTransaction.RootObjects.DirectRead(name);
-            if (val == null)
-                return RootObjectType.None;
-
-            return ((RootHeader*)val)->RootObjectType;
+            return val == null ? RootObjectType.None : ((RootHeader*)val)->RootObjectType;
         }
     }
 

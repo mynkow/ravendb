@@ -8,12 +8,11 @@ namespace Voron.Data.BTrees
 {
     public class CedarPageSplitter
     {
-        private LowLevelTransaction _llt;
+        private readonly LowLevelTransaction _llt;
+        private readonly CedarTree _tree;
 
-        private CedarTree _tree;
         private CedarCursor _cursor;
         
-
         public CedarPageSplitter(LowLevelTransaction llt, CedarTree tree, CedarCursor cursor)
         {
             this._llt = llt;

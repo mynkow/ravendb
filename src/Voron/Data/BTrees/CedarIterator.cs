@@ -15,9 +15,9 @@ namespace Voron.Data.BTrees
 
         public event Action<IIterator> OnDisposal;
 
-        private CedarCursor _cursor;
+        private CedarCursor _cursor;        
         private Slice _currentKey = default(Slice);
-        private Slice _currentInternalKey = new Slice();
+        private Slice _currentInternalKey = default(Slice);
 
         public CedarIterator(CedarTree tree, LowLevelTransaction tx, bool prefetch)
         {
@@ -32,9 +32,8 @@ namespace Voron.Data.BTrees
                 throw new ObjectDisposedException($"{nameof(CedarIterator)} {_tree.Name}");
 
             // We look for the branch page that is going to host this data. 
-            CedarBranchPageHeader* node;
+            CedarPageHeader* node;
             _cursor = _tree.FindLocationFor(key, out node);
-            _cursor.Pop(); // TODO: Check why this is needed. It comes like this from TreeCursor.
 
             if (node != null)
             {
@@ -45,8 +44,8 @@ namespace Voron.Data.BTrees
 
                 if (DoRequireValidation)
                     return this.ValidateCurrentKey(_cursor.Key);
-                else
-                    return true;
+
+                return true;
             }
 
             // The key is not found in the db, but we are Seek()ing for equals or starts with.
@@ -78,7 +77,21 @@ namespace Voron.Data.BTrees
             if (_disposed)
                 throw new ObjectDisposedException($"{nameof(CedarIterator)} {_tree.Name}");
 
-            throw new NotImplementedException();
+            if (count != 0)
+            {
+                var moveMethod = (count > 0) ? (Func<bool>)MoveNext : MovePrev;
+
+                for (int i = 0; i < Math.Abs(count); i++)
+                {
+                    if (!moveMethod())
+                        break;
+                }
+            }
+
+            if (DoRequireValidation)
+                return _cursor != null && this.ValidateCurrentKey(_cursor.Key);
+
+            return _cursor != null;
         }
 
 
@@ -89,15 +102,12 @@ namespace Voron.Data.BTrees
                 if (_disposed)
                     throw new ObjectDisposedException($"{nameof(CedarIterator)} {_tree.Name}");
 
-                throw new NotImplementedException();
+                return _currentKey;
             }
         }
 
         private bool _requireValidation;
-        public bool DoRequireValidation
-        {
-            get { return _requireValidation; }
-        }
+        public bool DoRequireValidation => _requireValidation;
 
         private Slice _requiredPrefix;
         public Slice RequiredPrefix

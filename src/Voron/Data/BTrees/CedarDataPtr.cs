@@ -1,16 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
+﻿using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 using Voron.Impl;
 
 namespace Voron.Data.BTrees
 {
     /// <summary>
-    /// The pointer to the data. A list of these elements can be found on every Cedar Branch Page immediately after the <see cref="CedarBranchPageHeader"/>    
+    /// The pointer to the data. A list of these elements can be found on every Cedar Branch Page immediately after the <see cref="CedarPageHeader"/>    
     /// </summary>
     /// <remarks>
     /// We are willing to pay unaligned access costs here because we are looking for the most efficient storage representation for this data.
@@ -42,10 +38,10 @@ namespace Voron.Data.BTrees
         /// <remarks>
         /// In case the value is <see cref="CedarNodeFlags.Data"/> the value should be smaller or equal to 8 bytes in size.
         /// </remarks>
-        public TreeNodeFlags Flags
+        public CedarNodeFlags Flags
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return (Header & FlagsMask) != 0 ? TreeNodeFlags.Data : TreeNodeFlags.PageRef; }
+            get { return (Header & FlagsMask) != 0 ? CedarNodeFlags.Data : CedarNodeFlags.Branch; }
         }
 
         /// <summary>
@@ -59,17 +55,12 @@ namespace Voron.Data.BTrees
 
         public static byte* DirectAccess(LowLevelTransaction tx, CedarDataPtr* node)
         {
-            if (node->Flags == (TreeNodeFlags.PageRef))
-            {
-                var overFlowPage = tx.GetReadOnlyTreePage(node->PageNumber);
-                return overFlowPage.Base + sizeof(CedarLeafPageHeader);
-            }
             return (byte*)&node->Data;
         }
 
         public static ValueReader Reader(LowLevelTransaction tx, CedarDataPtr* node)
         {
-            if (node->Flags == (TreeNodeFlags.PageRef))             
+            if (node->Flags == CedarNodeFlags.Branch)             
                 return new ValueReader((byte*)&node->PageNumber, sizeof(long));
 
             Debug.Assert(node->DataSize > 0 && node->DataSize <= 8, "The embedded node data size is not compatible for this type of tree");

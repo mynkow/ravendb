@@ -11,8 +11,12 @@ using Voron.Impl.Paging;
 namespace Voron.Data.BTrees
 {
     public unsafe class CedarTree
-    {
+    {        
+        private readonly Transaction _tx;
+        private readonly LowLevelTransaction _llt;
         private readonly CedarMutableState _state;
+
+        private readonly RecentlyFoundCedarPages _recentlyFoundPages;
 
         private enum ActionType
         {
@@ -20,27 +24,7 @@ namespace Voron.Data.BTrees
             Delete
         }
 
-        //public event Action<long> PageModified;
-        //public event Action<long> PageFreed;
-
-        private readonly RecentlyFoundCedarPages _recentlyFoundPages;
-
-        public string Name { get; set; }
-
-        public CedarMutableState State
-        {
-            get { return _state; }
-        }
-
-        private readonly LowLevelTransaction _llt;
-        private readonly Transaction _tx;
-
-        public LowLevelTransaction Llt
-        {
-            get { return _llt; }
-        }
-
-        public enum OperationStatus
+        public enum ActionStatus
         {
             /// <summary>
             /// Operation worked as expected.
@@ -50,12 +34,18 @@ namespace Voron.Data.BTrees
             /// Key does not fit into the Cedar page. We need to split it.
             /// </summary>
             NotEnoughSpace,
-            /// <summary>
-            /// Items count is too small for this page to sustain. 
-            /// </summary>
-            TooMuchSpace,                    
-        }      
+        }
 
+        //public event Action<long> PageModified;
+        //public event Action<long> PageFreed;        
+
+        public string Name { get; set; }
+
+
+        public CedarMutableState State => _state;
+        public LowLevelTransaction Llt => _llt;
+
+        
         private CedarTree(LowLevelTransaction llt, Transaction tx, long root)
         {
             _llt = llt;
@@ -111,7 +101,7 @@ namespace Voron.Data.BTrees
         
         public void Add(string key, long value, ushort? version = null)
         {
-            Add(Slice.From( _tx.Allocator, key), value, version);
+            Add(Slice.From(_tx.Allocator, key), value, version);
         }
 
         public void Add(Slice key, long value, ushort? version = null)
@@ -123,6 +113,11 @@ namespace Voron.Data.BTrees
             *((long*)pos) = value;                                               
         }
 
+        public long Read(string key)
+        {
+            return Read(Slice.From(_tx.Allocator, key));
+        }
+
         public long Read(Slice key)
         {
             var pos = DirectRead(key);
@@ -131,35 +126,13 @@ namespace Voron.Data.BTrees
             return *((long*)pos);
         }
 
-        private static void CopyStreamToPointer(LowLevelTransaction tx, Stream value, byte* pos)
-        {
-            TemporaryPage tmp;
-            using (tx.Environment.GetTemporaryPage(tx, out tmp))
-            {
-                var tempPageBuffer = tmp.TempPageBuffer;
-                var tempPagePointer = tmp.TempPagePointer;
-                while (true)
-                {
-                    var read = value.Read(tempPageBuffer, 0, tempPageBuffer.Length);
-                    if (read == 0)
-                        break;
-
-                    Memory.CopyInline(pos, tempPagePointer, read);
-                    pos += read;
-
-                    if (read != tempPageBuffer.Length)
-                        break;
-                }
-            }
-        }
-
         public byte* DirectRead(Slice key)
         {
             if (AbstractPager.IsKeySizeValid(key.Size) == false)
                 throw new ArgumentException($"Key size is too big, must be at most {AbstractPager.MaxKeySize} bytes, but was {(key.Size + AbstractPager.RequiredSpaceForNewNode)}", nameof(key));
 
             // We look for the branch page that is going to host this data. 
-            CedarBranchPageHeader* node;
+            CedarPageHeader* node;
             CedarCursor cursor = FindLocationFor(key, out node);
 
             // This is efficient because we return the very same Slice so checking can be done via pointer comparison. 
@@ -188,7 +161,7 @@ namespace Voron.Data.BTrees
                 throw new ArgumentException($"Key size is too big, must be at most {AbstractPager.MaxKeySize} bytes, but was {(key.Size + AbstractPager.RequiredSpaceForNewNode)}", nameof(key));
 
             // We look for the branch page that is going to host this data. 
-            CedarBranchPageHeader* node;
+            CedarPageHeader* node;
             CedarCursor cursor = FindLocationFor(key, out node);
 
             // This is efficient because we return the very same Slice so checking can be done via pointer comparison. 
@@ -207,19 +180,19 @@ namespace Voron.Data.BTrees
             Debug.Assert(!cursor.Key.Equals(key));
 
             // Updates may fail if we have to split the page. 
-            OperationStatus status;
+            ActionStatus status;
             do
             {
                 // It will output the position of the data to be written to. 
                 status = TryUpdate(cursor, key, version, out pos);
-                if (status == OperationStatus.NotEnoughSpace)
+                if (status == ActionStatus.NotEnoughSpace)
                 {
                     // We need to split because there is not enough space available to add this key into the page.
                     var pageSplitter = new CedarPageSplitter(_llt, this, cursor);
                     cursor = pageSplitter.Execute();
                 }
             }
-            while (status != OperationStatus.Success);
+            while (status != ActionStatus.Success);
 
             // Record the new entry.
             State.NumberOfEntries++;
@@ -232,12 +205,12 @@ namespace Voron.Data.BTrees
             throw new NotImplementedException();
         }
 
-        internal CedarCursor FindLocationFor(Slice key, out CedarBranchPageHeader* node)
+        internal CedarCursor FindLocationFor(Slice key, out CedarPageHeader* node)
         {
             throw new NotImplementedException();
         }
 
-        private OperationStatus TryUpdate(CedarCursor cursor, Slice key, ushort? version, out byte* pos)
+        private ActionStatus TryUpdate(CedarCursor cursor, Slice key, ushort? version, out byte* pos)
         {
             throw new NotImplementedException();
         }

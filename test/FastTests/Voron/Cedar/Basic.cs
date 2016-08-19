@@ -43,7 +43,7 @@ namespace FastTests.Voron.Cedar
                     Assert.Equal("a", it.CurrentKey.ToString());
                 }
 
-                Assert.Equal("1", actual.Reader.ToString());
+                Assert.Equal(1, actual);
             }
         }
 
@@ -66,7 +66,7 @@ namespace FastTests.Voron.Cedar
         [Fact]
         public void AfterPageSplitAllDataIsValid()
         {
-            const int count = 256;
+            const int count = 4096;
             using (var tx = Env.WriteTransaction())
             {
                 var tree = tx.CreateTrie("foo");
@@ -77,6 +77,7 @@ namespace FastTests.Voron.Cedar
 
                 tx.Commit();
             }
+
             using (var tx = Env.ReadTransaction())
             {
                 var tree = tx.ReadTrie("foo");
@@ -86,42 +87,7 @@ namespace FastTests.Voron.Cedar
                     {
                         Assert.True(it.Seek(Slice.From(tx.Allocator, "test-" + i.ToString("000"))));
                         Assert.Equal("test-" + i.ToString("000"), it.CurrentKey.ToString());
-                        Assert.Equal("val-" + i, it.CreateReaderForCurrent().ToString());
-                    }
-                }
-            }
-        }
-
-        [Fact]
-        public void PageSplitsAllAround()
-        {
-            using (var tx = Env.WriteTransaction())
-            {
-                Stream stream = StreamFor("value");
-                var tree = tx.CreateTrie("foo");
-                for (int i = 0; i < 256; i++)
-                {
-                    for (int j = 0; j < 5; j++)
-                    {
-                        stream.Position = 0;
-                       
-                        tree.Add("test-" + j.ToString("000") + "-" + i.ToString("000"), stream);
-                    }
-                }
-
-                tx.Commit();
-            }
-
-            using (var tx = Env.ReadTransaction())
-            {
-                var tree = tx.ReadTrie("foo");
-                for (int i = 0; i < 256; i++)
-                {
-                    for (int j = 0; j < 5; j++)
-                    {
-                        var key = "test-" + j.ToString("000") + "-" + i.ToString("000");
-
-                        Assert.True(tree.Read(key) != null);
+                        Assert.Equal(i, it.CreateReaderForCurrent().ReadBigEndianInt64());
                     }
                 }
             }

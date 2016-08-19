@@ -23,15 +23,22 @@ namespace Voron.Data.BTrees
         public long RootPageNumber;
 
         /// <summary>
-        /// This is the number of nodes pages we are going to allow. For now it is a constant, but the idea is that
+        /// This is the number of blocks pages we are going to allow. For now it is a constant, but the idea is that
         /// we can control this. That's why it is already defined at the CedarRootHeader even though now it is still a constant.
         /// </summary>
-        public const long NumberOfNodePages = 3;
+        public const long NumberOfBlocksPages = 8;
+
         /// <summary>
         /// This is the number of tail pages we are going to allow. For now it is a constant, but the idea is that
         /// we can control this. That's why it is already defined at the CedarRootHeader even though now it is still a constant.
         /// </summary>
-        public const long NumberOfTailPages = 1;
+        public const long NumberOfTailPages = 6;
+
+        /// <summary>
+        /// This is the number of nodes pages we are going to allow. For now it is a constant, but the idea is that
+        /// we can control this. That's why it is already defined at the CedarRootHeader even though now it is still a constant.
+        /// </summary>
+        public const long NumberOfNodePages = 4;
 
         [FieldOffset(10)]
         public long BranchPages;
@@ -45,5 +52,12 @@ namespace Voron.Data.BTrees
         public long NumberOfEntries;
         [FieldOffset(58)]
         public int Depth;
+
+        /// <summary>
+        /// This is the total number of pages that each node will spawn. 
+        /// The idea is that all those enter into a very few L1 cache lines to exploit the layered access pattern. 
+        /// </summary>
+        public const long TotalNumberOfPagesPerNode = NumberOfNodePages + NumberOfBlocksPages + NumberOfTailPages;
+
     }
 }

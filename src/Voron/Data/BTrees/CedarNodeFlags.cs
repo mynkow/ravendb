@@ -10,16 +10,11 @@ namespace Voron.Data.BTrees
         /// <summary>
         /// Is this a reference to a branch node?
         /// </summary>
-        Branch = 1,
-
-        /// <summary>
-        /// Is this a reference to data?
-        /// </summary>
-        DataRef = 2,
+        Branch = 0,
 
         /// <summary>
         /// Is this embedded data?.
         /// </summary>
-        Data = 3,
+        Data = 1,
     }
 }

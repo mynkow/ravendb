@@ -77,7 +77,7 @@ namespace Voron.Data.BTrees
 
                 if (_currentPage.LastSearchPosition >= _currentPage.NumberOfEntries)
                     throw new InvalidOperationException(string.Format("Current page is invalid. Search position ({0}) exceeds number of entries ({1}). Page: {2}.", _currentPage.LastSearchPosition, _currentPage.NumberOfEntries, _currentPage));
-                    
+
                 return _currentKey;
             }
         }
@@ -189,7 +189,8 @@ namespace Voron.Data.BTrees
 
                 for (int i = 0; i < Math.Abs(count); i++)
                 {
-                    if (!moveMethod()) break;
+                    if (!moveMethod())
+                        break;
                 }
             }
 

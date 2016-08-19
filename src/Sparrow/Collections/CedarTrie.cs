@@ -115,7 +115,7 @@ namespace Sparrow.Collections
 
         private int _no_delete;
 
-        private short[] _reject = new short[257];
+        private readonly short[] _reject = new short[257];
 
         private ElementUnion u1;
         private SizeUnion u2;
@@ -167,15 +167,8 @@ namespace Sparrow.Collections
             Console.WriteLine($"Tail0 = {u2.Tail0.Length} ({u2.Tail0.Length * sizeof(int)})");
         }
 
-        public int TotalSize
-        {
-            get { return _nodeSize * Size; }
-        }
-
-        public int UnitSize
-        {
-            get { return _nodeSize; }
-        }
+        public int TotalSize => _nodeSize * Size;
+        public int UnitSize => _nodeSize;
 
         public int NonZeroSize
         {
