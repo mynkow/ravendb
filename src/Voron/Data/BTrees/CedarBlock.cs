@@ -86,16 +86,13 @@ namespace Voron.Data.BTrees
         }
     }
 
-    [StructLayout(LayoutKind.Explicit, Pack = 1, Size = block.Size + 256 * (ninfo.Size + node.Size))]
+    [StructLayout(LayoutKind.Explicit, Pack = 1, Size = node.Size + ninfo.Size)]
     internal struct CedarBlock
     {
         [FieldOffset(0)]
-        public block Metadata;
+        public node Node;
 
-        [FieldOffset(20)]
-        public byte Start;
-
-        public const int InfoOffset = 0;
-        public const int NodesOffset = 256 * ninfo.Size;
+        [FieldOffset(node.Size)]
+        public ninfo NodeInfo;
     }
 }

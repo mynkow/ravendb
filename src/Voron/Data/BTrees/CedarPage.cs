@@ -13,8 +13,8 @@ namespace Voron.Data.BTrees
     /// <summary>
     /// Each CedarPage is composed of the following components:
     /// - Header
+    /// - BlocksMetadata (in the header page)
     /// - BlocksPages with as many as <see cref="CedarRootHeader.NumberOfBlocksPages"/>
-    ///     - The first page is going to be shared with the <see cref="CedarPageHeader"/> therefore it will have a few lesser blocks than possible in a page.
     /// - TailPages with as many as <see cref="CedarRootHeader.NumberOfTailPages"/>
     /// - NodesPages with as many as <see cref="CedarRootHeader.NumberOfNodePages"/>    
     /// </summary>
@@ -25,7 +25,6 @@ namespace Voron.Data.BTrees
             private readonly CedarPage _page;
             private short _currentPageOffset;
             private PageHandlePtr _currentPtr;
-            private int _bytesOffset;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public BlocksAccessor(CedarPage page)
@@ -33,43 +32,36 @@ namespace Voron.Data.BTrees
                 _page = page;
                 _currentPtr = new PageHandlePtr();
                 _currentPageOffset = -1;
-                _bytesOffset = 0;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void* Read<T>(int i) where T : struct
             {
-                int pageOffset = i / _page._blocksPerPage;
-
-                if (pageOffset != _currentPageOffset)
-                {
-                    _bytesOffset = 0;
-                    if (pageOffset == 0)
-                    {
-                        // We adjust for the first page CedarPageHeader size.
-                        _bytesOffset = sizeof(CedarPageHeader) - sizeof(PageHeader);
-                    }
-
-                    _currentPageOffset = (short)pageOffset;
-                    _currentPtr = _page.GetBlocksPageByOffset(pageOffset);
-                }
-
-                var block = (CedarBlock*)(_currentPtr.Value.DataPointer + _bytesOffset);
-
                 if (typeof(T) == typeof(block))
                 {
-                    return &block->Metadata;
+                    throw new NotImplementedException();
                 }
-
-                int itemIndex = i % 256;
-
-                if (typeof(T) == typeof(ninfo))
+                else
                 {
-                    return (ninfo*)(&block->Start + CedarBlock.InfoOffset) + itemIndex;
-                }
-                if (typeof(T) == typeof(node))
-                {
-                    return (node*)(&block->Start + CedarBlock.NodesOffset) + itemIndex;
+                    int pageOffset = i / _page._blocksPerPage;
+                    int pageIndex = i % _page._blocksPerPage;
+
+                    if (pageOffset != _currentPageOffset)
+                    {
+                        _currentPageOffset = (short)pageOffset;
+                        _currentPtr = _page.GetBlocksPageByOffset(pageOffset);
+                    }
+
+                    var start = (CedarBlock*)_currentPtr.Value.DataPointer;
+
+                    if (typeof(T) == typeof(ninfo))
+                    {
+                        return &(start + pageIndex)->NodeInfo;
+                    }
+                    if (typeof(T) == typeof(node))
+                    {
+                        return &(start + pageIndex)->Node;
+                    }
                 }
 
                 throw new NotSupportedException();
@@ -78,37 +70,31 @@ namespace Voron.Data.BTrees
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void* Write<T>(int i) where T : struct
             {
-                int pageOffset = i / _page._blocksPerPage;
-
-                if (pageOffset != _currentPageOffset || !_currentPtr.IsWritable)
-                {
-                    _bytesOffset = 0;
-                    if (pageOffset == 0)
-                    {
-                        // We adjust for the first page CedarPageHeader size.
-                        _bytesOffset = sizeof(CedarPageHeader) - sizeof(PageHeader);
-                    }
-
-                    _currentPageOffset = (short)pageOffset;
-                    _currentPtr = _page.GetBlocksPageByOffset(pageOffset, true);
-                }
-
-                var block = (CedarBlock*)(_currentPtr.Value.DataPointer + _bytesOffset);
-
                 if (typeof(T) == typeof(block))
                 {
-                    return &block->Metadata;
+                    throw new NotImplementedException();
                 }
-
-                int itemIndex = i % 256;
-
-                if (typeof(T) == typeof(ninfo))
+                else
                 {
-                    return (ninfo*)(&block->Start + CedarBlock.InfoOffset) + itemIndex;
-                }
-                if (typeof(T) == typeof(node))
-                {
-                    return (node*)(&block->Start + CedarBlock.NodesOffset) + itemIndex;
+                    int pageOffset = i / _page._blocksPerPage;
+                    int pageIndex = i % _page._blocksPerPage;
+
+                    if (pageOffset != _currentPageOffset || !_currentPtr.IsWritable)
+                    {
+                        _currentPageOffset = (short)pageOffset;
+                        _currentPtr = _page.GetBlocksPageByOffset(pageOffset);
+                    }
+
+                    var start = (CedarBlock*)_currentPtr.Value.DataPointer;
+
+                    if (typeof(T) == typeof(ninfo))
+                    {
+                        return &(start + pageIndex)->NodeInfo;
+                    }
+                    if (typeof(T) == typeof(node))
+                    {
+                        return &(start + pageIndex)->Node;
+                    }
                 }
 
                 throw new NotSupportedException();
@@ -127,6 +113,12 @@ namespace Voron.Data.BTrees
                 _page = page;
                 _currentPtr = new PageHandlePtr();
                 _currentPageOffset = -1;
+            }
+
+            public int Length
+            {
+                get { throw new NotImplementedException(); }
+                set { throw new NotImplementedException(); }
             }
 
             public byte this[int i]

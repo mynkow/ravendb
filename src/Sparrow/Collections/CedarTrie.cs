@@ -71,17 +71,15 @@ namespace Sparrow.Collections
     public class CedarTrie : CedarTrie<int>
     {}
 
-    public class CedarTrie<T> : CedarTrie<T, long, Ordered> where T : struct
+    public class CedarTrie<T> : CedarTrie<T, Ordered> where T : struct
     {}
 
-    public unsafe class CedarTrie<T, SizeType, TOrdered> : IDisposable
+    public unsafe class CedarTrie<T, TOrdered> : IDisposable
         where T : struct
-        where SizeType : struct
         where TOrdered : IOrderableDirective
     {
         protected readonly int _nodeSize;
         protected readonly int _tSize;
-        protected readonly int _numTrackingNodes = 0;
         protected readonly int _maxTrial = 1;
 
         private const long TAIL_OFFSET_MASK = 0xffffffff;
@@ -104,7 +102,6 @@ namespace Sparrow.Collections
         private node[] _array;
         private ninfo[] _ninfo;
         private block[] _block;
-        private long[] _trackingNode;
 
         private int _bheadF;  // first block of Full;   0
         private int _bheadC;  // first block of Closed; 0 if no Closed
@@ -129,7 +126,7 @@ namespace Sparrow.Collections
             get
             {
                 return _array.Length * sizeof(node) + _ninfo.Length * sizeof(ninfo) +
-                       _block.Length * sizeof(block) + _trackingNode.Length * sizeof(long) +
+                       _block.Length * sizeof(block) + 
                        u1.Tail.Length +
                        u2.Tail0.Length +
                        _reject.Length * sizeof(short);
@@ -141,7 +138,7 @@ namespace Sparrow.Collections
             get
             {
                 return _array.Length * sizeof(node) / 2 + _ninfo.Length * sizeof(ninfo) +
-                       _block.Length * sizeof(block) + _trackingNode.Length * sizeof(long) +
+                       _block.Length * sizeof(block) +
                        u1.Tail.Length +
                        u2.Tail0.Length +
                        _reject.Length * sizeof(short);
@@ -577,9 +574,6 @@ namespace Sparrow.Collections
             if (len == 0 && from == 0)
                 throw new ArgumentException("failed to insert zero-length key");
 
-            if (this._ninfo == null || this._block == null)
-                Restore();
-
             try
             {
                 //Console.WriteLine($"Start {nameof(Update)} with key-size: {len}");
@@ -649,16 +643,6 @@ namespace Sparrow.Collections
                         {
                             from = Follow(from, u1.Tail[offset_]);
                             offset_++;
-
-                            // this shows intricacy in debugging updatable double array trie
-                            if (_numTrackingNodes > 0) // keep the traversed node (on tail) updated
-                            {
-                                for (int j = 0; _trackingNode[j] != 0; j++)
-                                {
-                                    if (_trackingNode[j] >> 32 == offset_)
-                                        _trackingNode[j] = from;
-                                }
-                            }
                         }
 
                         //Console.WriteLine();
@@ -930,18 +914,6 @@ namespace Sparrow.Collections
                 {
                     _push_enode(to_);
                 }          
-
-                if ( _numTrackingNodes != 0 )
-                {
-                    for (int j = 0; j < _numTrackingNodes; j++)
-                    {
-                        if ( (int)(_trackingNode[j] & TAIL_OFFSET_MASK) == to_ )
-                        {
-                            _trackingNode[j] &= NODE_INDEX_MASK;
-                            _trackingNode[j] |= (long)to;
-                        }
-                    }
-                }
             }
 
             //Console.WriteLine($"returns [{(flag ? @base ^ label_n : to_pn)}] (_resolve)");
@@ -1363,10 +1335,6 @@ namespace Sparrow.Collections
             //Console.WriteLine($"returns [{head_out}] (_push_block)");
         }
 
-        private void Restore()
-        {
-            throw new NotImplementedException();
-        }
 
         struct IteratorValue
         {
@@ -1452,7 +1420,6 @@ namespace Sparrow.Collections
             _array = Reallocate<node>(_array, 256, 256);
             _ninfo = Reallocate<ninfo>(_ninfo, 256); // Marshal.Alloc doesn't ensure memory is zeroed out. 
             _block = Reallocate<block>(_block, 1, 0, block.Create()); // We need to call the constructor, not the default(block)
-            _trackingNode = Reallocate<long>(_trackingNode, _numTrackingNodes + 1);
 
             _array[0] = new node(0, -1);
             for (int i = 1; i < 256; ++i)
@@ -1467,9 +1434,6 @@ namespace Sparrow.Collections
 
             this._quota = u1.Length = sizeof(int);
             this._quota0 = 1;
-
-            for (int i = 0; i < _numTrackingNodes; i++)
-                _trackingNode[i] = 0;
 
             for (int i = 0; i < 256; i++)
                 _reject[i] = (short)( i + 1 );

@@ -61,5 +61,11 @@ namespace Voron.Data.BTrees
         /// </summary>
         [FieldOffset(24)]
         public int NodePageCount;
+
+        /// <summary>
+        /// The offset from the end of the <see cref="CedarPageHeader"/> where the blocks metadata is stored.
+        /// </summary>
+        [FieldOffset(28)]
+        public int MetadataOffset;
     }
 }
