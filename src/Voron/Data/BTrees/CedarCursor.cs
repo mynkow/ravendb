@@ -12,15 +12,35 @@ namespace Voron.Data.BTrees
     public unsafe class CedarCursor : IDisposable
     {
         private readonly LowLevelTransaction _llt;        
-        private readonly long[] _path;
+        private readonly List<long> _path;
 
         private CedarPage _currentPage;
 
-        public CedarCursor(LowLevelTransaction llt, CedarPage currentPage, long[] pathFromRoot)
+        public CedarCursor(LowLevelTransaction llt, CedarPage currentPage, List<long> pathFromRoot)
         {
             this._llt = llt;
             this._currentPage = currentPage;
             this._path = pathFromRoot;
+        }
+
+        public CedarCursor(LowLevelTransaction llt, CedarPage currentPage)
+            : this(llt, currentPage, new List<long> {currentPage.PageNumber})
+        {            
+        }
+
+        public void SearchFirst()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void SearchLast()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Search(Slice key)
+        {
+            throw new NotImplementedException();
         }
 
         public Slice Key
@@ -100,12 +120,12 @@ namespace Voron.Data.BTrees
             GC.SuppressFinalize(this);
         }
 
-        public void Push(CedarPage p)
+        protected void Push(CedarPage p)
         {
             throw new NotImplementedException();
         }
 
-        public CedarPage Pop()
+        protected CedarPage Pop()
         {
             throw new NotImplementedException();
         }

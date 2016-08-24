@@ -771,33 +771,6 @@ namespace Sparrow.Collections
             
         }
 
-        // TODO: Move this into a general T to struct converter. 
-        static T IncrementPrimitiveValue(T op1, T op2)
-        {
-            if (typeof(T) == typeof(byte))
-            {
-                byte v1 = (byte)(object)op1;
-                byte v2 = (byte)(object)op2;
-                return (T)(object)(v1 + v2);
-            }
-
-            if (typeof(T) == typeof(short))
-            {
-                short v1 = (short)(object)op1;
-                short v2 = (short)(object)op2;
-                return (T)(object)(v1 + v2);
-            }
-
-            if (typeof(T) == typeof(int))
-            {
-                int v1 = (int)(object)op1;
-                int v2 = (int)(object)op2;
-                return (T)(object)(v1 + v2);
-            }
-
-            throw new NotImplementedException();
-        }
-
         private int Follow(long from, byte label)
         {
             int to = 0;
@@ -1006,9 +979,7 @@ namespace Sparrow.Collections
                     if (_block[bi].Trial == _maxTrial)
                         _transfer_block(bi, ref _bheadO, ref _bheadC);
 
-                    if (_block[bi].Trial > _maxTrial)
-                        throw new Exception();
-                    // Debug.Assert(b->Trial <= _maxTrial);
+                    Debug.Assert(_block[bi].Trial <= _maxTrial);
 
                     if (bi == bz)
                         break;
@@ -1428,7 +1399,7 @@ namespace Sparrow.Collections
             Capacity = Size = 256;
 
             u1 = new ElementUnion(Reallocate<byte>(u1.Tail, sizeof(int)));
-            u2 = new SizeUnion(Reallocate<int>(u2.Tail0, 1) );            
+            u2 = new SizeUnion(Reallocate<int>(u2.Tail0, 1) );
 
             _block[0].Ehead = 1; // bug fix for erase
 

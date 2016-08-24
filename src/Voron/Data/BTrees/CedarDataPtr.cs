@@ -53,17 +53,17 @@ namespace Voron.Data.BTrees
             get { return (byte)(Header & SizeMask); }
         }
 
-        public static byte* DirectAccess(LowLevelTransaction tx, CedarDataPtr* node)
+        public static byte* DirectAccess(CedarDataPtr* node)
         {
             return (byte*)&node->Data;
         }
 
-        public static ValueReader Reader(LowLevelTransaction tx, CedarDataPtr* node)
+        public static ValueReader Reader(CedarDataPtr* node)
         {
-            if (node->Flags == CedarNodeFlags.Branch)             
+            if (node->Flags == CedarNodeFlags.Branch)
                 return new ValueReader((byte*)&node->PageNumber, sizeof(long));
 
-            Debug.Assert(node->DataSize > 0 && node->DataSize <= 8, "The embedded node data size is not compatible for this type of tree");
+            Debug.Assert(node->DataSize > 0 && node->DataSize <= 8, "The embedded Node data size is not compatible for this type of tree");
             return new ValueReader((byte*)&node->Data, node->DataSize);
         }
     }

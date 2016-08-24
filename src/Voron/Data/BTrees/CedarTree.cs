@@ -10,6 +10,18 @@ using Voron.Impl.Paging;
 
 namespace Voron.Data.BTrees
 {
+    public enum CedarActionStatus
+    {
+        /// <summary>
+        /// Operation worked as expected.
+        /// </summary>
+        Success,
+        /// <summary>
+        /// Key does not fit into the Cedar page. We need to split it.
+        /// </summary>
+        NotEnoughSpace,
+    }
+
     public unsafe class CedarTree
     {        
         private readonly Transaction _tx;
@@ -24,17 +36,7 @@ namespace Voron.Data.BTrees
             Delete
         }
 
-        public enum ActionStatus
-        {
-            /// <summary>
-            /// Operation worked as expected.
-            /// </summary>
-            Success,
-            /// <summary>
-            /// Key does not fit into the Cedar page. We need to split it.
-            /// </summary>
-            NotEnoughSpace,
-        }
+
 
         //public event Action<long> PageModified;
         //public event Action<long> PageFreed;        
@@ -45,7 +47,7 @@ namespace Voron.Data.BTrees
         public CedarMutableState State => _state;
         public LowLevelTransaction Llt => _llt;
 
-        
+
         private CedarTree(LowLevelTransaction llt, Transaction tx, long root)
         {
             _llt = llt;
@@ -75,13 +77,20 @@ namespace Voron.Data.BTrees
             };
         }
 
+
+        private static readonly int[] PageLayout = { 1, CedarRootHeader.NumberOfBlocksPages, CedarRootHeader.NumberOfTailPages, CedarRootHeader.NumberOfDataNodePages };
+
         public static CedarTree Create(LowLevelTransaction llt, Transaction tx, TreeFlags flags = TreeFlags.None)
         {
             Debug.Assert(llt.Flags == TransactionFlags.ReadWrite, "Create is being called in a read transaction.");
 
-            var newRootPage = Initialize(llt);
+            var pages = llt.AllocatePages(PageLayout, CedarRootHeader.TotalNumberOfPagesPerNode + 1);
 
-            var tree = new CedarTree(llt, tx, newRootPage.PageNumber)
+            var leaf = new CedarPage(llt, pages[0].PageNumber);
+            leaf.Header.Ptr->TreeFlags = TreePageFlags.Leaf;
+            leaf.Initialize();
+            
+            var tree = new CedarTree(llt, tx, leaf.PageNumber)
             {
                 _state =
                 {
@@ -92,11 +101,6 @@ namespace Voron.Data.BTrees
             };
 
             return tree;
-        }
-
-        private static Page Initialize(LowLevelTransaction tx)
-        {
-            throw new NotImplementedException();
         }
         
         public void Add(string key, long value, ushort? version = null)
@@ -132,8 +136,7 @@ namespace Voron.Data.BTrees
                 throw new ArgumentException($"Key size is too big, must be at most {AbstractPager.MaxKeySize} bytes, but was {(key.Size + AbstractPager.RequiredSpaceForNewNode)}", nameof(key));
 
             // We look for the branch page that is going to host this data. 
-            CedarPageHeader* node;
-            CedarCursor cursor = FindLocationFor(key, out node);
+            CedarCursor cursor = FindLocationFor(key);
 
             // This is efficient because we return the very same Slice so checking can be done via pointer comparison. 
             if (cursor.Key.Same(key))
@@ -161,8 +164,7 @@ namespace Voron.Data.BTrees
                 throw new ArgumentException($"Key size is too big, must be at most {AbstractPager.MaxKeySize} bytes, but was {(key.Size + AbstractPager.RequiredSpaceForNewNode)}", nameof(key));
 
             // We look for the branch page that is going to host this data. 
-            CedarPageHeader* node;
-            CedarCursor cursor = FindLocationFor(key, out node);
+            CedarCursor cursor = FindLocationFor(key);
 
             // This is efficient because we return the very same Slice so checking can be done via pointer comparison. 
             byte* pos;            
@@ -180,19 +182,19 @@ namespace Voron.Data.BTrees
             Debug.Assert(!cursor.Key.Equals(key));
 
             // Updates may fail if we have to split the page. 
-            ActionStatus status;
+            CedarActionStatus status;
             do
             {
                 // It will output the position of the data to be written to. 
                 status = TryUpdate(cursor, key, version, out pos);
-                if (status == ActionStatus.NotEnoughSpace)
+                if (status == CedarActionStatus.NotEnoughSpace)
                 {
                     // We need to split because there is not enough space available to add this key into the page.
                     var pageSplitter = new CedarPageSplitter(_llt, this, cursor);
-                    cursor = pageSplitter.Execute();
+                    cursor = pageSplitter.Execute(); // This effectively acts as a FindLocationFor(key, out node) call;
                 }
             }
-            while (status != ActionStatus.Success);
+            while (status != CedarActionStatus.Success);
 
             // Record the new entry.
             State.NumberOfEntries++;
@@ -205,44 +207,56 @@ namespace Voron.Data.BTrees
             throw new NotImplementedException();
         }
 
-        internal CedarCursor FindLocationFor(Slice key, out CedarPageHeader* node)
+        internal CedarCursor FindLocationFor(Slice key)
         {
             CedarCursor cursor;
-            if (TryUseRecentTransactionPage(key, out cursor, out node))
+            if (TryUseRecentTransactionPage(key, out cursor))
             {
                 return cursor;
             }
 
-            return SearchForKey(key, out node);
+            return SearchForKey(key);
         }
 
-        private CedarCursor SearchForKey(Slice key, out CedarPageHeader* node)
+        private CedarCursor SearchForKey(Slice key)
         {
-            throw new NotImplementedException();
+            var cursor = new CedarCursor(_llt, new CedarPage(_llt, State.RootPageNumber));
+
+            if (key.Options == SliceOptions.Key)
+            {
+                cursor.Search(key);                
+            }
+            else if (key.Options == SliceOptions.BeforeAllKeys)
+            {
+                cursor.SearchFirst();
+            }
+            else if (key.Options == SliceOptions.AfterAllKeys)
+            {
+                cursor.SearchLast();
+            }
+
+            return cursor;           
         }
 
-        private bool TryUseRecentTransactionPage(Slice key, out CedarCursor cursor, out CedarPageHeader* node)
+        private bool TryUseRecentTransactionPage(Slice key, out CedarCursor cursor)
         {
-            node = null;
             cursor = null;
 
             var foundPage = _recentlyFoundPages?.Find(key);
             if (foundPage == null)
                 return false;
 
-            // This is the page where the header lives.
-            var page = new CedarPage(_llt, foundPage.Number, foundPage.Page);
-            if ( page.IsBranch )
+            // This is the page where the header lives.                        
+            if (foundPage.Page.IsBranch)
                 throw new InvalidDataException("Index points to a non leaf page");
 
-            node = page.Header;
+            var page = new CedarPage(_llt, foundPage.Number, foundPage.Page);
             cursor = new CedarCursor(_llt, page, foundPage.CursorPath);
 
-
-            throw new NotImplementedException();
+            return true;            
         }
 
-        private ActionStatus TryUpdate(CedarCursor cursor, Slice key, ushort? version, out byte* pos)
+        private CedarActionStatus TryUpdate(CedarCursor cursor, Slice key, ushort? version, out byte* pos)
         {
             throw new NotImplementedException();
         }

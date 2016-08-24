@@ -8,7 +8,7 @@ namespace Voron.Data.BTrees
     public enum CedarNodeFlags : byte
     {
         /// <summary>
-        /// Is this a reference to a branch node?
+        /// Is this a reference to a branch Node?
         /// </summary>
         Branch = 0,
 

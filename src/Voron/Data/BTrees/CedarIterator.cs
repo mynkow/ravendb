@@ -35,27 +35,26 @@ namespace Voron.Data.BTrees
                 throw new ObjectDisposedException($"{nameof(CedarIterator)} {_tree.Name}");
 
             // We look for the branch page that is going to host this data. 
-            CedarPageHeader* node;
-            _cursor = _tree.FindLocationFor(key, out node);
-
-            if (node != null)
+            _cursor = _tree.FindLocationFor(key);
+            
+            // Returning an AfterAllKeys on a cursor means that the current node doesnt contains the key and we seek along the entire tree.
+            if (_cursor.Key.Same(Slices.AfterAllKeys))
             {
-                _currentInternalKey = _cursor.Key;
-                Debug.Assert(!_cursor.Key.Content.IsMutable, "The key returned is not immutable.");
-
-                _currentKey = _currentInternalKey;
-
-                if (DoRequireValidation)
-                    return this.ValidateCurrentKey(_cursor.Key);
-
-                return true;
+                // The key is not found in the db, but we are Seek()ing for equals or starts with.
+                // We know that the exact value isn't there, but it is possible that the next page has values 
+                // that is actually greater than the key, so we need to check it as well.
+                return MoveNext();
             }
 
-            // The key is not found in the db, but we are Seek()ing for equals or starts with.
-            // We know that the exact value isn't there, but it is possible that the next page has values 
-            // that is actually greater than the key, so we need to check it as well.
+            _currentInternalKey = _cursor.Key;
+            Debug.Assert(!_cursor.Key.Content.IsMutable, "The key returned is not immutable.");
 
-            return MoveNext();
+            _currentKey = _currentInternalKey;
+
+            if (DoRequireValidation)
+                return this.ValidateCurrentKey(_cursor.Key);
+
+            return true;
         }
 
         public bool MoveNext()

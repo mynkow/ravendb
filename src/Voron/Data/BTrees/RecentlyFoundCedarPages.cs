@@ -12,11 +12,11 @@ namespace Voron.Data.BTrees
             public readonly long Number;
             public readonly Slice FirstKey;
             public readonly Slice LastKey;
-            public readonly long[] CursorPath;
+            public readonly List<long> CursorPath;
 
             public CedarPage Page;
 
-            public FoundCedarPage(long number, CedarPage page, Slice firstKey, Slice lastKey, long[] cursorPath)
+            public FoundCedarPage(long number, CedarPage page, Slice firstKey, Slice lastKey, List<long> cursorPath)
             {
                 Number = number;
                 Page = page;
@@ -30,7 +30,7 @@ namespace Voron.Data.BTrees
 
         private readonly int _cacheSize;
 
-        private int current = 0;
+        private int _current = 0;
 
         public RecentlyFoundCedarPages(int cacheSize)
         {
@@ -41,7 +41,7 @@ namespace Voron.Data.BTrees
         public void Add(FoundCedarPage page)
         {
             int itemsLeft = _cacheSize;
-            int position = current + _cacheSize;
+            int position = _current + _cacheSize;
             while (itemsLeft > 0)
             {
                 var itemIndex = position % _cacheSize;
@@ -56,13 +56,13 @@ namespace Voron.Data.BTrees
                 position--;
             }
 
-            current = (++current) % _cacheSize;
-            _cache[current] = page;
+            _current = (++_current) % _cacheSize;
+            _cache[_current] = page;
         }
 
         public FoundCedarPage Find(Slice key)
         {
-            int position = current;
+            int position = _current;
 
             int itemsLeft = _cacheSize;
             while (itemsLeft > 0)

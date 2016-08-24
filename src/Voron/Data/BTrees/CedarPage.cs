@@ -1,12 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Voron.Data.BTrees.Cedar;
 using Voron.Impl;
-using Voron.Impl.Paging;
 
 namespace Voron.Data.BTrees
 {
@@ -15,229 +13,280 @@ namespace Voron.Data.BTrees
     /// - Header
     /// - BlocksMetadata (in the header page)
     /// - BlocksPages with as many as <see cref="CedarRootHeader.NumberOfBlocksPages"/>
+    ///     - NodeInfo sequence
+    ///     - Node sequence
     /// - TailPages with as many as <see cref="CedarRootHeader.NumberOfTailPages"/>
-    /// - NodesPages with as many as <see cref="CedarRootHeader.NumberOfNodePages"/>    
+    /// - NodesPages with as many as <see cref="CedarRootHeader.NumberOfDataNodePages"/>    
     /// </summary>
-    public unsafe class CedarPage
+    public unsafe partial class CedarPage
     {
+        public struct HeaderAccessor
+        {
+            private readonly CedarPage _page;
+            private PageHandlePtr _currentPtr;
+            public CedarPageHeader* Ptr;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public HeaderAccessor(CedarPage page, PageHandlePtr pagePtr)
+            {
+                _page = page;
+                _currentPtr = pagePtr;
+
+                Ptr = (CedarPageHeader*)_currentPtr.Value.Pointer;
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void SetWritable()
+            {
+                if (!_currentPtr.IsWritable)
+                    _currentPtr = _page.GetMainPage(true);
+
+                Ptr = (CedarPageHeader*)_currentPtr.Value.Pointer;
+            }
+        }
+
         protected struct BlocksAccessor
         {
             private readonly CedarPage _page;
-            private short _currentPageOffset;
             private PageHandlePtr _currentPtr;
+            private PageHandlePtr _currentMetadataPtr;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public BlocksAccessor(CedarPage page)
             {
                 _page = page;
-                _currentPtr = new PageHandlePtr();
-                _currentPageOffset = -1;
+                _currentMetadataPtr = _page.GetBlocksMetadataPage();
+                _currentPtr = _page.GetBlocksPageByOffset();
+            }
+
+            /// <summary>
+            /// Returns the first <see cref="Node"/>. CAUTION: Can only be used for reading, use DirectWrite if you need to write to it.
+            /// </summary>
+            internal Node* Nodes
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get { return (Node*)DirectRead<Node>(); }
+            }
+
+            /// <summary>
+            /// Returns the first <see cref="NodeInfo"/>. CAUTION: Can only be used for reading, use DirectWrite if you need to write to it.
+            /// </summary>
+            internal NodeInfo* NodesInfo
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get { return (NodeInfo*)DirectRead<NodeInfo>(); }
+            }
+
+            /// <summary>
+            /// Returns the first <see cref="BlockMetadata"/>. CAUTION: Can only be used for reading, use DirectWrite if you need to write to it.
+            /// </summary>
+            internal BlockMetadata* Metadata
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get { return (BlockMetadata*)DirectRead<BlockMetadata>(); }
+            }
+
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void* DirectRead<T>(long i = 0) where T : struct
+            {
+                if (typeof(T) == typeof(BlockMetadata))
+                {
+                    return ((BlockMetadata*)_currentMetadataPtr.Value.Pointer + _page.Header.Ptr->MetadataOffset) + i;
+                }
+
+                if (typeof(T) == typeof(NodeInfo))
+                {
+                    return (NodeInfo*)_currentPtr.Value.DataPointer + i;
+                }
+
+                // We prefer the Node to go last because sizeof(NodeInfo) == 2 therefore we only shift _blocksPerPage instead of multiply.
+                if (typeof(T) == typeof(Node))
+                {
+                    return (Node*)(_currentPtr.Value.DataPointer + sizeof(NodeInfo) * _page.Header.Ptr->BlocksPerPage) + i;
+                }
+
+                throw new NotSupportedException("Access type not supported by this accessor.");
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void* Read<T>(int i) where T : struct
+            public void* DirectWrite<T>(long i = 0) where T : struct
             {
-                if (typeof(T) == typeof(block))
+                if (typeof(T) == typeof(BlockMetadata))
                 {
-                    throw new NotImplementedException();
-                }
-                else
-                {
-                    int pageOffset = i / _page._blocksPerPage;
-                    int pageIndex = i % _page._blocksPerPage;
+                    if (!_currentMetadataPtr.IsWritable)
+                        _currentMetadataPtr = _page.GetBlocksMetadataPage(true);
 
-                    if (pageOffset != _currentPageOffset)
-                    {
-                        _currentPageOffset = (short)pageOffset;
-                        _currentPtr = _page.GetBlocksPageByOffset(pageOffset);
-                    }
-
-                    var start = (CedarBlock*)_currentPtr.Value.DataPointer;
-
-                    if (typeof(T) == typeof(ninfo))
-                    {
-                        return &(start + pageIndex)->NodeInfo;
-                    }
-                    if (typeof(T) == typeof(node))
-                    {
-                        return &(start + pageIndex)->Node;
-                    }
+                    return ((BlockMetadata*)_currentMetadataPtr.Value.Pointer + _page.Header.Ptr->MetadataOffset) + i;
                 }
 
-                throw new NotSupportedException();
+                if (!_currentPtr.IsWritable)
+                    _currentPtr = _page.GetBlocksPageByOffset(true);
+
+                if (typeof(T) == typeof(NodeInfo))
+                {
+                    return (NodeInfo*)_currentPtr.Value.DataPointer + i;
+                }
+
+                // We prefer the Node to go last because sizeof(NodeInfo) == 2 therefore we only shift _blocksPerPage instead of multiply.
+                if (typeof(T) == typeof(Node))
+                {
+                    return (Node*)(_currentPtr.Value.DataPointer + sizeof(NodeInfo) * _page.Header.Ptr->BlocksPerPage) + i;
+                }
+
+                throw new NotSupportedException("Access type not supported by this accessor.");
+            }
+        }
+
+        protected struct Tail0Accessor
+        {
+            private readonly CedarPage _page;
+            private PageHandlePtr _currentPtr;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public Tail0Accessor(CedarPage page)
+            {
+                _page = page;
+                _currentPtr = _page.GetMainPage();
+            }
+
+            public int Length
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get { return this[0]; }
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                set { this[0] = value; }
+            }
+
+            public int this[long i]
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get
+                {
+                    int* ptr = (int*)(_currentPtr.Value.Pointer + _page.Header.Ptr->Tail0Offset);
+                    return *(ptr + i);
+                }
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                set
+                {
+                    SetWritable();
+
+                    int* ptr = (int*)(_currentPtr.Value.Pointer + _page.Header.Ptr->Tail0Offset);
+                    *(ptr + i) = value;
+                }
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void* Write<T>(int i) where T : struct
+            public void SetWritable()
             {
-                if (typeof(T) == typeof(block))
-                {
-                    throw new NotImplementedException();
-                }
-                else
-                {
-                    int pageOffset = i / _page._blocksPerPage;
-                    int pageIndex = i % _page._blocksPerPage;
-
-                    if (pageOffset != _currentPageOffset || !_currentPtr.IsWritable)
-                    {
-                        _currentPageOffset = (short)pageOffset;
-                        _currentPtr = _page.GetBlocksPageByOffset(pageOffset);
-                    }
-
-                    var start = (CedarBlock*)_currentPtr.Value.DataPointer;
-
-                    if (typeof(T) == typeof(ninfo))
-                    {
-                        return &(start + pageIndex)->NodeInfo;
-                    }
-                    if (typeof(T) == typeof(node))
-                    {
-                        return &(start + pageIndex)->Node;
-                    }
-                }
-
-                throw new NotSupportedException();
+                if (!_currentPtr.IsWritable)
+                    _currentPtr = _page.GetMainPage(true);
             }
+
         }
 
         protected struct TailAccessor
         {
             private readonly CedarPage _page;
-            private short _currentPageOffset;
             private PageHandlePtr _currentPtr;
+
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public TailAccessor(CedarPage page)
             {
                 _page = page;
-                _currentPtr = new PageHandlePtr();
-                _currentPageOffset = -1;
+                _currentPtr = _page.GetTailPageByOffset();
             }
 
             public int Length
             {
-                get { throw new NotImplementedException(); }
-                set { throw new NotImplementedException(); }
+                get { return *(int*)_currentPtr.Value.DataPointer; }
+                set
+                {
+                    if (!_currentPtr.IsWritable)
+                        _currentPtr = _page.GetTailPageByOffset(true);
+
+                    *(int*)_currentPtr.Value.DataPointer = value;
+                }
             }
 
             public byte this[int i]
             {
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                get
-                {
-                    int pageOffset = i / _page._tailBytesPerPage;
-                    int pageIndex = i % _page._tailBytesPerPage;
-                    if (pageOffset != _currentPageOffset)
-                    {
-                        _currentPageOffset = (short)pageOffset;
-                        _currentPtr = _page.GetTailPageByOffset(pageOffset);
-                    }
-
-                    return *(_currentPtr.Value.DataPointer + pageIndex);
-                }
+                get { return *(_currentPtr.Value.DataPointer + i); }
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 set
                 {
-                    int pageOffset = i / _page._tailBytesPerPage;
-                    int pageIndex = i % _page._tailBytesPerPage;
-                    if (pageOffset != _currentPageOffset || !_currentPtr.IsWritable)
-                    {
-                        _currentPageOffset = (short)pageOffset;
-                        _currentPtr = _page.GetTailPageByOffset(pageOffset, true);
-                    }
+                    if (!_currentPtr.IsWritable)
+                        _currentPtr = _page.GetTailPageByOffset(true);
 
-                    *(_currentPtr.Value.DataPointer + pageIndex) = value;
+                    *(_currentPtr.Value.DataPointer + i) = value;
                 }
             }
 
-            public T Read<T>(int i) where T : struct
+            public byte this[long i]
             {
-                // TODO: Check if typeof(T) == typeof(int) gets optimized.
-                throw new NotImplementedException();
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get { return *(_currentPtr.Value.DataPointer + i); }
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                set
+                {
+                    if (!_currentPtr.IsWritable)
+                        _currentPtr = _page.GetTailPageByOffset(true);
+
+                    *(_currentPtr.Value.DataPointer + i) = value;
+                }
             }
 
-            public void Write<T>(int i, T v) where T : struct
+            public byte* DirectRead(long i = 0)
             {
-                // TODO: Check if typeof(T) == typeof(int) gets optimized.
-                throw new NotImplementedException();
+                return _currentPtr.Value.DataPointer + i;
+            }
+
+            public byte* DirectWrite(long i = 0)
+            {
+                if (!_currentPtr.IsWritable)
+                    _currentPtr = _page.GetDataNodesPageByOffset(true);
+
+                return _currentPtr.Value.DataPointer + i;
             }
         }
 
-        protected struct NodesAccessor
+        protected struct DataAccessor
         {
             private readonly CedarPage _page;
-            private short _currentPageOffset;
             private PageHandlePtr _currentPtr;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public NodesAccessor(CedarPage page)
+            public DataAccessor(CedarPage page)
             {
                 _page = page;
-                _currentPtr = new PageHandlePtr();
-                _currentPageOffset = -1;
+                _currentPtr = _page.GetDataNodesPageByOffset();
             }
 
-            public CedarDataPtr* Read(int i)
+            public CedarDataPtr* DirectRead(long i = 0)
             {
-                int pageOffset = i / _page._nodesPerPage;
-                int pageIndex = i % _page._nodesPerPage;
-                if (pageOffset != _currentPageOffset)
-                {
-                    _currentPageOffset = (short)pageOffset;
-                    _currentPtr = _page.GetNodesPageByOffset(pageOffset);
-                }
-
-                return (CedarDataPtr*)_currentPtr.Value.DataPointer + pageIndex;
+                return (CedarDataPtr*)_currentPtr.Value.DataPointer + i;
             }
 
-            public CedarDataPtr* Write(int i)
+            public CedarDataPtr* DirectWrite(long i = 0)
             {
-                int pageOffset = i / _page._nodesPerPage;
-                int pageIndex = i % _page._nodesPerPage;
-                if (pageOffset != _currentPageOffset || !_currentPtr.IsWritable)
-                {
-                    _currentPageOffset = (short)pageOffset;
-                    _currentPtr = _page.GetNodesPageByOffset(pageOffset, true);
-                }
+                if (!_currentPtr.IsWritable)
+                    _currentPtr = _page.GetDataNodesPageByOffset(true);
 
-                return (CedarDataPtr*)_currentPtr.Value.DataPointer + pageIndex;
+                return (CedarDataPtr*)_currentPtr.Value.DataPointer + i;
             }
         }
-
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private PageHandlePtr GetBlocksPageByOffset(int pageOffset, bool writable = false)
-        {
-            long pageNumber = Header->BlocksPageNumber + pageOffset;
-            return writable ? new PageHandlePtr(_pageLocator.GetWritablePage(pageNumber), true) : new PageHandlePtr(_pageLocator.GetReadOnlyPage(pageNumber), false);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private PageHandlePtr GetTailPageByOffset(int pageOffset, bool writable = false)
-        {
-            long pageNumber = Header->TailPageNumber + pageOffset;
-            return writable ? new PageHandlePtr(_pageLocator.GetWritablePage(pageNumber), true) : new PageHandlePtr(_pageLocator.GetReadOnlyPage(pageNumber), false);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private PageHandlePtr GetNodesPageByOffset(int pageOffset, bool writable = false)
-        {
-            long pageNumber = Header->NodesPageNumber + pageOffset;
-            return writable ? new PageHandlePtr(_pageLocator.GetWritablePage(pageNumber), true) : new PageHandlePtr(_pageLocator.GetReadOnlyPage(pageNumber), false);
-        }
-
 
         private readonly LowLevelTransaction _llt;
         private readonly PageLocator _pageLocator;
-        private readonly Page _mainPage;
-        private readonly int _tailBytesPerPage;
-        private readonly int _blocksPerPage;
-        private readonly int _nodesPerPage;
+        private Page _mainPage;
 
-        protected readonly BlocksAccessor Blocks;
-        protected readonly TailAccessor Tail;
-        protected readonly NodesAccessor Nodes;
+        public HeaderAccessor Header;
+        protected BlocksAccessor Blocks;
+        protected TailAccessor Tail;
+        protected Tail0Accessor Tail0;
+        protected DataAccessor Data;        
 
         public CedarPage(LowLevelTransaction llt, long pageNumber, CedarPage page = null)
         {
@@ -253,33 +302,128 @@ namespace Voron.Data.BTrees
             {
                 this._mainPage = _pageLocator.GetReadOnlyPage(pageNumber);
             }
-            
-            this._blocksPerPage = (_llt.DataPager.PageSize - sizeof(CedarPageHeader)) / sizeof(CedarBlock);
-            this._tailBytesPerPage = _llt.DataPager.PageSize - sizeof(PageHeader);
-            this._nodesPerPage = (_llt.DataPager.PageSize - sizeof(PageHeader)) / sizeof(CedarDataPtr);
 
+            this.Header = new HeaderAccessor(this, new PageHandlePtr(this._mainPage, false));
             this.Blocks = new BlocksAccessor(this);
             this.Tail = new TailAccessor(this);
-            this.Nodes = new NodesAccessor(this);
-        }
-
-        public CedarPageHeader* Header
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return (CedarPageHeader*) _mainPage.Pointer; }
+            this.Data = new DataAccessor(this);            
         }
 
         public long PageNumber
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return Header->PageNumber; }
+            get { return Header.Ptr->PageNumber; }
         }
 
         public bool IsBranch
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return Header->IsBranchPage; }
+            get { return Header.Ptr->IsBranchPage; }
         }
+
+        internal void Initialize()
+        {
+            Header.SetWritable();
+
+            CedarPageHeader* header = Header.Ptr;
+
+            // We do not allow changing the amount of pages because of now we will consider them constants.
+            header->BlocksPageCount = CedarRootHeader.NumberOfBlocksPages;
+            header->BlocksPerPage = (_llt.PageSize * header->BlocksPageCount - sizeof(PageHeader)) / (sizeof(Node) + sizeof(NodeInfo));
+
+            header->TailPageCount = CedarRootHeader.NumberOfTailPages;
+            header->TailBytesPerPage = _llt.PageSize * header->TailPageCount - sizeof(PageHeader);
+
+            header->DataPageCount = CedarRootHeader.NumberOfDataNodePages;            
+            header->DataNodesPerPage = (_llt.PageSize * header->DataPageCount - sizeof(PageHeader)) / sizeof(CedarDataPtr);
+
+            // We make sure we do now account for any block that is not complete. 
+            header->Size = 256;            
+            header->Capacity = header->BlocksPerPage - (header->BlocksPerPage % 256);            
+
+            // Aligned to 16 bytes
+            int offset = sizeof(CedarPageHeader*) + 16;
+            header->MetadataOffset = offset - offset % 16;
+            header->Tail0Offset = header->MetadataOffset + (header->BlocksPerPage + 1) * sizeof(BlockMetadata);
+
+            Debug.Assert(header->Tail0Offset < _llt.PageSize - 1024); // We need at least 1024 bytes for it. 
+
+            for (int i = 0; i < 256; i++)
+                header->Reject[i] = (short) (i + 1);
+
+            // Request for writing all the pages. 
+            var array = (Node*)Blocks.DirectWrite<Node>();
+            var block = (BlockMetadata*)Blocks.DirectWrite<BlockMetadata>();
+
+            array[0] = new Node(0, -1);
+            for (int i = 1; i < 256; ++i)
+                array[i] = new Node(i == 1 ? -255 : -(i - 1), i == 255 ? -1 : -(i + 1));
+
+            block[0].Ehead = 1; // bug fix for erase
+        }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private PageHandlePtr GetMainPage(bool writable = false)
+        {
+            if (writable)
+                Debug.Assert(_llt.Flags == TransactionFlags.ReadWrite, "Create is being called in a read transaction.");
+
+            this._mainPage = writable ?
+                _pageLocator.GetWritablePage(_mainPage.PageNumber) :
+                _pageLocator.GetReadOnlyPage(_mainPage.PageNumber);
+
+            return new PageHandlePtr(_mainPage, writable);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private PageHandlePtr GetBlocksPageByOffset(bool writable = false)
+        {
+            if (writable)
+                Debug.Assert(_llt.Flags == TransactionFlags.ReadWrite, "Create is being called in a read transaction.");
+
+            long pageNumber = Header.Ptr->BlocksPageNumber;
+            return writable ?
+                new PageHandlePtr(_pageLocator.GetWritablePage(pageNumber), true) :
+                new PageHandlePtr(_pageLocator.GetReadOnlyPage(pageNumber), false);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private PageHandlePtr GetTailPageByOffset(bool writable = false)
+        {
+            if (writable)
+                Debug.Assert(_llt.Flags == TransactionFlags.ReadWrite, "Create is being called in a read transaction.");
+
+            long pageNumber = Header.Ptr->TailPageNumber;
+            return writable ?
+                new PageHandlePtr(_pageLocator.GetWritablePage(pageNumber), true) :
+                new PageHandlePtr(_pageLocator.GetReadOnlyPage(pageNumber), false);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private PageHandlePtr GetDataNodesPageByOffset(bool writable = false)
+        {
+            if (writable)
+                Debug.Assert(_llt.Flags == TransactionFlags.ReadWrite, "Create is being called in a read transaction.");
+
+            long pageNumber = Header.Ptr->NodesPageNumber;
+            return writable ?
+                new PageHandlePtr(_pageLocator.GetWritablePage(pageNumber), true) :
+                new PageHandlePtr(_pageLocator.GetReadOnlyPage(pageNumber), false);
+        }
+
+
+        private PageHandlePtr GetBlocksMetadataPage(bool writable = false)
+        {
+            if (writable)
+                Debug.Assert(_llt.Flags == TransactionFlags.ReadWrite, "Create is being called in a read transaction.");
+
+            long pageNumber = _mainPage.PageNumber;
+            return writable ?
+                new PageHandlePtr(_pageLocator.GetWritablePage(pageNumber), true) :
+                new PageHandlePtr(_pageLocator.GetReadOnlyPage(pageNumber), false);
+        }
+
     }
 
 }

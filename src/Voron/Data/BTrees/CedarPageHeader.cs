@@ -10,15 +10,15 @@ namespace Voron.Data.BTrees
     /// The Cedar Branch Header is contained by the first page or any Cedar BTree Node
     /// </summary>
     [StructLayout(LayoutKind.Explicit, Pack = 1)]
-    public struct CedarPageHeader
+    public unsafe struct CedarPageHeader
     {
         public bool IsValid => Flags == PageFlags.CedarTreePage && (TreeFlags == TreePageFlags.Branch || TreeFlags == TreePageFlags.Leaf);
         public bool IsBranchPage => TreeFlags == TreePageFlags.Branch;
         public bool IsLeafPage => TreeFlags == TreePageFlags.Leaf;
         
         public long BlocksPageNumber => PageNumber;
-        public long TailPageNumber => PageNumber + NodePageCount;
-        public long NodesPageNumber => PageNumber + NodePageCount + NodePageCount;    
+        public long TailPageNumber => PageNumber + DataPageCount;
+        public long NodesPageNumber => PageNumber + DataPageCount + DataPageCount;
 
         /// <summary>
         /// This page number
@@ -45,27 +45,64 @@ namespace Voron.Data.BTrees
         public TreePageFlags TreeFlags;
 
         /// <summary>
-        /// How many blocks pages are available to be used.
+        /// The actual used size for the blocks storage.
         /// </summary>
         [FieldOffset(16)]
+        public int Size;
+
+        /// <summary>
+        /// The total capacity for the blocks storage
+        /// </summary>
+        [FieldOffset(20)]
+        public int Capacity;
+
+        /// <summary>
+        /// How many blocks pages are available to be used.
+        /// </summary>
+        [FieldOffset(24)]
         public int BlocksPageCount;
+
+        [FieldOffset(28)]
+        public int BlocksPerPage;
 
         /// <summary>
         /// How many tail pages are available to be used.
         /// </summary>
-        [FieldOffset(20)]
+        [FieldOffset(32)]
         public int TailPageCount;
 
-        /// <summary>
-        /// How many nodes pages are available for this node. 
-        /// </summary>
-        [FieldOffset(24)]
-        public int NodePageCount;
+        [FieldOffset(36)]
+        public int TailBytesPerPage;
 
         /// <summary>
-        /// The offset from the end of the <see cref="CedarPageHeader"/> where the blocks metadata is stored.
+        /// How many data nodes pages are available for this Node. 
         /// </summary>
-        [FieldOffset(28)]
+        [FieldOffset(40)]
+        public int DataPageCount;
+
+        [FieldOffset(44)]
+        public int DataNodesPerPage;
+
+        /// <summary>
+        /// The offset from the start of the <see cref="CedarPageHeader"/> where the blocks metadata is stored.
+        /// </summary>
+        [FieldOffset(48)]
         public int MetadataOffset;
+
+        /// <summary>
+        /// The offset from the start of the <see cref="CedarPageHeader"/> where the tail metadata is stored.
+        /// </summary>
+        [FieldOffset(52)]
+        public int Tail0Offset;
+
+        [FieldOffset(56)]
+        public int _bheadF;  // first block of Full;   0
+        [FieldOffset(60)]
+        public int _bheadC;  // first block of Closed; 0 if no Closed
+        [FieldOffset(64)]
+        public int _bheadO;  // first block of Open;   0 if no Open
+
+        [FieldOffset(68)]
+        public fixed short Reject[257];
     }
 }

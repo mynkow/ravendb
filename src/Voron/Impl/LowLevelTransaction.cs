@@ -302,6 +302,45 @@ namespace Voron.Impl
             return p;
         }
 
+        /// <summary>
+        /// This method of allocating pages will ensure all pages are going to be allocated one after the other. 
+        /// This way of allocating will ensure that pages have data locality among themselves.
+        /// </summary>
+        /// <param name="numberOfPages">The size of the pages to allocate</param>
+        /// <returns>The actual allocated pages.</returns>
+        public Page[] AllocatePages(int[] numberOfPages, int? totalPages = null, long? pageNumber = null)
+        {
+            if (pageNumber == null)
+            {
+                if (totalPages == null)
+                {
+                    totalPages = 0;
+                    for (int i = 0; i < numberOfPages.Length; i++)
+                        totalPages += i;
+                }
+
+                pageNumber = _freeSpaceHandling.TryAllocateFromFreeSpace(this, totalPages.Value);
+                if ( pageNumber == null) // allocate from end of file
+                {
+                    pageNumber = State.NextPageNumber;
+                    State.NextPageNumber += totalPages.Value;
+                }
+            }
+
+            var result = new Page[numberOfPages.Length];
+            int count = 0;
+            for (int i = 0; i < numberOfPages.Length; i++)
+            {
+                result[i] = AllocatePage(numberOfPages[i], pageNumber + count);
+                count += numberOfPages[i];
+            }
+
+            if (totalPages.HasValue && count != totalPages.Value)
+                throw new InvalidOperationException("The total pages (if passed) must be equal to the actual pages requested.");
+
+            return result;
+        }
+
         public Page AllocatePage(int numberOfPages, long? pageNumber = null)
         {
             if (pageNumber == null)
