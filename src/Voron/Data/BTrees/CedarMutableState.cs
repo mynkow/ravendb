@@ -42,7 +42,7 @@ namespace Voron.Data.BTrees
 
         public void CopyTo(CedarRootHeader* header)
         {
-            header->RootObjectType = RootObjectType.VariableSizeTree;
+            header->RootObjectType = RootObjectType.CedarTree;
             header->Flags = Flags;
             header->BranchPages = BranchPages;
             header->Depth = Depth;

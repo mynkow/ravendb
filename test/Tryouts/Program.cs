@@ -18,14 +18,40 @@ using Sparrow.Collections;
 
 namespace Tryouts
 {
-  
+
     public class Program
     {
         static void Main(string[] args)
         {
+            using (var streamwriter = new StreamWriter(new FileStream("managed.txt", FileMode.Create)))
+            {
+                streamwriter.AutoFlush = true;
+                Console.SetOut(streamwriter);
+                Console.SetError(streamwriter);
+
+                var p = new FastTests.Sparrow.CedarTrieTests();
+                p.SingleInsertAndQuery();
+            }
+
+            try
+            {
+                using (var streamwriter = new StreamWriter(new FileStream("voron.txt", FileMode.Create)))
+                {
+                    streamwriter.AutoFlush = true;
+                    Console.SetOut(streamwriter);
+                    Console.SetError(streamwriter);
+
+                    var b = new FastTests.Voron.Cedar.Basic(); ;
+                    b.SingleInsertAndQuery();
+                }
+            }
+            catch {}
+
+
             //CedarTrie<int> trie = new CedarTrie<int>();
-            var p = new FastTests.Sparrow.CedarTrieTests();
-            p.TestCaseGenerator(100, 60, 1002400, 45);
+            // p.TestCaseGenerator(100, 60, 1002400, 45);
+
+
         }
     }
 }

@@ -57,7 +57,7 @@ namespace Voron.Data.BTrees
                     }
                 }
 
-                return i + j*(1 + sizeof(short));
+                return i + j*(1 + sizeof(long));
             }
         }
 

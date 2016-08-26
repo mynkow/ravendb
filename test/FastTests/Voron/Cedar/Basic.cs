@@ -40,7 +40,7 @@ namespace FastTests.Voron.Cedar
         }
 
         [Fact]
-        public void CanAdd()
+        public void SingleInsertAndQuery()
         {
             using (var tx = Env.WriteTransaction())
             {
@@ -52,7 +52,7 @@ namespace FastTests.Voron.Cedar
 
                 Assert.Equal(1, root.NumberOfKeys);
                 Assert.Equal(1, root.NonZeroSize);
-                Assert.Equal(8, root.NonZeroLength);
+                //Assert.Equal(8, root.NonZeroLength);
 
                 tx.Commit();
             }
@@ -66,7 +66,14 @@ namespace FastTests.Voron.Cedar
 
                 Assert.Equal(1, root.NumberOfKeys);
                 Assert.Equal(1, root.NonZeroSize);
-                Assert.Equal(8, root.NonZeroLength);
+                //Assert.Equal(8, root.NonZeroLength);
+
+                CedarDataPtr* ptr;
+                CedarRef result;
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator,"tes"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator,"test1"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator,"a"), out result, out ptr));
             }
         }
 

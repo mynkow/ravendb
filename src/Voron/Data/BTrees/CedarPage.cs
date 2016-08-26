@@ -438,12 +438,13 @@ namespace Voron.Data.BTrees
             var array = (Node*)Blocks.DirectWrite<Node>();
             var block = (BlockMetadata*)Blocks.DirectWrite<BlockMetadata>();
             var data = Data.DirectWrite();
-            var tail = Tail.DirectWrite();
 
             array[0] = new Node(0, -1);
             for (int i = 1; i < 256; ++i)
                 array[i] = new Node(i == 1 ? -255 : -(i - 1), i == 255 ? -1 : -(i + 1));
 
+            // Create a default block
+            block[0] = BlockMetadata.Create();
             block[0].Ehead = 1; // bug fix for erase
 
             // Initialize the free data node linked list.
@@ -466,7 +467,9 @@ namespace Voron.Data.BTrees
 
             Data.NextFree = 0;
 
-            Memory.Set(tail, 0, header->TailBytesPerPage);
+
+            Tail.Length = sizeof(int);
+
         }
 
 
