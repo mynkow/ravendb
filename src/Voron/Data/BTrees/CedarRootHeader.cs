@@ -57,7 +57,9 @@ namespace Voron.Data.BTrees
         /// This is the total number of pages that each Node will spawn. 
         /// The idea is that all those enter into a very few L1 cache lines to exploit the layered access pattern. 
         /// </summary>
-        public const int TotalNumberOfPagesPerNode = NumberOfDataNodePages + NumberOfBlocksPages + NumberOfTailPages;
+        public const int TotalNumberOfPagesPerNode = NumberOfDataNodePages + NumberOfBlocksPages + NumberOfTailPages + 1;
+
+        public static readonly int[] DefaultLayout = { 1, CedarRootHeader.NumberOfBlocksPages, CedarRootHeader.NumberOfTailPages, CedarRootHeader.NumberOfDataNodePages };
 
     }
 }

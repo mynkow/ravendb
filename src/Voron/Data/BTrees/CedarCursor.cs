@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Voron.Impl;
 
@@ -14,7 +15,7 @@ namespace Voron.Data.BTrees
         private readonly LowLevelTransaction _llt;        
         private readonly List<long> _path;
 
-        private CedarPage _currentPage;
+        private CedarPage _currentPage;        
 
         public CedarCursor(LowLevelTransaction llt, CedarPage currentPage, List<long> pathFromRoot)
         {
@@ -28,34 +29,22 @@ namespace Voron.Data.BTrees
         {            
         }
 
-        public void SearchFirst()
+        public CedarPage CurrentPage
         {
-            throw new NotImplementedException();
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return _currentPage; }
         }
 
-        public void SearchLast()
-        {
-            throw new NotImplementedException();
-        }
-
-        public void Search(Slice key)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Slice Key
-        {
-            get
-            {
-                throw new NotImplementedException();
-            }
-        }
+        public Slice Key { get; internal set; }
 
         public ushort NodeVersion
         {
             get
             {
-                throw new NotImplementedException();
+                if (Pointer == null)
+                    throw new InvalidOperationException();
+
+                return Pointer->Version;
             }
         }
 
@@ -63,7 +52,10 @@ namespace Voron.Data.BTrees
         {
             get
             {
-                throw new NotImplementedException();
+                if (Pointer == null)
+                    throw new InvalidOperationException();
+
+                return Pointer->DataSize;
             }
         }
 
@@ -71,18 +63,16 @@ namespace Voron.Data.BTrees
         {
             get
             {
-                throw new NotImplementedException();
+                if (Pointer == null)
+                    throw new InvalidOperationException();
+
+                return (byte*) &Pointer->Data;
             }
         }
 
-        internal CedarDataPtr* Pointer
-        {
-            get
-            {
-                throw new NotImplementedException();
-            }
-        }
+        public CedarDataPtr* Pointer { get; private set; }
 
+        public CedarTuple Result;
 
         #region IDisposable Support
 
@@ -120,7 +110,7 @@ namespace Voron.Data.BTrees
             GC.SuppressFinalize(this);
         }
 
-        protected void Push(CedarPage p)
+        protected void Push(CedarPage page)
         {
             throw new NotImplementedException();
         }
@@ -131,5 +121,66 @@ namespace Voron.Data.BTrees
         }
 
         #endregion
+
+        public void FindLocation(Slice key)
+        {
+            if (key.Options == SliceOptions.Key)
+            {
+                Lookup(key);
+            }
+            else if (key.Options == SliceOptions.BeforeAllKeys)
+            {
+                LookupFirst();
+            }
+            else if (key.Options == SliceOptions.AfterAllKeys)
+            {
+                LookupLast();
+            }
+        }
+
+        private void LookupLast()
+        {
+            Key = Slices.AfterAllKeys;
+            Pointer = null;
+
+            if (_currentPage.IsLeaf)
+                return;
+
+            throw new NotImplementedException();
+        }
+
+        private void LookupFirst()
+        {
+            Key = Slices.BeforeAllKeys;
+            Pointer = null;
+
+            if (_currentPage.IsLeaf)
+                return;
+
+            throw new NotImplementedException();
+        }
+
+        private void Lookup(Slice key)
+        {
+            if (_currentPage.IsLeaf)
+            {
+                CedarDataPtr* ptr;
+
+                if (_currentPage.ExactMatchSearch(key, out Result, out ptr) == CedarResultCode.Success)
+                {
+                    Key = key;
+                    Pointer = ptr;
+                }
+                else
+                {
+                    Key = Slices.Empty;
+                    Pointer = null;
+                }
+
+                return;
+            }
+
+            throw new NotImplementedException();
+        }
     }
 }

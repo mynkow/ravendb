@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using Xunit;
 using Voron;
+using Voron.Data.BTrees;
 using Voron.Global;
 
 namespace FastTests.Voron.Cedar
 {
-    public class Basic : StorageTest
+    public unsafe class Basic : StorageTest
     {
 
         protected override void Configure(StorageEnvironmentOptions options)
@@ -17,12 +18,55 @@ namespace FastTests.Voron.Cedar
         }
 
         [Fact]
+        public void Construction()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.False(root.IsBranch); // It is just created, so it is a leaf node.   
+                Assert.Equal(256, root.Header.Ptr->Size);
+                Assert.Equal(root.Header.Ptr->BlocksPerPage - (root.Header.Ptr->BlocksPerPage % 256), root.Header.Ptr->Capacity);
+                Assert.Equal(0,  root.Header.Ptr->Capacity % 256);
+
+                Assert.Equal(0, root.NumberOfKeys);
+                Assert.Equal(0, root.NonZeroSize);
+                Assert.Equal(0, root.NonZeroLength);
+
+                Assert.Equal(1, tree.State.PageCount);
+                Assert.Equal(1, tree.State.LeafPages);
+            }
+        }
+
+        [Fact]
         public void CanAdd()
         {
             using (var tx = Env.WriteTransaction())
             {
                 var tree = tx.CreateTrie("foo");
                 tree.Add("test", 1);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(256, root.Header.Ptr->Size);
+
+                Assert.Equal(1, root.NumberOfKeys);
+                Assert.Equal(1, root.NonZeroSize);
+                Assert.Equal(8, root.NonZeroLength);
+
+                tx.Commit();
+            }
+
+            using (var tx = Env.ReadTransaction())
+            {
+                var tree = tx.ReadTrie("foo");
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(256, root.Header.Ptr->Size);
+
+                Assert.Equal(1, root.NumberOfKeys);
+                Assert.Equal(1, root.NonZeroSize);
+                Assert.Equal(8, root.NonZeroLength);
             }
         }
 
@@ -66,14 +110,26 @@ namespace FastTests.Voron.Cedar
         [Fact]
         public void AfterPageSplitAllDataIsValid()
         {
-            const int count = 4096;
+            int count = 0;
             using (var tx = Env.WriteTransaction())
             {
                 var tree = tx.CreateTrie("foo");
-                for (int i = 0; i < count; i++)
+
+                do
                 {
-                   tree.Add("test-" + i.ToString("000"), i);
+
+                    tree.Add("test-" + count.ToString("0000000"), count);
+
+                    count++;
                 }
+                while (tree.State.PageCount == 1);
+
+                Assert.Equal(count, tree.State.NumberOfEntries);
+                Assert.Equal(3, tree.State.PageCount);
+                Assert.Equal(2, tree.State.LeafPages);
+                Assert.Equal(1, tree.State.BranchPages);
+                Assert.Equal(2, tree.State.Depth);
+                Assert.True(tree.State.IsModified);
 
                 tx.Commit();
             }
@@ -81,12 +137,20 @@ namespace FastTests.Voron.Cedar
             using (var tx = Env.ReadTransaction())
             {
                 var tree = tx.ReadTrie("foo");
+
+                Assert.Equal(count, tree.State.NumberOfEntries);
+                Assert.Equal(3, tree.State.PageCount);
+                Assert.Equal(2, tree.State.LeafPages);
+                Assert.Equal(1, tree.State.BranchPages);
+                Assert.Equal(2, tree.State.Depth);
+                Assert.False(tree.State.IsModified);
+
                 using (var it = tree.Iterate(false))
                 {
                     for (int i = 0; i < count; i++)
                     {
-                        Assert.True(it.Seek(Slice.From(tx.Allocator, "test-" + i.ToString("000"))));
-                        Assert.Equal("test-" + i.ToString("000"), it.CurrentKey.ToString());
+                        Assert.True(it.Seek(Slice.From(tx.Allocator, "test-" + i.ToString("0000000"))));
+                        Assert.Equal("test-" + i.ToString("0000000"), it.CurrentKey.ToString());
                         Assert.Equal(i, it.CreateReaderForCurrent().ReadBigEndianInt64());
                     }
                 }

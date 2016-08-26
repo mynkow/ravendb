@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Voron.Impl;
 
 namespace Voron.Data.BTrees
 {
@@ -14,7 +13,8 @@ namespace Voron.Data.BTrees
     [StructLayout(LayoutKind.Explicit, Pack = 1)]
     public unsafe struct CedarDataPtr
     {
-        private const byte FlagsMask = 0x80;
+        public const byte FreeNode = 0x80;
+        private const byte FlagsMask = 0x40;
         private const byte SizeMask = 0x0F; // Size mask of total size of 16 is fine because we cannot store bigger than 8 bytes data anyways.
 
         [FieldOffset(0)]
@@ -42,6 +42,14 @@ namespace Voron.Data.BTrees
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (Header & FlagsMask) != 0 ? CedarNodeFlags.Data : CedarNodeFlags.Branch; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set
+            {
+                if (CedarNodeFlags.Data == value)
+                    Header |= FlagsMask;
+                else
+                    Header &= SizeMask;
+            }
         }
 
         /// <summary>
@@ -51,6 +59,21 @@ namespace Voron.Data.BTrees
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (byte)(Header & SizeMask); }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set { Header = (byte) (value & SizeMask); }
+        }
+
+        public bool IsFree
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return (Header & FreeNode) != 0; }
+            set
+            {
+                if (value)
+                    Header |= FreeNode;
+                else
+                    Header &= unchecked((byte) ~FreeNode);
+            }
         }
 
         public static byte* DirectAccess(CedarDataPtr* node)

@@ -68,7 +68,7 @@ namespace Voron.Data.BTrees
             };
         }
 
-        public void RecordNewPage(TreePage p, int num)
+        public void RecordNewPage(CedarPage p, int num)
         {
             PageCount += num;
 
@@ -80,13 +80,9 @@ namespace Voron.Data.BTrees
             {
                 LeafPages++;
             }
-            else if (p.IsOverflow)
-            {
-                OverflowPages += num;
-            }
         }
 
-        public void RecordFreedPage(TreePage p, int num)
+        public void RecordFreedPage(CedarPage p, int num)
         {
             PageCount -= num;
             Debug.Assert(PageCount >= 0);
@@ -100,11 +96,6 @@ namespace Voron.Data.BTrees
             {
                 LeafPages--;
                 Debug.Assert(LeafPages >= 0);
-            }
-            else if (p.IsOverflow)
-            {
-                OverflowPages -= num;
-                Debug.Assert(OverflowPages >= 0);
             }
         }
 

@@ -15,10 +15,10 @@ namespace Voron.Data.BTrees
         public bool IsValid => Flags == PageFlags.CedarTreePage && (TreeFlags == TreePageFlags.Branch || TreeFlags == TreePageFlags.Leaf);
         public bool IsBranchPage => TreeFlags == TreePageFlags.Branch;
         public bool IsLeafPage => TreeFlags == TreePageFlags.Leaf;
-        
-        public long BlocksPageNumber => PageNumber;
-        public long TailPageNumber => PageNumber + DataPageCount;
-        public long NodesPageNumber => PageNumber + DataPageCount + DataPageCount;
+
+        public long BlocksPageNumber => PageNumber + 1;
+        public long TailPageNumber => BlocksPageNumber + BlocksPageCount;
+        public long NodesPageNumber => TailPageNumber + TailPageCount;
 
         /// <summary>
         /// This page number

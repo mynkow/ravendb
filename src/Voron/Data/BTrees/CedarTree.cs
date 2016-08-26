@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Voron.Impl;
 using Voron.Impl.Paging;
@@ -37,7 +38,6 @@ namespace Voron.Data.BTrees
         }
 
 
-
         //public event Action<long> PageModified;
         //public event Action<long> PageFreed;        
 
@@ -46,7 +46,6 @@ namespace Voron.Data.BTrees
 
         public CedarMutableState State => _state;
         public LowLevelTransaction Llt => _llt;
-
 
         private CedarTree(LowLevelTransaction llt, Transaction tx, long root)
         {
@@ -76,17 +75,13 @@ namespace Voron.Data.BTrees
                 }
             };
         }
-
-
-        private static readonly int[] PageLayout = { 1, CedarRootHeader.NumberOfBlocksPages, CedarRootHeader.NumberOfTailPages, CedarRootHeader.NumberOfDataNodePages };
+        
 
         public static CedarTree Create(LowLevelTransaction llt, Transaction tx, TreeFlags flags = TreeFlags.None)
         {
             Debug.Assert(llt.Flags == TransactionFlags.ReadWrite, "Create is being called in a read transaction.");
 
-            var pages = llt.AllocatePages(PageLayout, CedarRootHeader.TotalNumberOfPagesPerNode + 1);
-
-            var leaf = new CedarPage(llt, pages[0].PageNumber);
+            var leaf = CedarPage.Allocate(llt, CedarRootHeader.DefaultLayout, CedarRootHeader.TotalNumberOfPagesPerNode);
             leaf.Header.Ptr->TreeFlags = TreePageFlags.Leaf;
             leaf.Initialize();
             
@@ -100,6 +95,7 @@ namespace Voron.Data.BTrees
                 }
             };
 
+            tree.State.RecordNewPage(leaf, 1);
             return tree;
         }
         
@@ -136,14 +132,12 @@ namespace Voron.Data.BTrees
                 throw new ArgumentException($"Key size is too big, must be at most {AbstractPager.MaxKeySize} bytes, but was {(key.Size + AbstractPager.RequiredSpaceForNewNode)}", nameof(key));
 
             // We look for the branch page that is going to host this data. 
-            CedarCursor cursor = FindLocationFor(key);
+            CedarCursor cursor;
+            CedarPage page = FindLocationFor(key, out cursor);
 
             // This is efficient because we return the very same Slice so checking can be done via pointer comparison. 
             if (cursor.Key.Same(key))
-            {
-                // We will be able to overwrite the data if the data fit into the allocated space or if we have smaller than 8 bytes data to store.                       
-                return GetDataPointer(cursor);
-            }
+                return cursor.Value;
 
             // If this triggers it is signaling a defect on the cursor implementation
             // This is a checked invariant on debug builds. 
@@ -152,7 +146,7 @@ namespace Voron.Data.BTrees
             return null;
         }
 
-        public byte* DirectAdd(Slice key, ushort? version = null)
+        public byte* DirectAdd(Slice key, ushort? version = null, int size = 8)
         {
             if (State.InWriteTransaction)
                 State.IsModified = true;
@@ -163,18 +157,27 @@ namespace Voron.Data.BTrees
             if (AbstractPager.IsKeySizeValid(key.Size) == false)
                 throw new ArgumentException($"Key size is too big, must be at most {AbstractPager.MaxKeySize} bytes, but was {(key.Size + AbstractPager.RequiredSpaceForNewNode)}", nameof(key));
 
+            // We will be able to write the data if the data fit into the allocated space or if we have smaller than 8 bytes data to store.
+            if (size > 8 || size < 0)
+                throw new ArgumentOutOfRangeException(nameof(size), "The supported range is between 0 and 8 bytes.");
+
             // We look for the branch page that is going to host this data. 
-            CedarCursor cursor = FindLocationFor(key);
+            CedarCursor cursor;
+            CedarPage page = FindLocationFor(key, out cursor);
 
             // This is efficient because we return the very same Slice so checking can be done via pointer comparison. 
             byte* pos;            
             if (cursor.Key.Same(key)) 
             {
                 // This is an update operation (key was found).               
-                CheckConcurrency(key, version, cursor.NodeVersion, ActionType.Add);
+                CheckConcurrency(key, version, cursor.NodeVersion, ActionType.Add);                
+                
+                // We need write access to the node.
+                short dataPosition = cursor.Result.Value;
+                CedarDataPtr* ptr = page.Data.DirectWrite(dataPosition);
+                ptr->DataSize = (byte) size;
 
-                // We will be able to overwrite the data if the data fit into the allocated space or if we have smaller than 8 bytes data to store.                       
-                return GetDataPointer(cursor);
+                return (byte*)&ptr->Data;
             }
 
             // If this triggers it is signaling a defect on the cursor implementation
@@ -186,7 +189,7 @@ namespace Voron.Data.BTrees
             do
             {
                 // It will output the position of the data to be written to. 
-                status = TryUpdate(cursor, key, version, out pos);
+                status = page.Update(key, size, out pos);
                 if (status == CedarActionStatus.NotEnoughSpace)
                 {
                     // We need to split because there is not enough space available to add this key into the page.
@@ -207,39 +210,45 @@ namespace Voron.Data.BTrees
             throw new NotImplementedException();
         }
 
-        internal CedarCursor FindLocationFor(Slice key)
+        internal CedarPage FindLocationFor(Slice key)
         {
-            CedarCursor cursor;
-            if (TryUseRecentTransactionPage(key, out cursor))
+            CedarPage page;
+            if (TryUseRecentTransactionPage(key, out page))
             {
-                return cursor;
+                return page;
             }
 
-            return SearchForKey(key);
+            return SearchPageForKey(key);
         }
 
-        private CedarCursor SearchForKey(Slice key)
+        internal CedarPage FindLocationFor(Slice key, out CedarCursor cursor)
+        {
+            CedarPage page;
+            if (TryUseRecentTransactionPage(key, out page, out cursor))
+                return page;
+
+            return SearchPageForKey(key, out cursor);
+        }
+
+        private CedarPage SearchPageForKey(Slice key)
         {
             var cursor = new CedarCursor(_llt, new CedarPage(_llt, State.RootPageNumber));
+            cursor.FindLocation(key);
 
-            if (key.Options == SliceOptions.Key)
-            {
-                cursor.Search(key);                
-            }
-            else if (key.Options == SliceOptions.BeforeAllKeys)
-            {
-                cursor.SearchFirst();
-            }
-            else if (key.Options == SliceOptions.AfterAllKeys)
-            {
-                cursor.SearchLast();
-            }
-
-            return cursor;           
+            return cursor.CurrentPage;
         }
 
-        private bool TryUseRecentTransactionPage(Slice key, out CedarCursor cursor)
+        private CedarPage SearchPageForKey(Slice key, out CedarCursor cursor)
         {
+            cursor = new CedarCursor(_llt, new CedarPage(_llt, State.RootPageNumber));
+            cursor.FindLocation(key);
+
+            return cursor.CurrentPage;
+        }
+
+        private bool TryUseRecentTransactionPage(Slice key, out CedarPage page, out CedarCursor cursor)
+        {
+            page = null;
             cursor = null;
 
             var foundPage = _recentlyFoundPages?.Find(key);
@@ -250,23 +259,30 @@ namespace Voron.Data.BTrees
             if (foundPage.Page.IsBranch)
                 throw new InvalidDataException("Index points to a non leaf page");
 
-            var page = new CedarPage(_llt, foundPage.Number, foundPage.Page);
+            page = new CedarPage(_llt, foundPage.Number, foundPage.Page);
             cursor = new CedarCursor(_llt, page, foundPage.CursorPath);
 
-            return true;            
+            return true;
         }
 
-        private CedarActionStatus TryUpdate(CedarCursor cursor, Slice key, ushort? version, out byte* pos)
+        private bool TryUseRecentTransactionPage(Slice key, out CedarPage page)
         {
-            throw new NotImplementedException();
+            page = null;
+
+            var foundPage = _recentlyFoundPages?.Find(key);
+            if (foundPage == null)
+                return false;
+
+            // This is the page where the header lives.                        
+            if (foundPage.Page.IsBranch)
+                throw new InvalidDataException("Index points to a non leaf page");
+
+            page = new CedarPage(_llt, foundPage.Number, foundPage.Page);
+
+            return true;
         }
 
         private void CheckConcurrency(Slice key, ushort? version, ushort nodeVersion, ActionType add)
-        {
-            throw new NotImplementedException();
-        }
-
-        private byte* GetDataPointer(CedarCursor cursor)
         {
             throw new NotImplementedException();
         }

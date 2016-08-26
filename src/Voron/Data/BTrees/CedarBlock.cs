@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using Voron.Data.BTrees.Cedar;
 
 namespace Voron.Data.BTrees
 {

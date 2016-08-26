@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using Sparrow;
 using Voron.Data.BTrees.Cedar;
 using Voron.Impl;
 
@@ -45,6 +46,88 @@ namespace Voron.Data.BTrees
             }
         }
 
+        public struct DataAccessor
+        {
+            private readonly CedarPage _page;
+            private PageHandlePtr _currentPtr;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public DataAccessor(CedarPage page)
+            {
+                _page = page;
+                _currentPtr = _page.GetDataNodesPage();
+            }
+
+            public CedarDataPtr* DirectRead(long i = 0)
+            {
+                return (CedarDataPtr*)_currentPtr.Value.DataPointer + sizeof(int) + i;
+            }
+
+            public CedarDataPtr* DirectWrite(long i = 0)
+            {
+                if (!_currentPtr.IsWritable)
+                    _currentPtr = _page.GetDataNodesPage(true);
+
+                return (CedarDataPtr*)_currentPtr.Value.DataPointer + sizeof(int) + i;
+            }
+
+            internal int NextFree
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get { return *_currentPtr.Value.DataPointer; }
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                set { *(int*)_currentPtr.Value.DataPointer = value; }
+            }
+
+            public bool TryAllocateNode(out int index, out CedarDataPtr* ptr)
+            {
+                // If there are no more allocable nodes, we fail.
+                if (NextFree == -1)
+                {
+                    index = -1;                 
+                    ptr = null;
+                    return false;
+                }
+
+                // We need write access.
+                if (!_currentPtr.IsWritable)
+                    _currentPtr = _page.GetDataNodesPage(true);
+
+                index = NextFree;
+                ptr = (CedarDataPtr*)_currentPtr.Value.DataPointer + sizeof(int) + index;
+
+                Debug.Assert(index >= 0, "Index cannot be negative.");
+                Debug.Assert(index < _page.Header.Ptr->DataNodesPerPage, "Index cannot be bigger than the quantity of nodes available to use.");
+                Debug.Assert(ptr->IsFree);
+
+                // We will store in the data pointer the next free.
+                NextFree = (int) ptr->Data;
+                ptr->IsFree = false;
+
+                return true;
+            }
+
+            public void FreeNode(int index)
+            {
+                Debug.Assert(index >= 0, "Index cannot be negative.");
+                Debug.Assert(index < _page.Header.Ptr->DataNodesPerPage, "Index cannot be bigger than the quantity of nodes available to use.");
+
+                // We need write access.
+                if (!_currentPtr.IsWritable)
+                    _currentPtr = _page.GetDataNodesPage(true);
+
+                var ptr = (CedarDataPtr*)_currentPtr.Value.DataPointer + sizeof(int) + index;
+                Debug.Assert(!ptr->IsFree);
+
+                int currentFree = NextFree;
+
+                ptr->IsFree = true;
+                ptr->Data = currentFree;
+
+                NextFree = index;
+            }
+        }
+
         protected struct BlocksAccessor
         {
             private readonly CedarPage _page;
@@ -56,7 +139,7 @@ namespace Voron.Data.BTrees
             {
                 _page = page;
                 _currentMetadataPtr = _page.GetBlocksMetadataPage();
-                _currentPtr = _page.GetBlocksPageByOffset();
+                _currentPtr = _page.GetBlocksPage();
             }
 
             /// <summary>
@@ -121,7 +204,7 @@ namespace Voron.Data.BTrees
                 }
 
                 if (!_currentPtr.IsWritable)
-                    _currentPtr = _page.GetBlocksPageByOffset(true);
+                    _currentPtr = _page.GetBlocksPage(true);
 
                 if (typeof(T) == typeof(NodeInfo))
                 {
@@ -195,7 +278,7 @@ namespace Voron.Data.BTrees
             public TailAccessor(CedarPage page)
             {
                 _page = page;
-                _currentPtr = _page.GetTailPageByOffset();
+                _currentPtr = _page.GetTailPage();
             }
 
             public int Length
@@ -204,7 +287,7 @@ namespace Voron.Data.BTrees
                 set
                 {
                     if (!_currentPtr.IsWritable)
-                        _currentPtr = _page.GetTailPageByOffset(true);
+                        _currentPtr = _page.GetTailPage(true);
 
                     *(int*)_currentPtr.Value.DataPointer = value;
                 }
@@ -218,7 +301,7 @@ namespace Voron.Data.BTrees
                 set
                 {
                     if (!_currentPtr.IsWritable)
-                        _currentPtr = _page.GetTailPageByOffset(true);
+                        _currentPtr = _page.GetTailPage(true);
 
                     *(_currentPtr.Value.DataPointer + i) = value;
                 }
@@ -232,7 +315,7 @@ namespace Voron.Data.BTrees
                 set
                 {
                     if (!_currentPtr.IsWritable)
-                        _currentPtr = _page.GetTailPageByOffset(true);
+                        _currentPtr = _page.GetTailPage(true);
 
                     *(_currentPtr.Value.DataPointer + i) = value;
                 }
@@ -246,37 +329,15 @@ namespace Voron.Data.BTrees
             public byte* DirectWrite(long i = 0)
             {
                 if (!_currentPtr.IsWritable)
-                    _currentPtr = _page.GetDataNodesPageByOffset(true);
+                    _currentPtr = _page.GetDataNodesPage(true);
 
                 return _currentPtr.Value.DataPointer + i;
             }
         }
 
-        protected struct DataAccessor
-        {
-            private readonly CedarPage _page;
-            private PageHandlePtr _currentPtr;
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public DataAccessor(CedarPage page)
-            {
-                _page = page;
-                _currentPtr = _page.GetDataNodesPageByOffset();
-            }
 
-            public CedarDataPtr* DirectRead(long i = 0)
-            {
-                return (CedarDataPtr*)_currentPtr.Value.DataPointer + i;
-            }
-
-            public CedarDataPtr* DirectWrite(long i = 0)
-            {
-                if (!_currentPtr.IsWritable)
-                    _currentPtr = _page.GetDataNodesPageByOffset(true);
-
-                return (CedarDataPtr*)_currentPtr.Value.DataPointer + i;
-            }
-        }
+        internal const int BlockSize = 256;
 
         private readonly LowLevelTransaction _llt;
         private readonly PageLocator _pageLocator;
@@ -286,12 +347,12 @@ namespace Voron.Data.BTrees
         protected BlocksAccessor Blocks;
         protected TailAccessor Tail;
         protected Tail0Accessor Tail0;
-        protected DataAccessor Data;        
+        public DataAccessor Data;        
 
         public CedarPage(LowLevelTransaction llt, long pageNumber, CedarPage page = null)
         {
             this._llt = llt;
-            this._pageLocator = new PageLocator(_llt, 8);
+            this._pageLocator = new PageLocator(_llt);
 
             if (page != null)
             {
@@ -321,45 +382,91 @@ namespace Voron.Data.BTrees
             get { return Header.Ptr->IsBranchPage; }
         }
 
+        public bool IsLeaf
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get { return !Header.Ptr->IsBranchPage; }
+        }
+
+        public static CedarPage Allocate(LowLevelTransaction llt, int[] layout, int totalNumberOfPages)
+        {
+            var pages = llt.AllocatePages(layout, totalNumberOfPages);
+
+            // Bulk zero out the pages. 
+            foreach (var page in pages)
+            {
+                byte* ptr = page.DataPointer;
+                Memory.Set(ptr, 0, page.OverflowSize - sizeof(PageHeader));
+            }
+
+            var header = (CedarPageHeader*) pages[0].Pointer;
+
+            // We do not allow changing the amount of pages because of now we will consider them constants.
+            header->BlocksPageCount = CedarRootHeader.NumberOfBlocksPages;
+            header->BlocksPerPage = (llt.PageSize * header->BlocksPageCount - sizeof(PageHeader)) / (sizeof(Node) + sizeof(NodeInfo));
+
+            header->TailPageCount = CedarRootHeader.NumberOfTailPages;
+            header->TailBytesPerPage = llt.PageSize * header->TailPageCount - sizeof(PageHeader);
+
+            header->DataPageCount = CedarRootHeader.NumberOfDataNodePages;
+            header->DataNodesPerPage = (llt.PageSize * header->DataPageCount - sizeof(PageHeader) - sizeof(int)) / sizeof(CedarDataPtr);
+
+            return new CedarPage(llt, pages[0].PageNumber);
+        }
+
         internal void Initialize()
         {
             Header.SetWritable();
 
             CedarPageHeader* header = Header.Ptr;
 
-            // We do not allow changing the amount of pages because of now we will consider them constants.
-            header->BlocksPageCount = CedarRootHeader.NumberOfBlocksPages;
-            header->BlocksPerPage = (_llt.PageSize * header->BlocksPageCount - sizeof(PageHeader)) / (sizeof(Node) + sizeof(NodeInfo));
-
-            header->TailPageCount = CedarRootHeader.NumberOfTailPages;
-            header->TailBytesPerPage = _llt.PageSize * header->TailPageCount - sizeof(PageHeader);
-
-            header->DataPageCount = CedarRootHeader.NumberOfDataNodePages;            
-            header->DataNodesPerPage = (_llt.PageSize * header->DataPageCount - sizeof(PageHeader)) / sizeof(CedarDataPtr);
-
             // We make sure we do now account for any block that is not complete. 
-            header->Size = 256;            
-            header->Capacity = header->BlocksPerPage - (header->BlocksPerPage % 256);            
+            header->Size = BlockSize;
+            header->Capacity = header->BlocksPerPage - (header->BlocksPerPage % BlockSize);
 
             // Aligned to 16 bytes
             int offset = sizeof(CedarPageHeader*) + 16;
             header->MetadataOffset = offset - offset % 16;
-            header->Tail0Offset = header->MetadataOffset + (header->BlocksPerPage + 1) * sizeof(BlockMetadata);
+            header->Tail0Offset = header->MetadataOffset + (header->BlocksPerPage + 1) / BlockSize * sizeof(BlockMetadata);
 
             Debug.Assert(header->Tail0Offset < _llt.PageSize - 1024); // We need at least 1024 bytes for it. 
-
-            for (int i = 0; i < 256; i++)
-                header->Reject[i] = (short) (i + 1);
+        
+            for (int i = 0; i < BlockSize; i++)
+                header->Reject[i] = (short)(i + 1);
 
             // Request for writing all the pages. 
             var array = (Node*)Blocks.DirectWrite<Node>();
             var block = (BlockMetadata*)Blocks.DirectWrite<BlockMetadata>();
+            var data = Data.DirectWrite();
+            var tail = Tail.DirectWrite();
 
             array[0] = new Node(0, -1);
             for (int i = 1; i < 256; ++i)
                 array[i] = new Node(i == 1 ? -255 : -(i - 1), i == 255 ? -1 : -(i + 1));
 
             block[0].Ehead = 1; // bug fix for erase
+
+            // Initialize the free data node linked list.
+            int count = Header.Ptr->DataNodesPerPage - 1;            
+            for (int i = 0; i < count; i++)
+            {
+                // Link the current node to the next.
+                data->Header = CedarDataPtr.FreeNode;
+                data->Data = i + 1;
+
+                data++;
+            }
+
+            // Close the linked list.
+            data->Header = CedarDataPtr.FreeNode;
+            data->Data = -1;
+
+            Debug.Assert(Data.DirectRead(Header.Ptr->DataNodesPerPage - 1)->IsFree, "Last node is not free.");
+            Debug.Assert(Data.DirectRead(Header.Ptr->DataNodesPerPage - 1)->Data == -1, "Free node linked list does not end.");            
+
+            Data.NextFree = 0;
+
+            Memory.Set(tail, 0, header->TailBytesPerPage);
         }
 
 
@@ -377,7 +484,7 @@ namespace Voron.Data.BTrees
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private PageHandlePtr GetBlocksPageByOffset(bool writable = false)
+        private PageHandlePtr GetBlocksPage(bool writable = false)
         {
             if (writable)
                 Debug.Assert(_llt.Flags == TransactionFlags.ReadWrite, "Create is being called in a read transaction.");
@@ -389,7 +496,7 @@ namespace Voron.Data.BTrees
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private PageHandlePtr GetTailPageByOffset(bool writable = false)
+        private PageHandlePtr GetTailPage(bool writable = false)
         {
             if (writable)
                 Debug.Assert(_llt.Flags == TransactionFlags.ReadWrite, "Create is being called in a read transaction.");
@@ -401,7 +508,7 @@ namespace Voron.Data.BTrees
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private PageHandlePtr GetDataNodesPageByOffset(bool writable = false)
+        private PageHandlePtr GetDataNodesPage(bool writable = false)
         {
             if (writable)
                 Debug.Assert(_llt.Flags == TransactionFlags.ReadWrite, "Create is being called in a read transaction.");

@@ -733,7 +733,7 @@ namespace Voron.Impl
             if ( readOnlyPages.TryGetValue(page.PageNumber, out storedHash) )
             {
                 if (pageHash != storedHash)
-                    throw new VoronUnrecoverableErrorException("Read Only Page has change between tracking requests. Page #" + page.PageNumber);
+                    throw new VoronUnrecoverableErrorException("Read Only Page has change between tracking requests. CurrentPage #" + page.PageNumber);
             }
             else
             {

@@ -35,7 +35,7 @@ namespace Voron.Data.BTrees
                 throw new ObjectDisposedException($"{nameof(CedarIterator)} {_tree.Name}");
 
             // We look for the branch page that is going to host this data. 
-            _cursor = _tree.FindLocationFor(key);
+            CedarPage _page = _tree.FindLocationFor(key, out _cursor);
             
             // Returning an AfterAllKeys on a cursor means that the current node doesnt contains the key and we seek along the entire tree.
             if (_cursor.Key.Same(Slices.AfterAllKeys))
