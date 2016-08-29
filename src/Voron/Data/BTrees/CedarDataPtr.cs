@@ -60,7 +60,7 @@ namespace Voron.Data.BTrees
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return (byte)(Header & SizeMask); }
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            set { Header = (byte) (value & SizeMask); }
+            set { Header = (byte) ((Header & FlagsMask) | (value & SizeMask)); }
         }
 
         public bool IsFree

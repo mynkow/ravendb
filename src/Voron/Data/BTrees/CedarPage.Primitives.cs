@@ -169,7 +169,7 @@ namespace Voron.Data.BTrees
             {
                 //Console.WriteLine("Begin 1");
 
-                for (byte* keyPtr = key; _array[from].Base >= 0; pos++)
+                for (; _array[from].Base >= 0; pos++)
                 {
                     if (pos == len)
                     {
@@ -218,7 +218,7 @@ namespace Voron.Data.BTrees
                     // TODO: Write in the proper endianness.
                     Unsafe.Write(ptr, value);
 
-                    //Console.WriteLine($"_tail[{ptrOffset}] = {Unsafe.Read<T>(ptr)}");
+                    //Console.WriteLine($"_tail[{tailPtr + (len + 1) - Tail.DirectRead()}] = {Unsafe.Read<short>(ptr)}");
 
                     return CedarActionStatus.Success;
                 }
@@ -259,6 +259,7 @@ namespace Voron.Data.BTrees
                 moved += offset;
                 for (int i = (int) offset; i <= moved; i += 1 + sizeof(short))
                 {
+                    Tail0.SetWritable();
                     Tail0.Length += 1;
 
                     // NO REALLOCATION WILL HAPPEN HERE... KEEPING THE CODE JUST IN CASE FOR UNTIL PORTING IS FINISHED.
@@ -307,6 +308,9 @@ namespace Voron.Data.BTrees
             int needed = (int) (len - pos + 1 + sizeof(short));
             if (pos == len && Tail0.Length != 0)
             {
+                Tail.SetWritable();
+                Tail0.SetWritable();
+
                 int offset0 = Tail0[Tail0.Length];
                 Tail[offset0] = 0;
 
@@ -334,7 +338,7 @@ namespace Voron.Data.BTrees
             //    u1 = new ElementUnion(Reallocate<byte>(u1.Tail, _quota, u1.Length));
             //}
 
-            //Console.WriteLine($"_array[{from}].Base = {-u1.Length}");
+            //Console.WriteLine($"_array[{from}].Base = {-Tail.Length}");
             _array[from].Base = (short) -Tail.Length;
             pos_orig = pos;
 
@@ -343,7 +347,7 @@ namespace Voron.Data.BTrees
             {
                 do
                 {
-                    //Console.WriteLine($"_tail[{tailOffset + pos}] = {key[pos]}");
+                    //Console.WriteLine($"_tail[{tailPtr + pos - Tail.DirectRead()}] = {key[pos]}");
                     tailPtr[pos] = key[pos];
                 }
                 while (++pos < len);
@@ -355,7 +359,7 @@ namespace Voron.Data.BTrees
 
             Unsafe.Write(&tailPtr[len + 1], value);
 
-            //Console.WriteLine($"_tail[{tailOffset + (len + 1)}] = {Unsafe.Read<T>(ptr)}");
+            //Console.WriteLine($"_tail[{tailPtr + (len + 1) - Tail.DirectRead()}] = {value}");
 
 
             //Console.WriteLine($"End {nameof(Update)} with key-size: {len}");
@@ -483,13 +487,13 @@ namespace Voron.Data.BTrees
 
             if (Header.Ptr->_bheadC != 0)
             {
-                //Console.WriteLine($"returns: {_block[_bheadC].Ehead} (_find_place)");
+                //Console.WriteLine($"returns: {_block[Header.Ptr->_bheadC].Ehead} (_find_place)");
                 return _block[Header.Ptr->_bheadC].Ehead;
             }
 
             if (Header.Ptr->_bheadO != 0)
             {
-                //Console.WriteLine($"returns: {_block[_bheadO].Ehead} (_find_place)");
+                //Console.WriteLine($"returns: {_block[Header.Ptr->_bheadO].Ehead} (_find_place)");
                 return _block[Header.Ptr->_bheadO].Ehead;
             }
 
@@ -870,9 +874,9 @@ namespace Voron.Data.BTrees
 
             do
             {
-                //Console.WriteLine($"\tc_n: _ninfo[{base_n ^ c_n}].sibling = {_ninfo[base_n ^ c_n].Sibling} (_consult)");
+                //Console.WriteLine($"\tc_n: _ninfo[{base_n ^ c_n}].sibling = {Blocks.NodesInfo[base_n ^ c_n].Sibling} (_consult)");
                 c_n = Blocks.NodesInfo[base_n ^ c_n].Sibling;
-                //Console.WriteLine($"\tc_p: _ninfo[{base_p ^ c_p}].sibling = {_ninfo[base_p ^ c_p].Sibling} (_consult)");
+                //Console.WriteLine($"\tc_p: _ninfo[{base_p ^ c_p}].sibling = {Blocks.NodesInfo[base_p ^ c_p].Sibling} (_consult)");
                 c_p = Blocks.NodesInfo[base_p ^ c_p].Sibling;
             }
             while (c_n != 0 && c_p != 0);

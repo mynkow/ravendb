@@ -329,9 +329,15 @@ namespace Voron.Data.BTrees
             public byte* DirectWrite(long i = 0)
             {
                 if (!_currentPtr.IsWritable)
-                    _currentPtr = _page.GetDataNodesPage(true);
+                    _currentPtr = _page.GetTailPage(true);
 
                 return _currentPtr.Value.DataPointer + i;
+            }
+
+            public void SetWritable()
+            {
+                if (!_currentPtr.IsWritable)
+                    _currentPtr = _page.GetTailPage(true);
             }
         }
 
@@ -345,7 +351,7 @@ namespace Voron.Data.BTrees
 
         public HeaderAccessor Header;
         protected BlocksAccessor Blocks;
-        protected TailAccessor Tail;
+         TailAccessor Tail;
         protected Tail0Accessor Tail0;
         public DataAccessor Data;        
 
@@ -367,6 +373,7 @@ namespace Voron.Data.BTrees
             this.Header = new HeaderAccessor(this, new PageHandlePtr(this._mainPage, false));
             this.Blocks = new BlocksAccessor(this);
             this.Tail = new TailAccessor(this);
+            this.Tail0 = new Tail0Accessor(this);
             this.Data = new DataAccessor(this);            
         }
 
