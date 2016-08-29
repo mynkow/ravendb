@@ -427,7 +427,7 @@ namespace Sparrow.Collections
 
         public bool Remove(byte* key, int len, long from = 0 )
         {
-            //Console.WriteLine($"Begin Erase with len={len}");
+           //Console.WriteLine($"Begin Erase with len={len}");
             long pos = 0;
 
             T value;
@@ -445,18 +445,18 @@ namespace Sparrow.Collections
             int e = flag ? (int)from : _array[from].Base ^ 0;
             from = _array[e].Check;
 
-            //Console.WriteLine($"flag={(flag ? 1 : 0)}, e={e}, from={from} (erase)");
+           //Console.WriteLine($"flag={(flag ? 1 : 0)}, e={e}, from={from} (erase)");
 
             do
             {
                 node n = _array[from];
 
-                //Console.WriteLine($"n.Base={n.Base}, _ninfo[{from}].Child={_ninfo[from].Child} (erase)");
-                //Console.WriteLine($"_ninfo[{(n.Base ^ _ninfo[from].Child)}].Sibling={_ninfo[n.Base ^ _ninfo[from].Child].Sibling} (erase)");
+               //Console.WriteLine($"n.Base={n.Base}, _ninfo[{from}].Child={_ninfo[from].Child} (erase)");
+               //Console.WriteLine($"_ninfo[{(n.Base ^ _ninfo[from].Child)}].Sibling={_ninfo[n.Base ^ _ninfo[from].Child].Sibling} (erase)");
 
                 flag = _ninfo[n.Base ^ _ninfo[from].Child].Sibling != 0;
 
-                //Console.WriteLine($"flag={(flag ? 1 : 0)}, e={e}, from={from}, n.Base={n.Base}, n.Check={n.Check} (erase)");
+               //Console.WriteLine($"flag={(flag ? 1 : 0)}, e={e}, from={from}, n.Base={n.Base}, n.Check={n.Check} (erase)");
 
                 if (flag)
                     _pop_sibling(from, n.Base, (byte)(n.Base ^ e));
@@ -467,8 +467,8 @@ namespace Sparrow.Collections
             }
             while (!flag);
 
-            //Console.WriteLine($"_ninfo[264] = [{_ninfo[264].Child},{_ninfo[264].Sibling}] (erase)");
-            //Console.WriteLine($"End Erase with len={len}");
+           //Console.WriteLine($"_ninfo[264] = [{_ninfo[264].Child},{_ninfo[264].Sibling}] (erase)");
+           //Console.WriteLine($"End Erase with len={len}");
 
             return true;
         }
@@ -576,12 +576,12 @@ namespace Sparrow.Collections
 
             try
             {
-                //Console.WriteLine($"Start {nameof(Update)} with key-size: {len}");
+               //Console.WriteLine($"Start {nameof(Update)} with key-size: {len}");
 
                 long offset = from >> 32;
                 if (offset == 0)
                 {
-                    //Console.WriteLine("Begin 1");
+                   //Console.WriteLine("Begin 1");
 
                     for (byte* keyPtr = key; _array[from].Base >= 0; pos++)
                     {
@@ -595,7 +595,7 @@ namespace Sparrow.Collections
                         from = Follow(from, key[pos]);
                     }
 
-                    //Console.WriteLine("End 1");
+                   //Console.WriteLine("End 1");
 
                     offset = -_array[from].Base;
                 }
@@ -629,7 +629,7 @@ namespace Sparrow.Collections
                         {
                             Unsafe.Write(ptr, value);
 
-                            //Console.WriteLine($"_tail[{ptrOffset}] = {Unsafe.Read<T>(ptr)}");
+                           //Console.WriteLine($"_tail[{ptrOffset}] = {Unsafe.Read<T>(ptr)}");
                         }
 
                         return;
@@ -645,15 +645,15 @@ namespace Sparrow.Collections
                             offset_++;
                         }
 
-                        //Console.WriteLine();
+                       //Console.WriteLine();
                     }
 
-                    //Console.WriteLine("Begin 2");
+                   //Console.WriteLine("Begin 2");
 
                     for (long pos_ = pos_orig; pos_ < pos; pos_++)
                         from = Follow(from, key[pos_]);
 
-                    //Console.WriteLine("End 2");                    
+                   //Console.WriteLine("End 2");                    
 
                     moved = pos - pos_orig;
                     if (u1.Tail[tailOffset + pos] != 0)
@@ -662,7 +662,7 @@ namespace Sparrow.Collections
                         long to_ = Follow(from, u1.Tail[tailOffset + pos]);
                         moved++;
 
-                        //Console.WriteLine($"_array[{to_}].Base = {-(int)(offset + moved)}");
+                       //Console.WriteLine($"_array[{to_}].Base = {-(int)(offset + moved)}");
                         _array[to_].Base = -(int)(offset + moved);
 
                         moved -= 1 + _tSize;  // keep record
@@ -687,7 +687,6 @@ namespace Sparrow.Collections
                         long to = Follow(from, 0);
                         if (pos == len)
                         {
-                            T _toValue = GetNodeValue(_array, (int)to);
                             SetNodeValue(_array, (int)to, value);
                             return;
                         }
@@ -712,13 +711,13 @@ namespace Sparrow.Collections
                     int offset0 = u2.Tail0[u2.Length0];
                     u1.Tail[offset0] = 0;
 
-                    //Console.WriteLine($"_array[{from}].Base = {-offset0}");
+                   //Console.WriteLine($"_array[{from}].Base = {-offset0}");
                     _array[from].Base = -offset0;
                     (u2.Length0)--;
 
                     fixed (void* ptr = &u1.Tail[offset0 + 1])
                     {
-                        //Console.WriteLine($"_tail[{offset0 + 1}] = {value}");
+                       //Console.WriteLine($"_tail[{offset0 + 1}] = {value}");
                         Unsafe.Write(ptr, value);
                     }
 
@@ -738,7 +737,7 @@ namespace Sparrow.Collections
                     u1 = new ElementUnion(Reallocate<byte>(u1.Tail, _quota, u1.Length));
                 }
 
-                //Console.WriteLine($"_array[{from}].Base = {-u1.Length}");
+               //Console.WriteLine($"_array[{from}].Base = {-u1.Length}");
                 _array[from].Base = -u1.Length;
                 pos_orig = pos;
 
@@ -747,7 +746,7 @@ namespace Sparrow.Collections
                 {
                     do
                     {
-                        //Console.WriteLine($"_tail[{tailOffset + pos}] = {key[pos]}");
+                       //Console.WriteLine($"_tail[{tailOffset + pos}] = {key[pos]}");
                         u1.Tail[tailOffset + pos] = key[pos];
                     }                        
                     while (++pos < len);
@@ -761,12 +760,12 @@ namespace Sparrow.Collections
                 {
                     Unsafe.Write(ptr, value);
 
-                    //Console.WriteLine($"_tail[{tailOffset + (len + 1)}] = {Unsafe.Read<T>(ptr)}");
+                   //Console.WriteLine($"_tail[{tailOffset + (len + 1)}] = {Unsafe.Read<T>(ptr)}");
                 }
             }
             finally
             {
-                //Console.WriteLine($"End {nameof(Update)} with key-size: {len}");
+               //Console.WriteLine($"End {nameof(Update)} with key-size: {len}");
             }
             
         }
@@ -785,7 +784,7 @@ namespace Sparrow.Collections
                 to = _resolve(from, @base, label);
             }
 
-            //Console.WriteLine($"F->{to}");
+           //Console.WriteLine($"F->{to}");
 
             return to;
         }
@@ -795,7 +794,7 @@ namespace Sparrow.Collections
         /// </summary>
         private int _resolve(long from_n, int base_n, byte label_n)
         {
-            //Console.WriteLine($"enters [{from_n}, {base_n}, {label_n}] (_resolve)");
+           //Console.WriteLine($"enters [{from_n}, {base_n}, {label_n}] (_resolve)");
 
             // examine siblings of conflicted nodes
             int to_pn = base_n ^ label_n;
@@ -815,16 +814,16 @@ namespace Sparrow.Collections
             int from = flag ? (int)from_n : from_p;
             int base_ = flag ? base_n : base_p;
 
-            //Console.WriteLine($"base_[{base_}], from[{from}], to_pn[{to_pn}], from_p[{from_p}], base_p[{base_p}] (_resolve)");
+           //Console.WriteLine($"base_[{base_}], from[{from}], to_pn[{to_pn}], from_p[{from_p}], base_p[{base_p}] (_resolve)");
 
             if (flag && *first == label_n)
             {
-                //Console.WriteLine($"_ninfo[{from}].Child = {label_n} (_resolve)");
+               //Console.WriteLine($"_ninfo[{from}].Child = {label_n} (_resolve)");
                 _ninfo[from].Child = label_n; // new child
             }
 
 
-            //Console.WriteLine($"_array[{from}].Base = {@base} (_resolve)");
+           //Console.WriteLine($"_array[{from}].Base = {@base} (_resolve)");
             _array[from].Base = @base; // new base
 
             for ( byte* p = first; p <= last; p++)
@@ -833,25 +832,25 @@ namespace Sparrow.Collections
                 int to = _pop_enode(@base, *p, from);
                 int to_ = base_ ^ *p;
 
-                //Console.WriteLine($"to[{to}], to_[{to_}] (_resolve)");
+               //Console.WriteLine($"to[{to}], to_[{to_}] (_resolve)");
 
-                //Console.WriteLine($"_ninfo[{to}].Sibling = {(byte)(p == last ? 0 : *(p + 1))} (_resolve)");
+               //Console.WriteLine($"_ninfo[{to}].Sibling = {(byte)(p == last ? 0 : *(p + 1))} (_resolve)");
                 _ninfo[to].Sibling = (byte)(p == last ? 0 : *(p + 1));
 
                 if (flag && to_ == to_pn) // skip newcomer (no child)
                     continue;
 
-                //Console.WriteLine($"_array[{to}].Base = {_array[to_].Base} (_resolve)");
+               //Console.WriteLine($"_array[{to}].Base = {_array[to_].Base} (_resolve)");
                 _array[to].Base = _array[to_].Base;
                 if (_array[to_].Base > 0 && *p != 0)
                 {
                     // copy base; bug fix
-                    //Console.WriteLine($"_ninfo[{to}].Child = {_ninfo[to_].Child} (_resolve)");
+                   //Console.WriteLine($"_ninfo[{to}].Child = {_ninfo[to_].Child} (_resolve)");
                     byte c = _ninfo[to].Child = _ninfo[to_].Child;
                     do
                     {
                         int toBase = _array[to].Base ^ c;
-                        //Console.WriteLine($"_array[{toBase}].Check = {to} (_resolve)");
+                       //Console.WriteLine($"_array[{toBase}].Check = {to} (_resolve)");
                         _array[toBase].Check = to;
                         c = _ninfo[toBase].Sibling;
                     }
@@ -866,21 +865,21 @@ namespace Sparrow.Collections
                     // the address is immediately used
                     _push_sibling(from_n, to_pn ^ label_n, label_n);
 
-                    //Console.WriteLine($"_ninfo[{to_}].Child = 0 (_resolve)");
+                   //Console.WriteLine($"_ninfo[{to_}].Child = 0 (_resolve)");
                     _ninfo[to_].Child = 0; // remember to reset child
 
                     if (label_n != 0)
                     {
-                        //Console.WriteLine($"_array[{to_}].Base = -1 (_resolve)");
+                       //Console.WriteLine($"_array[{to_}].Base = -1 (_resolve)");
                         _array[to_].Base = -1;
                     }
                     else
                     {
-                        // //Console.WriteLine($"_array[{to_}].Value = 0 (_resolve)");
+                        ////Console.WriteLine($"_array[{to_}].Value = 0 (_resolve)");
                         SetNodeValue(_array, to_, default(T));
                     }
 
-                    //Console.WriteLine($"_array[{to_}].Check = {(int)from_n} (_resolve)");
+                   //Console.WriteLine($"_array[{to_}].Check = {(int)from_n} (_resolve)");
                     _array[to_].Check = (int)from_n;
                 }
                 else
@@ -889,14 +888,14 @@ namespace Sparrow.Collections
                 }          
             }
 
-            //Console.WriteLine($"returns [{(flag ? @base ^ label_n : to_pn)}] (_resolve)");
+           //Console.WriteLine($"returns [{(flag ? @base ^ label_n : to_pn)}] (_resolve)");
 
             return flag ? @base ^ label_n : to_pn;
         }
 
         private void _push_enode(int e)
         {
-            //Console.WriteLine($"enters [{e}] (_push_enode)");
+           //Console.WriteLine($"enters [{e}] (_push_enode)");
 
             int bi = e >> 8;
 
@@ -905,8 +904,8 @@ namespace Sparrow.Collections
                 // Full to Closed
                 _block[bi].Ehead = e;
                 _array[e] = new node(-e, -e);
-                //Console.WriteLine($"_array[{e}].Base = {_array[e].Base} (_push_enode)");
-                //Console.WriteLine($"_array[{e}].Check = {_array[e].Check} (_push_enode)");
+               //Console.WriteLine($"_array[{e}].Base = {_array[e].Base} (_push_enode)");
+               //Console.WriteLine($"_array[{e}].Check = {_array[e].Check} (_push_enode)");
                 if (bi != 0)
                     _transfer_block(bi, ref _bheadF, ref _bheadC); // Full to Closed
             }
@@ -915,12 +914,12 @@ namespace Sparrow.Collections
                 int prev = _block[bi].Ehead;
                 int next = -_array[prev].Check;
                 _array[e] = new node(-prev, -next);
-                //Console.WriteLine($"_array[{e}].Base = {_array[e].Base} (_push_enode)");
-                //Console.WriteLine($"_array[{e}].Check = {_array[e].Check} (_push_enode)");
+               //Console.WriteLine($"_array[{e}].Base = {_array[e].Base} (_push_enode)");
+               //Console.WriteLine($"_array[{e}].Check = {_array[e].Check} (_push_enode)");
 
                 _array[prev].Check = _array[next].Base = -e;
-                //Console.WriteLine($"_array[{prev}].Check = {_array[prev].Check} (_push_enode)");
-                //Console.WriteLine($"_array[{next}].Base = {_array[next].Base} (_push_enode)");
+               //Console.WriteLine($"_array[{prev}].Check = {_array[prev].Check} (_push_enode)");
+               //Console.WriteLine($"_array[{next}].Base = {_array[next].Base} (_push_enode)");
 
                 if (_block[bi].Num == 2 || _block[bi].Trial == _maxTrial)
                 {
@@ -935,7 +934,7 @@ namespace Sparrow.Collections
                 _block[bi].Reject = _reject[_block[bi].Num];
             
             _ninfo[e] = new ninfo();
-            //Console.WriteLine($"_ninfo[{e}] = [{_ninfo[e].Child},{_ninfo[e].Sibling}] (_push_enode)");
+           //Console.WriteLine($"_ninfo[{e}] = [{_ninfo[e].Child},{_ninfo[e].Sibling}] (_push_enode)");
         }
 
         private int _find_place(byte* first, byte* last)
@@ -949,17 +948,22 @@ namespace Sparrow.Collections
                 short nc = (short)(last - first + 1);
                 while ( true )
                 {
+                    //Console.WriteLine($"try [bi={bi},num={_block[bi].Num},nc={nc}] (_find_place)");
+
                     if (_block[bi].Num >= nc && nc < _block[bi].Reject) // explore configuration
                     {
                         int e = _block[bi].Ehead;
                         while (true)
                         {
                             int @base = e ^ *first;
+
+                            //Console.WriteLine($"try [e={e},base={@base}] (_find_place)");
                             for (byte* p = first; _array[@base ^ *(++p)].Check < 0;)
                             {
                                 if (p == last)
                                 {
                                     _block[bi].Ehead = e;
+                                    //Console.WriteLine($"returns: {e} (_find_place)");
                                     return e;
                                 }
                             }
@@ -1004,7 +1008,7 @@ namespace Sparrow.Collections
 
         private byte* _set_child(byte* p, int @base, byte c, int label)
         {
-            //Console.WriteLine($"enters [{*p},{@base},{c},{label}] (_set_child)");
+           //Console.WriteLine($"enters [{*p},{@base},{c},{label}] (_set_child)");
 
             p--;
             if ( c == 0 )
@@ -1043,24 +1047,24 @@ namespace Sparrow.Collections
 
         private bool _consult(int base_n, int base_p, byte c_n, byte c_p)
         {
-            //Console.WriteLine($"enters [{base_n},{base_p},{c_n},{c_p}] (_consult)");
+           //Console.WriteLine($"enters [{base_n},{base_p},{c_n},{c_p}] (_consult)");
 
             do
             {
-                //Console.WriteLine($"\tc_n: _ninfo[{base_n ^ c_n}].sibling = {_ninfo[base_n ^ c_n].Sibling} (_consult)");
+               //Console.WriteLine($"\tc_n: _ninfo[{base_n ^ c_n}].sibling = {_ninfo[base_n ^ c_n].Sibling} (_consult)");
                 c_n = _ninfo[base_n ^ c_n].Sibling;
-                //Console.WriteLine($"\tc_p: _ninfo[{base_p ^ c_p}].sibling = {_ninfo[base_p ^ c_p].Sibling} (_consult)");
+               //Console.WriteLine($"\tc_p: _ninfo[{base_p ^ c_p}].sibling = {_ninfo[base_p ^ c_p].Sibling} (_consult)");
                 c_p = _ninfo[base_p ^ c_p].Sibling;
             }
             while (c_n != 0 && c_p != 0);
 
-            //Console.WriteLine($"returns: { (c_p != 0 ? 1 : 0)}  (_consult)");
+           //Console.WriteLine($"returns: { (c_p != 0 ? 1 : 0)}  (_consult)");
             return c_p != 0;
         }
 
         private void _pop_sibling(long from, int @base, byte label)
         {
-            //Console.WriteLine($"enters [{from},{@base},{(int)label}] (_pop_sibling)");
+           //Console.WriteLine($"enters [{from},{@base},{(int)label}] (_pop_sibling)");
 
             // TODO: Review this and the push... the original uses pointers (and for a good reason) even though it is illegible what it is doing.
 
@@ -1078,19 +1082,19 @@ namespace Sparrow.Collections
             byte sibling = _ninfo[@base ^ label].Sibling;
             if (changeChild)
             {
-                //Console.WriteLine($"\t_ninfo[{from}].Child = {sibling} (_pop_sibling)");
+               //Console.WriteLine($"\t_ninfo[{from}].Child = {sibling} (_pop_sibling)");
                 _ninfo[from].Child = sibling;
             }
             else
             {
-                //Console.WriteLine($"\t_ninfo[{@base ^ c}].Sibling = {sibling} (_pop_sibling)");
+               //Console.WriteLine($"\t_ninfo[{@base ^ c}].Sibling = {sibling} (_pop_sibling)");
                 _ninfo[from].Sibling = sibling;
             }
         }
 
         private void _push_sibling(long from, int @base, byte label, bool flag = true)
         {
-            //Console.WriteLine($"enters [{from},{@base},{(int)label},{(flag ? 1 : 0)}] (_push_sibling)");
+           //Console.WriteLine($"enters [{from},{@base},{(int)label},{(flag ? 1 : 0)}] (_push_sibling)");
 
             bool changeChild = true;
             long current = from;
@@ -1106,18 +1110,18 @@ namespace Sparrow.Collections
                 while ((typeof(TOrdered) == typeof(Ordered)) && c != 0 && c < label);
             }
 
-            //Console.WriteLine($"\t_ninfo[{ @base ^ label }].Sibling = {c.ToString()} (_push_sibling)");
+           //Console.WriteLine($"\t_ninfo[{ @base ^ label }].Sibling = {c.ToString()} (_push_sibling)");
             
             _ninfo[@base ^ label].Sibling = c;
 
             if (changeChild)
             {
-                //Console.WriteLine($"\t_ninfo[{current}].Child = {label} (_push_sibling)");
+               //Console.WriteLine($"\t_ninfo[{current}].Child = {label} (_push_sibling)");
                 _ninfo[current].Child = label;
             }
             else
             {
-                //Console.WriteLine($"\t_ninfo[{current}].Sibling = {label} (_push_sibling)");
+               //Console.WriteLine($"\t_ninfo[{current}].Sibling = {label} (_push_sibling)");
                 _ninfo[current].Sibling = label;
             }
 
@@ -1125,7 +1129,7 @@ namespace Sparrow.Collections
 
         private int _pop_enode(int @base, byte label, int from)
         {
-            //Console.WriteLine($"enters [{@base},{label},{from}] (_pop_enode)");
+           //Console.WriteLine($"enters [{@base},{label},{from}] (_pop_enode)");
 
             int e = @base < 0 ? _find_place() : @base ^ label;
             int bi = e >> 8;
@@ -1140,7 +1144,7 @@ namespace Sparrow.Collections
             {
                 _array[-(_array[e].Base)].Check = _array[e].Check;
 
-                //Console.WriteLine($"_array[{-(_array[e].Check)}].Base = {_array[e].Base}");
+               //Console.WriteLine($"_array[{-(_array[e].Check)}].Base = {_array[e].Base}");
                 _array[-(_array[e].Check)].Base = _array[e].Base;
 
                 if (e == _block[bi].Ehead)
@@ -1153,12 +1157,11 @@ namespace Sparrow.Collections
             // initialize the released node
             if (label != 0)
             {
-                //Console.WriteLine($"_array[{e}].Base = -1");
+               //Console.WriteLine($"_array[{e}].Base = -1");
                 _array[e].Base = -1;
             }
             else
             {
-                ////Console.WriteLine($"_array[{e}].Base = 0");
                 SetNodeValue(_array, e, default(T));
 
                 Debug.Assert(_array[e].Base == 0);
@@ -1169,10 +1172,10 @@ namespace Sparrow.Collections
             if (@base < 0)
             {
                 _array[from].Base = e ^ label;
-                //Console.WriteLine($"_array[{from}].Base = {e ^ label}");
+               //Console.WriteLine($"_array[{from}].Base = {e ^ label}");
             }
 
-            //Console.WriteLine($"returns: {e} (_pop_enode)");
+           //Console.WriteLine($"returns: {e} (_pop_enode)");
             return e;
         }
 
@@ -1181,20 +1184,15 @@ namespace Sparrow.Collections
             return (T)(object)n.Base;
         }
 
-        private T GetNodeValue(node[] n, int offset)
-        {
-            return (T)(object)n[offset].Base;
-        }
-
         private void SetNodeValue(node[] n, int offset, T value)
         {
-            //Console.WriteLine($"_array[{offset}].Value = {((int)(object)value)}");
+           //Console.WriteLine($"_array[{offset}].Value = {((int)(object)value)}");
             n[offset].Base = (int)(object)value;
         }
 
         private void _transfer_block(int bi, ref int head_in, ref int head_out)
         {
-            //Console.WriteLine($"enters [{bi},{head_in},{head_out}] (_transfer_block)");
+           //Console.WriteLine($"enters [{bi},{head_in},{head_out}] (_transfer_block)");
 
             _pop_block(bi, ref head_in, bi == _block[bi].Next);
             _push_block(bi, ref head_out, head_out == 0 && _block[bi].Num != 0);
@@ -1202,27 +1200,29 @@ namespace Sparrow.Collections
 
         private int _find_place()
         {
-            //Console.WriteLine($"enters [] (_find_place)");
+           //Console.WriteLine($"enters [] (_find_place)");
 
             if (_bheadC != 0)
             {
-                //Console.WriteLine($"returns: {_block[_bheadC].Ehead} (_find_place)");
+               //Console.WriteLine($"returns: {_block[_bheadC].Ehead} (_find_place)");
                 return _block[_bheadC].Ehead;
             }
                 
             if (_bheadO != 0)
             {
-                //Console.WriteLine($"returns: {_block[_bheadO].Ehead} (_find_place)");
+               //Console.WriteLine($"returns: {_block[_bheadO].Ehead} (_find_place)");
                 return _block[_bheadO].Ehead;
             }
 
             int result = _add_block() << 8;
-            //Console.WriteLine($"returns: {result} (_find_place)");
+           //Console.WriteLine($"returns: {result} (_find_place)");
             return result;
         }
 
         private int _add_block()
         {
+            //Console.WriteLine($"enters [] (_add_block)");
+
             if ( Size == Capacity)
             {
                 Capacity += Size >= MAX_ALLOC_SIZE ? MAX_ALLOC_SIZE : Size;
@@ -1246,7 +1246,7 @@ namespace Sparrow.Collections
 
         private void _pop_block(int bi, ref int head_in, bool last)
         {
-            //Console.WriteLine($"enters [{bi},{head_in},{Convert.ToByte(last)}] (_pop_block)");
+           //Console.WriteLine($"enters [{bi},{head_in},{Convert.ToByte(last)}] (_pop_block)");
 
             if ( last )
             {
@@ -1258,23 +1258,23 @@ namespace Sparrow.Collections
                 fixed (block* b = &_block[bi])
                 {
                     _block[_block[bi].Prev].Next = _block[bi].Next;
-                    //Console.WriteLine($"_block[{_block[bi].Prev}].Next = {_block[bi].Next} (_pop_block)");
+                   //Console.WriteLine($"_block[{_block[bi].Prev}].Next = {_block[bi].Next} (_pop_block)");
 
                     _block[_block[bi].Next].Prev = _block[bi].Prev;                    
-                    //Console.WriteLine($"_block[{_block[bi].Next}].Prev = {_block[bi].Prev} (_pop_block)");
+                   //Console.WriteLine($"_block[{_block[bi].Next}].Prev = {_block[bi].Prev} (_pop_block)");
 
                     if (bi == head_in)
                         head_in = b->Next;
                 }
             }
 
-            //Console.WriteLine($"returns [{head_in}] (_pop_block)");
+           //Console.WriteLine($"returns [{head_in}] (_pop_block)");
         }
 
         private void _push_block(int bi, ref int head_out, bool empty)
         {
             // TODO: Ensure this can be inlined copying the parameter. 
-            //Console.WriteLine($"enters [{bi},{head_out},{Convert.ToByte(empty)}] (_push_block)");
+           //Console.WriteLine($"enters [{bi},{head_out},{Convert.ToByte(empty)}] (_push_block)");
 
             fixed (block* b = &_block[bi])
             {
@@ -1283,8 +1283,8 @@ namespace Sparrow.Collections
                     // the destination is empty
                     head_out = b->Prev = b->Next = bi;
 
-                    //Console.WriteLine($"_block[{bi}].Next = {_block[bi].Next} (_push_block)");
-                    //Console.WriteLine($"_block[{bi}].Prev = {_block[bi].Prev} (_push_block)");                    
+                   //Console.WriteLine($"_block[{bi}].Next = {_block[bi].Next} (_push_block)");
+                   //Console.WriteLine($"_block[{bi}].Prev = {_block[bi].Prev} (_push_block)");                    
                 }
                 else
                 {                    
@@ -1292,10 +1292,10 @@ namespace Sparrow.Collections
                     b->Prev = tail_out;
                     b->Next = head_out;
 
-                    //Console.WriteLine($"_block[{bi}].Next = {tail_out} (_push_block)");
-                    //Console.WriteLine($"_block[{bi}].Prev = {head_out} (_push_block)");
-                    //Console.WriteLine($"_block[{tail_out}].Next = {bi} (_push_block)");
-                    //Console.WriteLine($"_block[{head_out}].Prev = {bi} (_push_block)");
+                   //Console.WriteLine($"_block[{bi}].Next = {tail_out} (_push_block)");
+                   //Console.WriteLine($"_block[{bi}].Prev = {head_out} (_push_block)");
+                   //Console.WriteLine($"_block[{tail_out}].Next = {bi} (_push_block)");
+                   //Console.WriteLine($"_block[{head_out}].Prev = {bi} (_push_block)");
 
                     _block[tail_out].Next = bi;                    
                     _block[head_out].Prev = bi;                    
@@ -1303,7 +1303,7 @@ namespace Sparrow.Collections
                 }
             }
 
-            //Console.WriteLine($"returns [{head_out}] (_push_block)");
+           //Console.WriteLine($"returns [{head_out}] (_push_block)");
         }
 
 
@@ -1418,13 +1418,13 @@ namespace Sparrow.Collections
 
             if (ptr == null)
             {                               
-               // //Console.WriteLine($"allocating with elements to size: {size_n} zero from {size_p}");
+               ////Console.WriteLine($"allocating with elements to size: {size_n} zero from {size_p}");
             }
             else
             {
                 Array.Copy(ptr, tmp, ptr.Length);
 
-               // //Console.WriteLine($"moved with elements to size: {size_n} zero from {size_p}");
+               ////Console.WriteLine($"moved with elements to size: {size_n} zero from {size_p}");
             }            
                        
             int count = size_n - size_p;

@@ -52,7 +52,6 @@ namespace FastTests.Voron.Cedar
 
                 Assert.Equal(1, root.NumberOfKeys);
                 Assert.Equal(1, root.NonZeroSize);
-                //Assert.Equal(8, root.NonZeroLength);
 
                 tx.Commit();
             }
@@ -66,16 +65,187 @@ namespace FastTests.Voron.Cedar
 
                 Assert.Equal(1, root.NumberOfKeys);
                 Assert.Equal(1, root.NonZeroSize);
-                //Assert.Equal(8, root.NonZeroLength);
 
                 CedarDataPtr* ptr;
                 CedarRef result;
                 Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
-                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator,"tes"), out result, out ptr));
-                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator,"test1"), out result, out ptr));
-                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator,"a"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tes"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test1"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "a"), out result, out ptr));
             }
         }
+
+
+        [Fact]
+        public void InsertSplitAtTheBeginningAndQuery()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+                tree.Add("test", 1);
+                tree.Add("aest", 2);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(256, root.Header.Ptr->Size);
+
+                Assert.Equal(2, root.NumberOfKeys);
+                Assert.Equal(2, root.NonZeroSize);
+
+                tx.Commit();
+            }
+
+            using (var tx = Env.ReadTransaction())
+            {
+                var tree = tx.ReadTrie("foo");
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(256, root.Header.Ptr->Size);
+
+                Assert.Equal(2, root.NumberOfKeys);
+                Assert.Equal(2, root.NonZeroSize);
+
+                CedarDataPtr* ptr;
+                CedarRef result;
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "aest"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tes"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test1"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "aest1"), out result, out ptr));
+            }
+        }
+
+        [Fact]
+        public void InsertSplitAtTheEnd()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+                tree.Add("test", 1);
+                tree.Add("tesa", 1);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(512, root.Header.Ptr->Size);
+
+                Assert.Equal(2, root.NumberOfKeys);
+                Assert.Equal(5, root.NonZeroSize);
+
+                tx.Commit();
+            }
+
+            using (var tx = Env.ReadTransaction())
+            {
+                var tree = tx.ReadTrie("foo");
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(512, root.Header.Ptr->Size);
+
+                Assert.Equal(2, root.NumberOfKeys);
+                Assert.Equal(5, root.NonZeroSize);
+
+                CedarDataPtr* ptr;
+                CedarRef result;
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tesa"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tes"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test1"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tesa1"), out result, out ptr));
+            }
+        }
+
+        [Fact]
+        public void InsertSplitAtTheEndAndMiddle()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+                tree.Add("test", 1);
+                tree.Add("tesa", 2);
+                tree.Add("tasa", 3);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal(512, root.Header.Ptr->Size);
+                Assert.Equal(3, root.NumberOfKeys);
+                Assert.Equal(6, root.NonZeroSize);
+
+                tx.Commit();
+            }
+
+            using (var tx = Env.ReadTransaction())
+            {
+                var tree = tx.ReadTrie("foo");
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal(512, root.Header.Ptr->Size);
+                Assert.Equal(3, root.NumberOfKeys);
+                Assert.Equal(6, root.NonZeroSize);
+
+                CedarDataPtr* ptr;
+                CedarRef result;
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
+                Assert.Equal(1, ptr->Data);
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tesa"), out result, out ptr));
+                Assert.Equal(2, ptr->Data);
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tasa"), out result, out ptr));
+                Assert.Equal(3, ptr->Data);
+
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tes"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tas1"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tesa1"), out result, out ptr));
+            }
+        }
+
+
+        [Fact]
+        public void InsertSelfContainedAndQuery()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+                tree.Add("test", 1);
+                tree.Add("test1234", 2);
+                tree.Add("test12", 3);
+                tree.Add("test123456", 4);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal(512, root.Header.Ptr->Size);
+                Assert.Equal(4, root.NumberOfKeys);
+                Assert.Equal(12, root.NonZeroSize);
+
+                tx.Commit();
+            }
+
+            using (var tx = Env.ReadTransaction())
+            {
+                var tree = tx.ReadTrie("foo");
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal(512, root.Header.Ptr->Size);
+                Assert.Equal(4, root.NumberOfKeys);
+                Assert.Equal(12, root.NonZeroSize);
+
+                CedarDataPtr* ptr;
+                CedarRef result;
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
+                Assert.Equal(1, ptr->Data);
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test1234"), out result, out ptr));
+                Assert.Equal(2, ptr->Data);
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test12"), out result, out ptr));
+                Assert.Equal(3, ptr->Data);
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test123456"), out result, out ptr));
+                Assert.Equal(4, ptr->Data);
+
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tes"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tas1"), out result, out ptr));
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tesa1"), out result, out ptr));
+            }
+        }
+
+
+
 
         [Fact]
         public void CanAddAndRead()

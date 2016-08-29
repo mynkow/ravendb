@@ -280,10 +280,11 @@ namespace Voron.Data.BTrees
                     long to = Follow(from, 0);
                     if (pos == len)
                     {
-                        var n = (Node*) Blocks.DirectWrite<Node>(to);
-                        
                         // TODO: Write in the proper endianness.
+                        var n = (Node*) Blocks.DirectWrite<Node>(to);                       
                         n->Value = value;
+
+                        //Console.WriteLine($"_array[{to}].Value = {value}");
 
                         return CedarActionStatus.Success;
                     }
@@ -291,12 +292,11 @@ namespace Voron.Data.BTrees
                     {
                         short toValue = *(short*) &tailPtr[pos + 1];
 
-                        var n = (Node*) Blocks.DirectWrite<Node>(to);
-
                         // TODO: Write in the proper endianness.
+                        var n = (Node*) Blocks.DirectWrite<Node>(to);
                         n->Value = toValue;
 
-                        return CedarActionStatus.Success;
+                        //Console.WriteLine($"_array[{to}].Value = {value}");
                     }
                 }
 
@@ -427,7 +427,7 @@ namespace Voron.Data.BTrees
             }
             else
             {
-                ////Console.WriteLine($"_array[{e}].Base = 0");
+                //Console.WriteLine($"_array[{e}].Value = 0");
                 _array[e].Value = 0;
 
                 Debug.Assert(_array[e].Base == 0);
@@ -505,6 +505,8 @@ namespace Voron.Data.BTrees
 
         private int _add_block()
         {
+            //Console.WriteLine($"enters [] (_add_block)");
+
             int size = Header.Ptr->Size;
             int capacity = Header.Ptr->Capacity;
             if (size == capacity)
@@ -722,7 +724,8 @@ namespace Voron.Data.BTrees
 
             int bi = e >> 8;
 
-            if (++_block[bi].Num == 1)
+            _block[bi].Num++;
+            if (_block[bi].Num == 1)
             {
                 // Full to Closed
                 _block[bi].Ehead = e;
@@ -777,17 +780,23 @@ namespace Voron.Data.BTrees
                 short nc = (short)(last - first + 1);
                 while (true)
                 {
+                    //Console.WriteLine($"try [bi={bi},num={_block[bi].Num},nc={nc}] (_find_place)");
+
                     if (_block[bi].Num >= nc && nc < _block[bi].Reject) // explore configuration
                     {
                         int e = _block[bi].Ehead;
                         while (true)
                         {
                             int @base = e ^ *first;
+
+                            //Console.WriteLine($"try [e={e},base={@base}] (_find_place)");
                             for (byte* p = first; _array[@base ^ *(++p)].Check < 0;)
                             {
                                 if (p == last)
                                 {
                                     _block[bi].Ehead = e;
+
+                                    //Console.WriteLine($"returns: {e} (_find_place)");
                                     return e;
                                 }
                             }

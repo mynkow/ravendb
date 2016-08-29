@@ -432,10 +432,11 @@ namespace Voron.Data.BTrees
             header->Capacity = header->BlocksPerPage - (header->BlocksPerPage % BlockSize);
 
             // Aligned to 16 bytes
-            int offset = sizeof(CedarPageHeader*) + 16;
+            int offset = sizeof(CedarPageHeader) + 16;
             header->MetadataOffset = offset - offset % 16;
             header->Tail0Offset = header->MetadataOffset + (header->BlocksPerPage + 1) / BlockSize * sizeof(BlockMetadata);
 
+            Debug.Assert(header->MetadataOffset > sizeof(CedarPageHeader));
             Debug.Assert(header->Tail0Offset < _llt.PageSize - 1024); // We need at least 1024 bytes for it. 
         
             for (int i = 0; i < BlockSize; i++)
@@ -450,8 +451,10 @@ namespace Voron.Data.BTrees
             for (int i = 1; i < 256; ++i)
                 array[i] = new Node(i == 1 ? -255 : -(i - 1), i == 255 ? -1 : -(i + 1));
 
-            // Create a default block
-            block[0] = BlockMetadata.Create();
+            // Initialize the default blocks
+            for (int i = 0; i < header->Capacity / header->Size; i++)
+                block[i] = BlockMetadata.Create();                    
+
             block[0].Ehead = 1; // bug fix for erase
 
             // Initialize the free data node linked list.
