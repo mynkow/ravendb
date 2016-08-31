@@ -74,7 +74,7 @@ namespace Voron.Data.BTrees
             internal int NextFree
             {
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                get { return *_currentPtr.Value.DataPointer; }
+                get { return *(int*)_currentPtr.Value.DataPointer; }
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 set { *(int*)_currentPtr.Value.DataPointer = value; }
             }
@@ -101,7 +101,7 @@ namespace Voron.Data.BTrees
                 Debug.Assert(ptr->IsFree);
 
                 // We will store in the data pointer the next free.
-                NextFree = (int) ptr->Data;
+                NextFree = (int)ptr->Data;
                 ptr->IsFree = false;
 
                 return true;

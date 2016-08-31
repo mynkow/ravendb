@@ -244,7 +244,103 @@ namespace FastTests.Voron.Cedar
             }
         }
 
+        [Fact]
+        public void InsertSameMultipleTimes()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+                tree.Add("test", 1);
+                tree.Add("test", 2);
+                tree.Add("test", 3);
 
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(1, root.NumberOfKeys);
+
+                tx.Commit();
+            }
+
+            using (var tx = Env.ReadTransaction())
+            {
+                var tree = tx.ReadTrie("foo");
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal(1, root.NumberOfKeys);
+
+                CedarDataPtr* ptr;
+                CedarRef result;
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
+                Assert.Equal(3, ptr->Data);
+            }
+        }
+
+        [Fact]
+        public void InsertBasic()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+                tree.Add("users/1", 1);
+                tree.Add("users/2", 2);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(2, root.NumberOfKeys);
+
+                tx.Commit();
+            }
+
+            using (var tx = Env.ReadTransaction())
+            {
+                var tree = tx.ReadTrie("foo");
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal(2, root.NumberOfKeys);
+
+                CedarDataPtr* ptr;
+                CedarRef result;
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "users/1"), out result, out ptr));
+                Assert.Equal(1, ptr->Data);
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "users/2"), out result, out ptr));
+                Assert.Equal(2, ptr->Data);
+            }
+        }
+
+        [Fact]
+        public void InsertBasic2()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+                tree.Add("collections/1", 1);
+                tree.Add("collections/2", 2);
+                tree.Add("collections/3", 3);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(3, root.NumberOfKeys);
+
+                tx.Commit();
+            }
+
+            using (var tx = Env.ReadTransaction())
+            {
+                var tree = tx.ReadTrie("foo");
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal(3, root.NumberOfKeys);
+
+                CedarDataPtr* ptr;
+                CedarRef result;
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "collections/1"), out result, out ptr));
+                Assert.Equal(1, ptr->Data);
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "collections/2"), out result, out ptr));
+                Assert.Equal(2, ptr->Data);
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "collections/3"), out result, out ptr));
+                Assert.Equal(3, ptr->Data);
+            }
+        }
 
 
         [Fact]

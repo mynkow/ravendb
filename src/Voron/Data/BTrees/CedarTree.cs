@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using Voron.Exceptions;
 using Voron.Impl;
 using Voron.Impl.Paging;
 
@@ -196,6 +197,7 @@ namespace Voron.Data.BTrees
                     var pageSplitter = new CedarPageSplitter(_llt, this, cursor);
                     cursor = pageSplitter.Execute(); // This effectively acts as a FindLocationFor(key, out node) call;
                 }
+
             }
             while (status != CedarActionStatus.Success);
 
@@ -282,9 +284,14 @@ namespace Voron.Data.BTrees
             return true;
         }
 
-        private void CheckConcurrency(Slice key, ushort? version, ushort nodeVersion, ActionType add)
+        private void CheckConcurrency(Slice key, ushort? expectedVersion, ushort nodeVersion, ActionType actionType)
         {
-            throw new NotImplementedException();
+            if (expectedVersion.HasValue && nodeVersion != expectedVersion.Value)
+                throw new ConcurrencyException(string.Format("Cannot {0} '{1}' to '{4}' tree. Version mismatch. Expected: {2}. Actual: {3}.", actionType.ToString().ToLowerInvariant(), key, expectedVersion.Value, nodeVersion, Name))
+                {
+                    ActualETag = nodeVersion,
+                    ExpectedETag = expectedVersion.Value,
+                };
         }
     }
 }
