@@ -60,7 +60,7 @@ namespace Voron.Data.BTrees
 
             public CedarDataPtr* DirectRead(long i = 0)
             {
-                return (CedarDataPtr*)_currentPtr.Value.DataPointer + sizeof(int) + i;
+                return (CedarDataPtr*)(_currentPtr.Value.DataPointer + sizeof(int)) + i;
             }
 
             public CedarDataPtr* DirectWrite(long i = 0)
@@ -68,7 +68,7 @@ namespace Voron.Data.BTrees
                 if (!_currentPtr.IsWritable)
                     _currentPtr = _page.GetDataNodesPage(true);
 
-                return (CedarDataPtr*)_currentPtr.Value.DataPointer + sizeof(int) + i;
+                return (CedarDataPtr*)(_currentPtr.Value.DataPointer + sizeof(int)) + i;
             }
 
             internal int NextFree
@@ -94,7 +94,7 @@ namespace Voron.Data.BTrees
                     _currentPtr = _page.GetDataNodesPage(true);
 
                 index = NextFree;
-                ptr = (CedarDataPtr*)_currentPtr.Value.DataPointer + sizeof(int) + index;
+                ptr = (CedarDataPtr*)(_currentPtr.Value.DataPointer + sizeof(int)) + index;
 
                 Debug.Assert(index >= 0, "Index cannot be negative.");
                 Debug.Assert(index < _page.Header.Ptr->DataNodesPerPage, "Index cannot be bigger than the quantity of nodes available to use.");
@@ -116,7 +116,7 @@ namespace Voron.Data.BTrees
                 if (!_currentPtr.IsWritable)
                     _currentPtr = _page.GetDataNodesPage(true);
 
-                var ptr = (CedarDataPtr*)_currentPtr.Value.DataPointer + sizeof(int) + index;
+                var ptr = (CedarDataPtr*)(_currentPtr.Value.DataPointer + sizeof(int)) + index;
                 Debug.Assert(!ptr->IsFree);
 
                 int currentFree = NextFree;
@@ -409,14 +409,14 @@ namespace Voron.Data.BTrees
             var header = (CedarPageHeader*) pages[0].Pointer;
 
             // We do not allow changing the amount of pages because of now we will consider them constants.
-            header->BlocksPageCount = CedarRootHeader.NumberOfBlocksPages;
-            header->BlocksPerPage = (llt.PageSize * header->BlocksPageCount - sizeof(PageHeader)) / (sizeof(Node) + sizeof(NodeInfo));
+            header->BlocksPageCount = layout[1];
+            header->BlocksPerPage = (pages[1].OverflowSize - sizeof(PageHeader)) / (sizeof(Node) + sizeof(NodeInfo));
 
-            header->TailPageCount = CedarRootHeader.NumberOfTailPages;
-            header->TailBytesPerPage = llt.PageSize * header->TailPageCount - sizeof(PageHeader);
+            header->TailPageCount = layout[2];
+            header->TailBytesPerPage = pages[2].OverflowSize - sizeof(PageHeader);
 
-            header->DataPageCount = CedarRootHeader.NumberOfDataNodePages;
-            header->DataNodesPerPage = (llt.PageSize * header->DataPageCount - sizeof(PageHeader) - sizeof(int)) / sizeof(CedarDataPtr);
+            header->DataPageCount = layout[3];
+            header->DataNodesPerPage = (pages[3].OverflowSize - sizeof(PageHeader) - sizeof(int)) / sizeof(CedarDataPtr);
 
             return new CedarPage(llt, pages[0].PageNumber);
         }

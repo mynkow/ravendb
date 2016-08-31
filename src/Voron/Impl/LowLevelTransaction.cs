@@ -424,13 +424,20 @@ namespace Voron.Impl
             
             _dirtyPages.Add(pageNumber);
 
-            if (numberOfPages > 1)
-                _dirtyOverflowPages.Add(pageNumber + 1, numberOfPages - 1);
-
-            var newPage = _env.ScratchBufferPool.ReadPage(this, pageFromScratchBuffer.ScratchFileNumber,
-                pageFromScratchBuffer.PositionInScratchBuffer);
+            var newPage = _env.ScratchBufferPool.ReadPage(this, pageFromScratchBuffer.ScratchFileNumber, pageFromScratchBuffer.PositionInScratchBuffer);
             newPage.PageNumber = pageNumber;
-            newPage.Flags = PageFlags.Single;
+           
+            if (numberOfPages > 1)
+            {
+                newPage.Flags = PageFlags.Overflow;
+                newPage.OverflowSize = PageSize*numberOfPages;
+
+                _dirtyOverflowPages.Add(pageNumber + 1, numberOfPages - 1);
+            }
+            else
+            {
+                newPage.Flags = PageFlags.Single;
+            }                
 
             _pageCache.AddWritable(newPage);            
 
