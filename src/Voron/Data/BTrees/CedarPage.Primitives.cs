@@ -512,7 +512,7 @@ namespace Voron.Data.BTrees
             if (size == capacity)
             {
                 // TODO: CHECK WHAT HAPPENS WHEN THIS KICKS OFF.
-                return (size >> 8) - 1;
+                throw new NotImplementedException();
             }
 
             Header.SetWritable();

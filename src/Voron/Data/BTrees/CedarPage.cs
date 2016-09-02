@@ -175,7 +175,7 @@ namespace Voron.Data.BTrees
             {
                 if (typeof(T) == typeof(BlockMetadata))
                 {
-                    return ((BlockMetadata*)_currentMetadataPtr.Value.Pointer + _page.Header.Ptr->MetadataOffset) + i;
+                    return (BlockMetadata*)(_currentMetadataPtr.Value.Pointer + _page.Header.Ptr->MetadataOffset) + i;
                 }
 
                 if (typeof(T) == typeof(NodeInfo))
@@ -200,7 +200,7 @@ namespace Voron.Data.BTrees
                     if (!_currentMetadataPtr.IsWritable)
                         _currentMetadataPtr = _page.GetBlocksMetadataPage(true);
 
-                    return ((BlockMetadata*)_currentMetadataPtr.Value.Pointer + _page.Header.Ptr->MetadataOffset) + i;
+                    return (BlockMetadata*)(_currentMetadataPtr.Value.Pointer + _page.Header.Ptr->MetadataOffset) + i;
                 }
 
                 if (!_currentPtr.IsWritable)
@@ -410,13 +410,16 @@ namespace Voron.Data.BTrees
 
             // We do not allow changing the amount of pages because of now we will consider them constants.
             header->BlocksPageCount = layout[1];
-            header->BlocksPerPage = (pages[1].OverflowSize - sizeof(PageHeader)) / (sizeof(Node) + sizeof(NodeInfo));
+            header->BlocksPerPage = ((pages[1].IsOverflow ? pages[1].OverflowSize : llt.PageSize) - sizeof(PageHeader)) / (sizeof(Node) + sizeof(NodeInfo));
+            Debug.Assert(header->BlocksPerPage > 0);
 
             header->TailPageCount = layout[2];
-            header->TailBytesPerPage = pages[2].OverflowSize - sizeof(PageHeader);
+            header->TailBytesPerPage = (pages[2].IsOverflow ? pages[2].OverflowSize : llt.PageSize) - sizeof(PageHeader);
+            Debug.Assert(header->TailBytesPerPage > 0);
 
             header->DataPageCount = layout[3];
-            header->DataNodesPerPage = (pages[3].OverflowSize - sizeof(PageHeader) - sizeof(int)) / sizeof(CedarDataPtr);
+            header->DataNodesPerPage = ((pages[3].IsOverflow ? pages[3].OverflowSize : llt.PageSize) - sizeof(PageHeader) - sizeof(int)) / sizeof(CedarDataPtr);
+            Debug.Assert(header->DataNodesPerPage > 0);
 
             return new CedarPage(llt, pages[0].PageNumber);
         }
