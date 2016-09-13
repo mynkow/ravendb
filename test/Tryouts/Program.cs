@@ -23,15 +23,15 @@ namespace Tryouts
     {
         static void Main(string[] args)
         {
-            using (var streamwriter = new StreamWriter(new FileStream("managed.txt", FileMode.Create)))
-            {
-                streamwriter.AutoFlush = true;
-                Console.SetOut(streamwriter);
-                Console.SetError(streamwriter);
+            //using (var streamwriter = new StreamWriter(new FileStream("managed.txt", FileMode.Create)))
+            //{
+            //    streamwriter.AutoFlush = true;
+            //    Console.SetOut(streamwriter);
+            //    Console.SetError(streamwriter);
 
-                var p = new FastTests.Sparrow.CedarTrieTests();
-                p.SingleInsertAndQuery();
-            }
+            //    var p = new FastTests.Sparrow.CedarTrieTests();
+            //    p.SingleInsertAndQuery();
+            //}
 
             try
             {
@@ -42,7 +42,7 @@ namespace Tryouts
                     Console.SetError(streamwriter);
 
                     var b = new FastTests.Voron.Cedar.Basic(); ;
-                    b.SingleInsertAndQuery();
+                    b.AfterPageSplitAllDataIsValid();
                 }
             }
             catch {}

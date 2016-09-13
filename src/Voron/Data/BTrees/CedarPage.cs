@@ -351,7 +351,7 @@ namespace Voron.Data.BTrees
 
         public HeaderAccessor Header;
         protected BlocksAccessor Blocks;
-         TailAccessor Tail;
+        protected TailAccessor Tail;
         protected Tail0Accessor Tail0;
         public DataAccessor Data;        
 

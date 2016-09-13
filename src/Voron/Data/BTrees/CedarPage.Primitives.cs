@@ -961,6 +961,33 @@ namespace Voron.Data.BTrees
             return CedarResultCode.Success;
         }
 
+        private CedarResultCode _first(ref long from, ref long pos, out int len, out short result)
+        {
+            result = 0;
+
+            long offset = from >> 32;
+            if (offset == 0)
+            {
+               
+
+            }
+
+            throw new NotImplementedException();
+        }
+
+        private CedarResultCode _last(ref long @from, ref long pos, out int len, out short result)
+        {
+            result = 0;
+
+            long offset = from >> 32;
+            if (offset == 0)
+            {
+            }
+
+            throw new NotImplementedException();
+        }
+
+
         public CedarResultCode ExactMatchSearch<TResult>(Slice key, out TResult value, out CedarDataPtr* ptr, long from = 0)
             where TResult : struct, ICedarResult
         {
@@ -992,5 +1019,154 @@ namespace Voron.Data.BTrees
 
             return errorCode;
         }
+
+        public CedarResultCode GetFirst<TResult>(out TResult value, out CedarDataPtr* ptr, long from = 0)
+            where TResult : struct, ICedarResult
+        {
+            long pos = 0;
+
+            short r;
+            int size;
+            var errorCode = _first(ref from, ref pos, out size, out r);
+            if (errorCode == CedarResultCode.NoPath)
+                errorCode = CedarResultCode.NoValue;
+
+            value = default(TResult);
+            value.SetResult(r, size, from);
+
+            if (errorCode == CedarResultCode.Success)
+            {
+                ptr = Data.DirectRead(r);
+                Debug.Assert(ptr->Flags == CedarNodeFlags.Data);
+            }
+            else
+            {
+                ptr = null;
+            }
+
+            return errorCode;
+        }
+
+        public CedarResultCode GetLast<TResult>(out TResult value, out CedarDataPtr* ptr, long from = 0)
+            where TResult : struct, ICedarResult
+        {
+            long pos = 0;
+
+            short r;
+            int size;
+            var errorCode = _last(ref from, ref pos, out size, out r);
+            if (errorCode == CedarResultCode.NoPath)
+                errorCode = CedarResultCode.NoValue;
+
+            value = default(TResult);
+            value.SetResult(r, size, from);
+
+            if (errorCode == CedarResultCode.Success)
+            {
+                ptr = Data.DirectRead(r);
+                Debug.Assert(ptr->Flags == CedarNodeFlags.Data);
+            }
+            else
+            {
+                ptr = null;
+            }
+
+            return errorCode;
+        }
+
+
+        struct IteratorValue
+        {
+            public short Value;
+            public CedarResultCode Error;
+        }
+
+        private IteratorValue Begin(ref long from, ref long len)
+        {
+            Node* _array = Blocks.Nodes;
+            NodeInfo* _ninfo = Blocks.NodesInfo;
+
+            int @base = from >> 32 != 0 ? -(int)(from >> 32) : _array[from].Base;
+            if (@base >= 0)
+            {
+                // on trie
+                byte c = _ninfo[from].Child;
+                if (from == 0)
+                {
+                    c = _ninfo[@base ^ c].Sibling;
+                    if (c == 0) // no entry
+                        return new IteratorValue { Error = CedarResultCode.NoPath };
+                }
+
+                for (; c != 0 && @base >= 0; len++)
+                {
+                    from = @base ^ c;
+                    @base = _array[from].Base;
+                    c = _ninfo[from].Child;
+                }
+
+                if (@base >= 0) // it finishes in the trie
+                    return new IteratorValue { Error = CedarResultCode.Success, Value = _array[@base ^ c].Value };
+            }            
+
+            // we have a suffix to look for
+
+            byte* tail = Tail.DirectRead();
+            int len_ = _strlen(tail - @base);
+            from &= TAIL_OFFSET_MASK;
+            from |= ((long)(-@base + len_)) << 32; // this must be long
+            len += len_;
+
+            return new IteratorValue { Error = CedarResultCode.Success, Value = *(short*)(tail - @base + len_ + 1) };
+        }
+
+        private IteratorValue Next(ref long from, ref long len, long root = 0)
+        {
+            Node* _array = Blocks.Nodes;
+            NodeInfo* _ninfo = Blocks.NodesInfo;
+
+            // return the next child if any
+            byte c = 0;
+
+            int offset = (int)(from >> 32);
+            if (offset != 0)
+            {
+                // on tail 
+                if (root >> 32 != 0)
+                    return new IteratorValue { Error = CedarResultCode.NoPath };
+
+                from &= TAIL_OFFSET_MASK;
+                len -= offset - (-_array[from].Base);
+            }
+            else
+            {
+                c = _ninfo[_array[from].Base ^ 0].Sibling;
+            }
+
+            for (; c == 0 && from != root; len--)
+            {
+                c = _ninfo[from].Sibling;
+                from = _array[from].Check;
+            }
+
+            if (c == 0)
+                return new IteratorValue { Error = CedarResultCode.NoPath };
+
+            from = _array[from].Base ^ c;
+            len++;
+
+            return Begin(ref from, ref len);
+        }
+
+
+        private static int _strlen(byte* str)
+        {
+            byte* current = str;
+            while (*current != 0)
+                current++;
+
+            return (int)(current - str);
+        }
+
     }
 }

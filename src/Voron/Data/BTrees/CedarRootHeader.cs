@@ -26,19 +26,19 @@ namespace Voron.Data.BTrees
         /// This is the number of blocks pages we are going to allow. For now it is a constant, but the idea is that
         /// we can control this. That's why it is already defined at the CedarRootHeader even though now it is still a constant.
         /// </summary>
-        public const int NumberOfBlocksPages = 8;
+        public const int NumberOfBlocksPages = 10;
 
         /// <summary>
         /// This is the number of tail pages we are going to allow. For now it is a constant, but the idea is that
         /// we can control this. That's why it is already defined at the CedarRootHeader even though now it is still a constant.
         /// </summary>
-        public const int NumberOfTailPages = 6;
+        public const int NumberOfTailPages = 10;
 
         /// <summary>
         /// This is the number of data nodes pages we are going to allow. For now it is a constant, but the idea is that
         /// we can control this. That's why it is already defined at the CedarRootHeader even though now it is still a constant.
         /// </summary>
-        public const int NumberOfDataNodePages = 4;
+        public const int NumberOfDataNodePages = 6;
 
         [FieldOffset(10)]
         public long BranchPages;
