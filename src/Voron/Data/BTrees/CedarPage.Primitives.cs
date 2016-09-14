@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using Sparrow;
 using Voron.Data.BTrees.Cedar;
 
 namespace Voron.Data.BTrees
@@ -961,32 +963,6 @@ namespace Voron.Data.BTrees
             return CedarResultCode.Success;
         }
 
-        private CedarResultCode _first(ref long from, ref long pos, out int len, out short result)
-        {
-            result = 0;
-
-            long offset = from >> 32;
-            if (offset == 0)
-            {
-               
-
-            }
-
-            throw new NotImplementedException();
-        }
-
-        private CedarResultCode _last(ref long @from, ref long pos, out int len, out short result)
-        {
-            result = 0;
-
-            long offset = from >> 32;
-            if (offset == 0)
-            {
-            }
-
-            throw new NotImplementedException();
-        }
-
 
         public CedarResultCode ExactMatchSearch<TResult>(Slice key, out TResult value, out CedarDataPtr* ptr, long from = 0)
             where TResult : struct, ICedarResult
@@ -1021,57 +997,161 @@ namespace Voron.Data.BTrees
         }
 
         public CedarResultCode GetFirst<TResult>(out TResult value, out CedarDataPtr* ptr, long from = 0)
-            where TResult : struct, ICedarResult
+            where TResult : struct, ICedarResultKey
         {
-            long pos = 0;
+            Node* _array = Blocks.Nodes;
+            NodeInfo* _ninfo = Blocks.NodesInfo;
 
-            short r;
-            int size;
-            var errorCode = _first(ref from, ref pos, out size, out r);
-            if (errorCode == CedarResultCode.NoPath)
-                errorCode = CedarResultCode.NoValue;
+            // TODO: Check from where can I get the maximum key size. 
+            var key = Slice.Create(_llt.Allocator, 4096);
+            byte* slicePtr = key.Content.Ptr;
+
+            int keyLength = 0;
+            short dataIndex;
+
+            int @base = from >> 32 != 0 ? -(int)(from >> 32) : _array[from].Base;
+            if (@base >= 0)
+            {
+                // on trie
+                byte c = _ninfo[from].Child;
+                if (from == 0)
+                {
+                    c = _ninfo[@base ^ c].Sibling;
+
+                    if (c == 0) // no entry to look for
+                    {
+                        value = default(TResult);
+                        ptr = null;
+                        return CedarResultCode.NoValue;
+                    }
+                }
+
+                for (; c != 0 && @base >= 0; keyLength++)
+                {
+                    // Start to construct the key.
+                    slicePtr[keyLength] = c;
+
+                    from = @base ^ c;
+                    @base = _array[from].Base;
+                    c = _ninfo[from].Child;
+                }
+
+                if (@base >= 0) // it finishes in the trie
+                {
+                    key.Content.Ptr[keyLength] = c;
+                    dataIndex = _array[@base ^ c].Value;
+
+                    goto PrepareResult;
+                }
+            }
+
+            // we have a suffix to look for
+
+            byte* tail = Tail.DirectRead();
+            int len_ = _strlen(tail - @base);
+
+            Memory.Copy(slicePtr + keyLength, tail - @base, len_);
+            dataIndex = *(short*)(tail - @base + len_ + 1);
+
+            keyLength += len_;
+
+            PrepareResult:
+
+            key.Shrink(keyLength);
 
             value = default(TResult);
-            value.SetResult(r, size, from);
+            value.SetResult(dataIndex, keyLength, 0);
+            value.SetKey(key);
 
-            if (errorCode == CedarResultCode.Success)
-            {
-                ptr = Data.DirectRead(r);
-                Debug.Assert(ptr->Flags == CedarNodeFlags.Data);
-            }
-            else
-            {
-                ptr = null;
-            }
+            ptr = Data.DirectRead(dataIndex);
+            Debug.Assert(ptr->Flags == CedarNodeFlags.Data);
 
-            return errorCode;
+            return CedarResultCode.Success;
         }
 
         public CedarResultCode GetLast<TResult>(out TResult value, out CedarDataPtr* ptr, long from = 0)
-            where TResult : struct, ICedarResult
+            where TResult : struct, ICedarResultKey
         {
-            long pos = 0;
+            Node* _array = Blocks.Nodes;
+            NodeInfo* _ninfo = Blocks.NodesInfo;
 
-            short r;
-            int size;
-            var errorCode = _last(ref from, ref pos, out size, out r);
-            if (errorCode == CedarResultCode.NoPath)
-                errorCode = CedarResultCode.NoValue;
+            // TODO: Check from where can I get the maximum key size. 
+            var key = Slice.Create(_llt.Allocator, 4096);
+
+            int keyLength = 0;
+            short dataIndex;
+
+            int @base = from >> 32 != 0 ? -(int)(from >> 32) : _array[from].Base;
+            if (@base >= 0)
+            {
+                // On trie         
+                byte c = _ninfo[from].Child;
+                if (from == 0)
+                {
+                    // We are on the root. Find the first node. 
+                    c = _ninfo[@base ^ c].Sibling;
+
+                    if (c == 0) // no entry to look for
+                    {
+                        value = default(TResult);
+                        ptr = null;
+                        return CedarResultCode.NoValue;
+                    }
+                }
+
+                // In here we know we have the location for the first labeled node.
+                // from: root node
+                // @base: The pool location of root node (base[from])
+                // c: the first node label on the trie.
+
+                for (; @base >= 0; keyLength++)
+                {
+                    long currentFrom = @base ^ c;
+                    while (_ninfo[currentFrom].Sibling != 0)
+                    {
+                        c = _ninfo[currentFrom].Sibling;
+                        currentFrom = @base ^ c;
+                    }
+
+                    // Start to construct the key.
+                    key[keyLength] = c;
+
+                    from = currentFrom;
+                    @base = _array[from].Base;
+                    c = _ninfo[from].Child;
+                }
+
+                if (@base >= 0) // it finishes in the trie
+                {
+                    key[keyLength] = c;
+                    dataIndex = _array[@base ^ c].Value;
+
+                    goto PrepareResult;
+                }
+            }
+
+            // we have a suffix to look for
+
+            byte* tail = Tail.DirectRead();
+            int len_ = _strlen(tail - @base);
+
+            Memory.Copy(key.Content.Ptr + keyLength, tail - @base, len_);
+            dataIndex = *(short*)(tail - @base + len_ + 1);
+
+            keyLength += len_;
+
+            PrepareResult:
+
+            key.Shrink(keyLength);
 
             value = default(TResult);
-            value.SetResult(r, size, from);
+            value.SetResult(dataIndex, keyLength, 0);
+            value.SetKey(key);
 
-            if (errorCode == CedarResultCode.Success)
-            {
-                ptr = Data.DirectRead(r);
-                Debug.Assert(ptr->Flags == CedarNodeFlags.Data);
-            }
-            else
-            {
-                ptr = null;
-            }
+            ptr = Data.DirectRead(dataIndex);
+            Debug.Assert(ptr->Flags == CedarNodeFlags.Data);
 
-            return errorCode;
+            return CedarResultCode.Success;
         }
 
 

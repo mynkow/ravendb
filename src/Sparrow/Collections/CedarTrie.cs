@@ -1071,7 +1071,7 @@ namespace Sparrow.Collections
             bool changeChild = true;
 
             byte c = _ninfo[from].Child;
-            while ( c != label )
+            while (c != label)
             {
                 changeChild = false;
 

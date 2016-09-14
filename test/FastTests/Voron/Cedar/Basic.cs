@@ -36,6 +36,11 @@ namespace FastTests.Voron.Cedar
 
                 Assert.Equal(1, tree.State.PageCount);
                 Assert.Equal(1, tree.State.LeafPages);
+
+                CedarDataPtr* ptr;
+                CedarKeyPair resultKey;
+                Assert.Equal((int)CedarResultCode.NoValue, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(ptr == null);
             }
         }
 
@@ -72,6 +77,15 @@ namespace FastTests.Voron.Cedar
                 Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tes"), out result, out ptr));
                 Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test1"), out result, out ptr));
                 Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "a"), out result, out ptr));
+
+                var testSlice = Slice.From(tx.Allocator, "test");
+
+                CedarKeyPair resultKey;
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, testSlice));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, testSlice));
             }
         }
 
@@ -111,6 +125,13 @@ namespace FastTests.Voron.Cedar
                 Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tes"), out result, out ptr));
                 Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test1"), out result, out ptr));
                 Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "aest1"), out result, out ptr));
+
+                CedarKeyPair resultKey;
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "aest")));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "test")));
             }
         }
 
@@ -241,6 +262,13 @@ namespace FastTests.Voron.Cedar
                 Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tes"), out result, out ptr));
                 Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tas1"), out result, out ptr));
                 Assert.Equal((int)CedarResultCode.NoValue, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "tesa1"), out result, out ptr));
+
+                CedarKeyPair resultKey;
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "test")));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "test123456")));
             }
         }
 
@@ -339,6 +367,13 @@ namespace FastTests.Voron.Cedar
                 Assert.Equal(2, ptr->Data);
                 Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "collections/3"), out result, out ptr));
                 Assert.Equal(3, ptr->Data);
+
+                CedarKeyPair resultKey;
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "collections/1")));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "collections/3")));
             }
         }
 
@@ -350,8 +385,35 @@ namespace FastTests.Voron.Cedar
             {
                 var tree = tx.CreateTrie("foo");
                 tree.Add("b", 2);
+
+                CedarDataPtr* ptr;
+                CedarKeyPair resultKey;
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "b")));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "b")));
+
                 tree.Add("c", 3);
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "b")));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "c")));
+
                 tree.Add("a", 1);
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "a")));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "c")));
+
+
                 var actual = tree.Read("a");
 
                 using (var it = tree.Iterate(false))
@@ -361,6 +423,85 @@ namespace FastTests.Voron.Cedar
                 }
 
                 Assert.Equal(1, actual);
+
+                
+            }
+        }
+
+
+        [Fact]
+        public void Example1()
+        {
+            // This example is generated to look like the following graph: https://linux.thai.net/~thep/datrie/trie2.gif
+
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+
+                tree.Add("pool", 1);
+                tree.Add("prize", 2);
+                tree.Add("preview", 3);
+                tree.Add("prepare", 4);
+                tree.Add("produce", 5);
+                tree.Add("progress", 6);
+
+                CedarDataPtr* ptr;
+                CedarKeyPair resultKey;
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "pool")));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "progress")));               
+            }
+        }
+
+        [Fact]
+        public void FindBounds()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+
+                tree.Add("aa", 2);
+                tree.Add("ab", 3);
+
+                CedarDataPtr* ptr;
+                CedarKeyPair resultKey;
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "aa")));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "ab")));
+
+                tree.Add("ac", 1);
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "aa")));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "ac")));
+
+                tree.Add("aca", 3);
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "aa")));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "aca"), out resultKey, out ptr));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "aca")));
+
+                tree.Add("b", 3);
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "aa")));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "b")));
             }
         }
 

@@ -59,6 +59,22 @@ namespace Voron
 
                 return *(Content.Ptr + (sizeof(byte) * index));
             }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set
+            {
+                Debug.Assert(Content.Ptr != null, "Uninitialized slice!");                
+
+                if (!Content.HasValue)
+                    throw new InvalidOperationException("Uninitialized slice!");
+
+                if (!Content.IsMutable)
+                    throw new InvalidOperationException("Immutable slice cannot be modified!");
+
+                if (index < 0 || index >= Content.Length)
+                    throw new ArgumentOutOfRangeException(nameof(index));
+
+                *(Content.Ptr + (sizeof(byte)*index)) = value;
+            }
         }
 
         public bool Same(Slice other)
@@ -102,6 +118,12 @@ namespace Voron
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Slice Create(ByteStringContext context, int size, SliceOptions options = SliceOptions.Key)
+        {
+            return new Slice(options, context.Allocate(size));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Slice From(ByteStringContext context, string value, ByteStringType type = ByteStringType.Mutable)
         {
             return new Slice(context.From(value, type));
@@ -135,6 +157,18 @@ namespace Voron
         public void Release(ByteStringContext context)
         {
             context.Release(ref Content);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Shrink(int length)
+        {
+            this.Content.Shrink(length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Expand(int length)
+        {
+            this.Content.Expand(length);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

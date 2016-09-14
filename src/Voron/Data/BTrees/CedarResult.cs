@@ -11,6 +11,11 @@ namespace Voron.Data.BTrees
         void SetResult(short value, int length, long pos);
     };
 
+    public interface ICedarResultKey : ICedarResult
+    {
+        void SetKey(Slice key);
+    }
+
     public struct CedarRef : ICedarResult
     {
         public short Value;
@@ -18,6 +23,24 @@ namespace Voron.Data.BTrees
         void ICedarResult.SetResult(short value, int length, long pos)
         {
             Value = value;
+        }
+    }
+
+    public struct CedarKeyPair : ICedarResultKey
+    {
+        public Slice Key;
+        public short Value;
+        public int Length; // prefix length
+
+        void ICedarResult.SetResult(short value, int length, long pos)
+        {
+            Value = value;
+            Length = length;
+        }
+
+        void ICedarResultKey.SetKey(Slice key)
+        {
+            Key = key;
         }
     }
 

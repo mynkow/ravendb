@@ -37,6 +37,8 @@ namespace Voron.Data.BTrees
 
         public Slice Key { get; internal set; }
 
+        public int PageDepth => _path.Count;
+
         public ushort NodeVersion
         {
             get
@@ -71,6 +73,8 @@ namespace Voron.Data.BTrees
         }
 
         public CedarDataPtr* Pointer { get; private set; }
+
+
 
         public CedarTuple Result;
 
@@ -180,6 +184,16 @@ namespace Voron.Data.BTrees
                 return;
             }
 
+            throw new NotImplementedException();
+        }
+
+        public bool IsFirst(Slice key)
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool IsLast(Slice key)
+        {
             throw new NotImplementedException();
         }
     }

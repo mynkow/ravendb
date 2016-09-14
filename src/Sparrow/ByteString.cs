@@ -332,6 +332,28 @@ namespace Sparrow
         {
             return this == other;
         }
+
+        public void Shrink(int length)
+        {
+            if (length > this._pointer->Length)
+                throw new ArgumentException("Cannot shrink an slice that is smaller than the required size.", nameof(length));
+
+            if (length > this._pointer->Size)
+                throw new ArgumentOutOfRangeException(nameof(length), "Cannot shrink an slice whose allocated size is smaller than the required size.");
+
+            this._pointer->Length = length;
+        }
+
+        public void Expand(int length)
+        {
+            if (length < this._pointer->Length)
+                throw new ArgumentException("Cannot expand an slice that is bigger than the required size.", nameof(length));
+
+            if (length > this._pointer->Size)
+                throw new ArgumentOutOfRangeException(nameof(length), "Cannot expand an slice out of allocated size bounds.");
+
+            this._pointer->Length = length;
+        }
     }
 
     public sealed class UnmanagedGlobalSegment : IDisposable

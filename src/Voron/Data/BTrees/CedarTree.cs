@@ -194,7 +194,7 @@ namespace Voron.Data.BTrees
                 if (status == CedarActionStatus.NotEnoughSpace)
                 {
                     // We need to split because there is not enough space available to add this key into the page.
-                    var pageSplitter = new CedarPageSplitter(_llt, this, cursor);
+                    var pageSplitter = new CedarPageSplitter(_llt, this, cursor, key);
                     cursor = pageSplitter.Execute(); // This effectively acts as a FindLocationFor(key, out node) call;
                 }
 
@@ -292,6 +292,11 @@ namespace Voron.Data.BTrees
                     ActualETag = nodeVersion,
                     ExpectedETag = expectedVersion.Value,
                 };
+        }
+
+        public void ClearRecentFoundPages()
+        {
+            throw new NotImplementedException();
         }
     }
 }

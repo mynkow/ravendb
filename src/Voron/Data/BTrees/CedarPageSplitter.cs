@@ -7,7 +7,7 @@ using Voron.Impl.FreeSpace;
 
 namespace Voron.Data.BTrees
 {
-    public class CedarPageSplitter
+    public unsafe class CedarPageSplitter
     {
         private readonly LowLevelTransaction _tx;
         private readonly CedarTree _tree;
@@ -28,7 +28,7 @@ namespace Voron.Data.BTrees
         {
             var page = _cursor.CurrentPage;
 
-            if (_cursor.PageCount == 0) // we are splitting the root
+            if (_cursor.PageDepth == 0) // we are splitting the root
             {
                 
             }
@@ -49,7 +49,9 @@ namespace Voron.Data.BTrees
                 // sequential inserts, at that point, we are going to keep the current page as is and create a new 
                 // page, this will allow us to do minimal amount of work to get the best density.
 
-                page.SearchLast();
+                CedarKeyPair keyPair;
+                CedarDataPtr* dataPtr;
+                page.GetLast( out keyPair, out dataPtr);
 
             }
             else
