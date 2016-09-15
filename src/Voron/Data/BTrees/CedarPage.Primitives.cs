@@ -120,6 +120,11 @@ namespace Voron.Data.BTrees
             } while (c != 0);
         }
 
+        public CedarActionStatus Remove(Slice key)
+        {
+            throw new NotImplementedException();
+        }
+
         public CedarActionStatus Update(Slice key, int size, out byte* pos, ushort? version = null)
         {
             pos = null;
@@ -1104,7 +1109,7 @@ namespace Voron.Data.BTrees
                 // @base: The pool location of root node (base[from])
                 // c: the first node label on the trie.
 
-                for (; @base >= 0; keyLength++)
+                for (; c != 0 && @base >= 0; keyLength++)
                 {
                     long currentFrom = @base ^ c;
                     while (_ninfo[currentFrom].Sibling != 0)

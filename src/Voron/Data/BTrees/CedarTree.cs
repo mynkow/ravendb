@@ -76,13 +76,15 @@ namespace Voron.Data.BTrees
                 }
             };
         }
-        
+
+        internal int[] Layout => CedarRootHeader.DefaultLayout;
+
 
         public static CedarTree Create(LowLevelTransaction llt, Transaction tx, TreeFlags flags = TreeFlags.None)
         {
             Debug.Assert(llt.Flags == TransactionFlags.ReadWrite, "Create is being called in a read transaction.");
 
-            var leaf = CedarPage.Allocate(llt, CedarRootHeader.DefaultLayout, CedarRootHeader.TotalNumberOfPagesPerNode);
+            var leaf = CedarPage.Allocate(llt, CedarRootHeader.DefaultLayout, TreePageFlags.Leaf);
             leaf.Header.Ptr->TreeFlags = TreePageFlags.Leaf;
             leaf.Initialize();
             
@@ -235,7 +237,7 @@ namespace Voron.Data.BTrees
         private CedarPage SearchPageForKey(Slice key)
         {
             var cursor = new CedarCursor(_llt, new CedarPage(_llt, State.RootPageNumber));
-            cursor.FindLocation(key);
+            cursor.Seek(key);
 
             return cursor.CurrentPage;
         }
@@ -243,7 +245,7 @@ namespace Voron.Data.BTrees
         private CedarPage SearchPageForKey(Slice key, out CedarCursor cursor)
         {
             cursor = new CedarCursor(_llt, new CedarPage(_llt, State.RootPageNumber));
-            cursor.FindLocation(key);
+            cursor.Seek(key);
 
             return cursor.CurrentPage;
         }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Sparrow;
@@ -395,9 +396,12 @@ namespace Voron.Data.BTrees
             get { return !Header.Ptr->IsBranchPage; }
         }
 
-        public static CedarPage Allocate(LowLevelTransaction llt, int[] layout, int totalNumberOfPages)
+        public static CedarPage Allocate(LowLevelTransaction llt, int[] layout, TreePageFlags pageType)
         {
-            var pages = llt.AllocatePages(layout, totalNumberOfPages);
+            Debug.Assert(layout.Length == 4);            
+
+            int totalPages = layout[0] + layout[1] + layout[2] + layout[3];
+            var pages = llt.AllocatePages(layout, totalPages);
 
             // Bulk zero out the pages. 
             foreach (var page in pages)
@@ -420,6 +424,9 @@ namespace Voron.Data.BTrees
             header->DataPageCount = layout[3];
             header->DataNodesPerPage = ((pages[3].IsOverflow ? pages[3].OverflowSize : llt.PageSize) - sizeof(PageHeader) - sizeof(int)) / sizeof(CedarDataPtr);
             Debug.Assert(header->DataNodesPerPage > 0);
+
+            header->TreeFlags = pageType;
+            Debug.Assert(header->TreeFlags == TreePageFlags.Leaf || header->TreeFlags == TreePageFlags.Branch);
 
             return new CedarPage(llt, pages[0].PageNumber);
         }
@@ -547,6 +554,12 @@ namespace Voron.Data.BTrees
                 new PageHandlePtr(_pageLocator.GetReadOnlyPage(pageNumber), false);
         }
 
+        public void AddBranchRef(Slice key, long pageNumber)
+        {
+            Debug.Assert(this.IsBranch);
+
+            throw new NotImplementedException();
+        }
     }
 
 }

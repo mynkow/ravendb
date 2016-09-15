@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Text;
 using FastTests.Voron.FixedSize;
-using NetTopologySuite.Operation.Overlay.Snap;
 using Sparrow;
 using Xunit;
 using Voron.Data.RawData;

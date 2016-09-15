@@ -35,6 +35,15 @@ namespace Voron.Data.BTrees
             get { return _currentPage; }
         }
 
+        public CedarPage ParentPage
+        {
+            get
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+
         public Slice Key { get; internal set; }
 
         public int PageDepth => _path.Count;
@@ -74,8 +83,6 @@ namespace Voron.Data.BTrees
 
         public CedarDataPtr* Pointer { get; private set; }
 
-
-
         public CedarTuple Result;
 
         #region IDisposable Support
@@ -114,19 +121,19 @@ namespace Voron.Data.BTrees
             GC.SuppressFinalize(this);
         }
 
-        protected void Push(CedarPage page)
+        public void Push(CedarPage page)
         {
             throw new NotImplementedException();
         }
 
-        protected CedarPage Pop()
+        public CedarPage Pop()
         {
             throw new NotImplementedException();
         }
 
         #endregion
 
-        public void FindLocation(Slice key)
+        public void Seek(Slice key)
         {
             if (key.Options == SliceOptions.Key)
             {
@@ -184,16 +191,6 @@ namespace Voron.Data.BTrees
                 return;
             }
 
-            throw new NotImplementedException();
-        }
-
-        public bool IsFirst(Slice key)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool IsLast(Slice key)
-        {
             throw new NotImplementedException();
         }
     }
