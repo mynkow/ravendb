@@ -46,6 +46,9 @@ namespace Voron.Data.BTrees
                 parentPage = _cursor.ParentPage;                
             }
 
+            // When splitting parents are always branch nodes.
+            Debug.Assert(parentPage.IsBranch);
+
             // We invalidate all the recent found pages. 
             if (page.IsLeaf)
             {
@@ -57,17 +60,43 @@ namespace Voron.Data.BTrees
                 Debug.Assert(errorCode == CedarResultCode.Success, "Calling GetLast on an empty tree cannot happen on split.");
 
                 if (SliceComparer.Equals(keyPair.Key, _keyToInsert))
-                {
+                {                    
                     // when we get a split at the end of a leaf page, we take that as a hint that the user is doing 
                     // sequential inserts, at that point, we are going to keep the current page as is and create a new 
                     // page, this will allow us to do minimal amount of work to get the best density.
+                    var rightPage = CedarPage.Allocate(_tx, page.Layout, TreePageFlags.Leaf);
 
-                    throw new NotImplementedException();
+                    if (parentPage.AddBranchRef(keyPair.Key, rightPage.PageNumber) == CedarActionStatus.NotEnoughSpace )
+                    {
+                        _cursor.Pop(); // We pop the current page we are going to split. 
 
-                    // Remove the last key we promoted to the leaf page.
-                    //page.Remove(keyPair.Key);
+                        // We recursively split the parent if necessary. 
+                        var splitter = new CedarPageSplitter(_tx, _tree, _cursor, keyPair.Key);
+                        _cursor = splitter.Execute();
 
-                    //return _cursor;
+                        // The parent page may have changed depending on which side the key would end up be stored. 
+                        parentPage = _cursor.CurrentPage;
+                        if ( parentPage.AddBranchRef(keyPair.Key, rightPage.PageNumber) != CedarActionStatus.Success )
+                            throw new InvalidOperationException("This is an splitting bug. It cannot happen that a branch page will not have space after an split.");
+
+                        // We restore the cursor to the current page to continue with the insert process.
+                        _cursor.Push(page);                                                
+                    }
+
+                    // We promote the last key of the left page into the next page. 
+                    CedarDataPtr* rightData;
+                    rightPage.Update(keyPair.Key, dataPtr->DataSize, out rightData);
+
+                    // Update the cursor to point to the right page and select the inserted key.
+
+                    _cursor.Pop(); // We pop the left page.
+                    _cursor.Push(rightPage);
+                    _cursor.Seek(keyPair.Key);
+
+                    // Remove the promoted key from the leaf page.
+                    page.Remove(keyPair.Key);
+
+                    return _cursor;
                 }
             }
 

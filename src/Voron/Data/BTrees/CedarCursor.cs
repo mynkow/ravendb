@@ -14,18 +14,20 @@ namespace Voron.Data.BTrees
     {
         private readonly LowLevelTransaction _llt;        
         private readonly List<long> _path;
+        private readonly CedarTree _tree;
 
-        private CedarPage _currentPage;        
+        private CedarPage _currentPage;
 
-        public CedarCursor(LowLevelTransaction llt, CedarPage currentPage, List<long> pathFromRoot)
+        public CedarCursor(LowLevelTransaction llt, CedarTree tree, CedarPage currentPage, List<long> pathFromRoot)
         {
             this._llt = llt;
+            this._tree = tree;
             this._currentPage = currentPage;
-            this._path = pathFromRoot;
+            this._path = new List<long>(pathFromRoot);
         }
 
-        public CedarCursor(LowLevelTransaction llt, CedarPage currentPage)
-            : this(llt, currentPage, new List<long> {currentPage.PageNumber})
+        public CedarCursor(LowLevelTransaction llt, CedarTree tree, CedarPage currentPage)
+            : this(llt, tree, currentPage, new List<long> {})
         {            
         }
 
@@ -39,7 +41,10 @@ namespace Voron.Data.BTrees
         {
             get
             {
-                throw new NotImplementedException();
+                if ( _path.Count == 0 )
+                    throw new InvalidOperationException("Cannot request the ParentPage of a root node.");
+
+                return _tree.GetPage(_path[_path.Count - 1]);
             }
         }
 
@@ -123,12 +128,18 @@ namespace Voron.Data.BTrees
 
         public void Push(CedarPage page)
         {
-            throw new NotImplementedException();
+            this._path.Add(_currentPage.PageNumber);
+            _currentPage = page;
         }
 
         public CedarPage Pop()
         {
-            throw new NotImplementedException();
+            var result = _currentPage;
+
+            _currentPage = _tree.GetPage(_path[_path.Count - 1]);
+            this._path.RemoveAt(_path.Count - 1);
+
+            return result;
         }
 
         #endregion

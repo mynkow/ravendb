@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Voron.Exceptions;
@@ -101,7 +102,8 @@ namespace Voron.Data.BTrees
             tree.State.RecordNewPage(leaf, 1);
             return tree;
         }
-        
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public void Add(string key, long value, ushort? version = null)
         {
             Add(Slice.From(_tx.Allocator, key), value, version);
@@ -116,6 +118,7 @@ namespace Voron.Data.BTrees
             *((long*)pos) = value;                                               
         }
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public long Read(string key)
         {
             return Read(Slice.From(_tx.Allocator, key));
@@ -169,7 +172,7 @@ namespace Voron.Data.BTrees
             CedarPage page = FindLocationFor(key, out cursor);
 
             // This is efficient because we return the very same Slice so checking can be done via pointer comparison. 
-            byte* pos;            
+            CedarDataPtr* ptr;
             if (cursor.Key.Same(key)) 
             {
                 // This is an update operation (key was found).               
@@ -177,7 +180,7 @@ namespace Voron.Data.BTrees
                 
                 // We need write access to the node.
                 short dataPosition = cursor.Result.Value;
-                CedarDataPtr* ptr = page.Data.DirectWrite(dataPosition);
+                ptr = page.Data.DirectWrite(dataPosition);
                 ptr->DataSize = (byte) size;
 
                 return (byte*)&ptr->Data;
@@ -192,21 +195,20 @@ namespace Voron.Data.BTrees
             do
             {
                 // It will output the position of the data to be written to. 
-                status = page.Update(key, size, out pos);
+                status = page.Update(key, size, out ptr);
                 if (status == CedarActionStatus.NotEnoughSpace)
                 {
                     // We need to split because there is not enough space available to add this key into the page.
                     var pageSplitter = new CedarPageSplitter(_llt, this, cursor, key);
                     cursor = pageSplitter.Execute(); // This effectively acts as a FindLocationFor(key, out node) call;
                 }
-
             }
             while (status != CedarActionStatus.Success);
 
             // Record the new entry.
             State.NumberOfEntries++;
 
-            return pos;
+            return (byte*)&ptr->Data;
         }
 
         public CedarIterator Iterate(bool prefetch)
@@ -236,7 +238,8 @@ namespace Voron.Data.BTrees
 
         private CedarPage SearchPageForKey(Slice key)
         {
-            var cursor = new CedarCursor(_llt, new CedarPage(_llt, State.RootPageNumber));
+            // TODO: Optimize this!!! This is for feature development purposes.
+            var cursor = new CedarCursor(_llt, this, new CedarPage(_llt, State.RootPageNumber));
             cursor.Seek(key);
 
             return cursor.CurrentPage;
@@ -244,7 +247,8 @@ namespace Voron.Data.BTrees
 
         private CedarPage SearchPageForKey(Slice key, out CedarCursor cursor)
         {
-            cursor = new CedarCursor(_llt, new CedarPage(_llt, State.RootPageNumber));
+            // TODO: Optimize this!!! This is for feature development purposes.
+            cursor = new CedarCursor(_llt, this, new CedarPage(_llt, State.RootPageNumber));
             cursor.Seek(key);
 
             return cursor.CurrentPage;
@@ -263,8 +267,9 @@ namespace Voron.Data.BTrees
             if (foundPage.Page.IsBranch)
                 throw new InvalidDataException("Index points to a non leaf page");
 
+            // TODO: Optimize this!!! This is for feature development purposes.
             page = new CedarPage(_llt, foundPage.Number, foundPage.Page);
-            cursor = new CedarCursor(_llt, page, foundPage.CursorPath);
+            cursor = new CedarCursor(_llt, this, page, foundPage.CursorPath);
 
             return true;
         }
@@ -281,6 +286,7 @@ namespace Voron.Data.BTrees
             if (foundPage.Page.IsBranch)
                 throw new InvalidDataException("Index points to a non leaf page");
 
+            // TODO: Optimize this!!! This is for feature development purposes.
             page = new CedarPage(_llt, foundPage.Number, foundPage.Page);
 
             return true;
@@ -294,11 +300,17 @@ namespace Voron.Data.BTrees
                     ActualETag = nodeVersion,
                     ExpectedETag = expectedVersion.Value,
                 };
-        }
+        }       
 
         public void ClearRecentFoundPages()
         {
             throw new NotImplementedException();
+        }
+
+        public CedarPage GetPage(long pageNumber)
+        {
+            // TODO: Optimize this!!! This is for feature development purposes.
+            return new CedarPage(_llt, pageNumber);
         }
     }
 }

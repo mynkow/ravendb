@@ -125,12 +125,9 @@ namespace Voron.Data.BTrees
             throw new NotImplementedException();
         }
 
-        public CedarActionStatus Update(Slice key, int size, out byte* pos, ushort? version = null)
+        public CedarActionStatus Update(Slice key, int size, out CedarDataPtr* ptr, ushort? version = null, CedarNodeFlags nodeFlag = CedarNodeFlags.Data)
         {
-            pos = null;
-
             int index;
-            CedarDataPtr* ptr;
             if (!Data.TryAllocateNode(out index, out ptr))
                 return CedarActionStatus.NotEnoughSpace;
 
@@ -146,12 +143,11 @@ namespace Voron.Data.BTrees
                 Data.FreeNode(index);
 
                 return result; 
-            }                
+            }
 
-            ptr->Flags = CedarNodeFlags.Data;
+            ptr->Flags = nodeFlag;
             ptr->Version = version ?? 0;
-            ptr->DataSize = (byte)size;
-            pos = (byte*)&ptr->Data;            
+            ptr->DataSize = (byte)size;         
 
             return CedarActionStatus.Success;
         }

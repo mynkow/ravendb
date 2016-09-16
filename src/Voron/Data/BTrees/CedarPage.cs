@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Sparrow;
 using Voron.Data.BTrees.Cedar;
 using Voron.Impl;
+using Voron.Impl.Paging;
 
 namespace Voron.Data.BTrees
 {
@@ -396,6 +397,43 @@ namespace Voron.Data.BTrees
             get { return !Header.Ptr->IsBranchPage; }
         }
 
+        public int[] Layout => new[] { 1, Header.Ptr->BlocksPageCount, Header.Ptr->TailPageCount, Header.Ptr->DataPageCount };
+
+        public static void FreeOnCommit(LowLevelTransaction llt, CedarPage page)
+        {
+            CedarPageHeader* header = page.Header.Ptr;
+
+            llt.FreePageOnCommit(header->PageNumber);
+            llt.FreePageOnCommit(header->BlocksPageNumber);
+            llt.FreePageOnCommit(header->TailPageNumber);
+            llt.FreePageOnCommit(header->NodesPageNumber);
+        }
+
+        public static CedarPage Clone(LowLevelTransaction llt, CedarPage page)
+        {
+            CedarPageHeader* header = page.Header.Ptr;
+
+            CedarPage clone = Allocate(llt, page.Layout, header->TreeFlags);
+
+            var srcMainPage = page.GetMainPage().Value;
+            var destMainPage = clone.GetMainPage(true).Value;
+            Memory.Copy(destMainPage.DataPointer, srcMainPage.DataPointer, srcMainPage.OverflowSize - sizeof(PageHeader));
+
+            var srcBlocksPage = page.GetBlocksPage().Value;
+            var destBlocksPage = clone.GetBlocksPage(true).Value;
+            Memory.Copy(destBlocksPage.DataPointer, srcBlocksPage.DataPointer, srcBlocksPage.OverflowSize - sizeof(PageHeader));
+
+            var srcTailPage = page.GetTailPage().Value;
+            var destTailPage = clone.GetTailPage(true).Value;
+            Memory.Copy(destTailPage.DataPointer, srcTailPage.DataPointer, srcTailPage.OverflowSize - sizeof(PageHeader));
+
+            var srcDataPage = page.GetDataNodesPage().Value;
+            var destDataPage = clone.GetDataNodesPage(true).Value;
+            Memory.Copy(destDataPage.DataPointer, srcDataPage.DataPointer, srcDataPage.OverflowSize - sizeof(PageHeader));
+
+            return clone;
+        }
+
         public static CedarPage Allocate(LowLevelTransaction llt, int[] layout, TreePageFlags pageType)
         {
             Debug.Assert(layout.Length == 4);            
@@ -410,7 +448,7 @@ namespace Voron.Data.BTrees
                 Memory.Set(ptr, 0, page.OverflowSize - sizeof(PageHeader));
             }
 
-            var header = (CedarPageHeader*) pages[0].Pointer;
+            var header = (CedarPageHeader*)pages[0].Pointer;
 
             // We do not allow changing the amount of pages because of now we will consider them constants.
             header->BlocksPageCount = layout[1];
@@ -554,7 +592,7 @@ namespace Voron.Data.BTrees
                 new PageHandlePtr(_pageLocator.GetReadOnlyPage(pageNumber), false);
         }
 
-        public void AddBranchRef(Slice key, long pageNumber)
+        public CedarActionStatus AddBranchRef(Slice key, long pageNumber)
         {
             Debug.Assert(this.IsBranch);
 
