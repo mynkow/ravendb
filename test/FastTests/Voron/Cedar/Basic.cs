@@ -522,7 +522,7 @@ namespace FastTests.Voron.Cedar
         }
 
         [Fact]
-        public void AfterPageSplitAllDataIsValid()
+        public void AfterSequentialPageSplitAllDataIsValid()
         {
             int count = 0;
             using (var tx = Env.WriteTransaction())
@@ -553,6 +553,59 @@ namespace FastTests.Voron.Cedar
                 var tree = tx.ReadTrie("foo");
 
                 Assert.Equal(count, tree.State.NumberOfEntries);
+                Assert.Equal(3, tree.State.PageCount);
+                Assert.Equal(2, tree.State.LeafPages);
+                Assert.Equal(1, tree.State.BranchPages);
+                Assert.Equal(2, tree.State.Depth);
+                Assert.False(tree.State.IsModified);
+
+                using (var it = tree.Iterate(false))
+                {
+                    for (int i = 0; i < count; i++)
+                    {
+                        Assert.True(it.Seek(Slice.From(tx.Allocator, "test-" + i.ToString("0000000"))));
+                        Assert.Equal("test-" + i.ToString("0000000"), it.CurrentKey.ToString());
+                        Assert.Equal(i, it.CreateReaderForCurrent().ReadBigEndianInt64());
+                    }
+                }
+            }
+        }
+
+        [Fact]
+        public void AfterRandomPageSplitAllDataIsValid()
+        {
+            Random r = new Random(123);
+
+            int count = 0;
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+
+                do
+                {
+                    int value = r.Next()%100000;
+
+                    tree.Add("test-" + value.ToString("0000000"), value);
+
+                    count++;
+                }
+                while (tree.State.PageCount == 1);
+
+                //Assert.Equal(count, tree.State.NumberOfEntries);
+                Assert.Equal(3, tree.State.PageCount);
+                Assert.Equal(2, tree.State.LeafPages);
+                Assert.Equal(1, tree.State.BranchPages);
+                Assert.Equal(2, tree.State.Depth);
+                Assert.True(tree.State.IsModified);
+
+                tx.Commit();
+            }
+
+            using (var tx = Env.ReadTransaction())
+            {
+                var tree = tx.ReadTrie("foo");
+
+                //Assert.Equal(count, tree.State.NumberOfEntries);
                 Assert.Equal(3, tree.State.PageCount);
                 Assert.Equal(2, tree.State.LeafPages);
                 Assert.Equal(1, tree.State.BranchPages);

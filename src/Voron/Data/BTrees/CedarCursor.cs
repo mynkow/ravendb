@@ -24,10 +24,13 @@ namespace Voron.Data.BTrees
             this._tree = tree;
             this._currentPage = currentPage;
             this._path = new List<long>(pathFromRoot);
+
+            if (this._path.Last() != currentPage.PageNumber)
+                this._path.Add(currentPage.PageNumber);
         }
 
         public CedarCursor(LowLevelTransaction llt, CedarTree tree, CedarPage currentPage)
-            : this(llt, tree, currentPage, new List<long> {})
+            : this(llt, tree, currentPage, new List<long> { currentPage.PageNumber })
         {            
         }
 

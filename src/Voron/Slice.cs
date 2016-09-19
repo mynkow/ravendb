@@ -172,6 +172,12 @@ namespace Voron
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Reset()
+        {
+            this.Content.Reset();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ValueReader CreateReader()
         {
             return new ValueReader(Content.Ptr, Size);
@@ -186,6 +192,8 @@ namespace Voron
         {
             return this.Content.ToString(Encoding.UTF8);
         }
+
+
     }
 
     public static class Slices

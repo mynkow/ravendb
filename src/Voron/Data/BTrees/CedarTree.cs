@@ -304,7 +304,7 @@ namespace Voron.Data.BTrees
 
         public void ClearRecentFoundPages()
         {
-            throw new NotImplementedException();
+            //throw new NotImplementedException();
         }
 
         public CedarPage GetPage(long pageNumber)

@@ -417,19 +417,19 @@ namespace Voron.Data.BTrees
 
             var srcMainPage = page.GetMainPage().Value;
             var destMainPage = clone.GetMainPage(true).Value;
-            Memory.Copy(destMainPage.DataPointer, srcMainPage.DataPointer, srcMainPage.OverflowSize - sizeof(PageHeader));
+            Memory.Copy(destMainPage.DataPointer, srcMainPage.DataPointer, (srcMainPage.IsOverflow ? srcMainPage.OverflowSize : llt.PageSize) - sizeof(PageHeader));
 
             var srcBlocksPage = page.GetBlocksPage().Value;
             var destBlocksPage = clone.GetBlocksPage(true).Value;
-            Memory.Copy(destBlocksPage.DataPointer, srcBlocksPage.DataPointer, srcBlocksPage.OverflowSize - sizeof(PageHeader));
+            Memory.Copy(destBlocksPage.DataPointer, srcBlocksPage.DataPointer, (srcBlocksPage.IsOverflow ? srcBlocksPage.OverflowSize : llt.PageSize) - sizeof(PageHeader));
 
             var srcTailPage = page.GetTailPage().Value;
             var destTailPage = clone.GetTailPage(true).Value;
-            Memory.Copy(destTailPage.DataPointer, srcTailPage.DataPointer, srcTailPage.OverflowSize - sizeof(PageHeader));
+            Memory.Copy(destTailPage.DataPointer, srcTailPage.DataPointer, (srcTailPage.IsOverflow ? srcTailPage.OverflowSize : llt.PageSize) - sizeof(PageHeader));
 
             var srcDataPage = page.GetDataNodesPage().Value;
             var destDataPage = clone.GetDataNodesPage(true).Value;
-            Memory.Copy(destDataPage.DataPointer, srcDataPage.DataPointer, srcDataPage.OverflowSize - sizeof(PageHeader));
+            Memory.Copy(destDataPage.DataPointer, srcDataPage.DataPointer, (srcDataPage.IsOverflow ? srcDataPage.OverflowSize : llt.PageSize) - sizeof(PageHeader));
 
             return clone;
         }
@@ -441,12 +441,9 @@ namespace Voron.Data.BTrees
             int totalPages = layout[0] + layout[1] + layout[2] + layout[3];
             var pages = llt.AllocatePages(layout, totalPages);
 
-            // Bulk zero out the pages. 
-            foreach (var page in pages)
-            {
-                byte* ptr = page.DataPointer;
-                Memory.Set(ptr, 0, page.OverflowSize - sizeof(PageHeader));
-            }
+            // Zero out the main page. 
+            byte* ptr = pages[0].DataPointer;
+            Memory.Set(ptr, 0, (pages[0].IsOverflow ? pages[0].OverflowSize : llt.PageSize) - sizeof(PageHeader));
 
             var header = (CedarPageHeader*)pages[0].Pointer;
 
@@ -473,11 +470,23 @@ namespace Voron.Data.BTrees
         {
             Header.SetWritable();
 
+            // Bulk zero out the content pages. 
+            var pages = new[] { GetBlocksPage(true), GetDataNodesPage(true), GetTailPage(true)};
+            foreach (var handle in pages)
+            {
+                byte* ptr = handle.Value.DataPointer;
+                Memory.Set(ptr, 0, (handle.Value.IsOverflow ? handle.Value.OverflowSize : _llt.PageSize) - sizeof(PageHeader));
+            }
+
             CedarPageHeader* header = Header.Ptr;
 
             // We make sure we do now account for any block that is not complete. 
             header->Size = BlockSize;
             header->Capacity = header->BlocksPerPage - (header->BlocksPerPage % BlockSize);
+
+            header->NumberOfEntries = 0;
+            header->ImplicitAfterAllKeys = Page.Invalid;
+            header->ImplicitBeforeAllKeys = Page.Invalid;
 
             // Aligned to 16 bytes
             int offset = sizeof(CedarPageHeader) + 16;
@@ -525,9 +534,7 @@ namespace Voron.Data.BTrees
 
             Data.NextFree = 0;
 
-
             Tail.Length = sizeof(int);
-
         }
 
 
@@ -594,9 +601,23 @@ namespace Voron.Data.BTrees
 
         public CedarActionStatus AddBranchRef(Slice key, long pageNumber)
         {
-            Debug.Assert(this.IsBranch);
+            Debug.Assert(this.IsBranch);            
 
-            throw new NotImplementedException();
+            if ( key.Options == SliceOptions.BeforeAllKeys )
+                this.Header.Ptr->ImplicitBeforeAllKeys = pageNumber;
+            else if (key.Options == SliceOptions.AfterAllKeys)
+                this.Header.Ptr->ImplicitAfterAllKeys = pageNumber;
+            else
+            {
+                CedarDataPtr* ptr;
+                var status = this.Update(key, sizeof(long), out ptr, nodeFlag: CedarNodeFlags.Branch);
+                if ( status == CedarActionStatus.Success)
+                    ptr->Data = pageNumber;
+
+                return status;
+            }
+
+            return CedarActionStatus.Success;
         }
     }
 

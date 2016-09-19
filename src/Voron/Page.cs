@@ -8,6 +8,8 @@ namespace Voron
 {
     public sealed unsafe class Page
     {
+        public const long Invalid = -1;
+
         public readonly byte* Pointer;
         public readonly AbstractPager Source;
 

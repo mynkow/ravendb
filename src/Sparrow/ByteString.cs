@@ -354,6 +354,11 @@ namespace Sparrow
 
             this._pointer->Length = length;
         }
+
+        public void Reset()
+        {
+            this._pointer->Length = this._pointer->Size;
+        }
     }
 
     public sealed class UnmanagedGlobalSegment : IDisposable

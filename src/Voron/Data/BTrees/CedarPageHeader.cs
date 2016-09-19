@@ -96,13 +96,22 @@ namespace Voron.Data.BTrees
         public int Tail0Offset;
 
         [FieldOffset(56)]
-        public int _bheadF;  // first block of Full;   0
+        public int NumberOfEntries;
+        
         [FieldOffset(60)]
-        public int _bheadC;  // first block of Closed; 0 if no Closed
+        public int _bheadF;  // first block of Full;   0        
         [FieldOffset(64)]
+        public int _bheadC;  // first block of Closed; 0 if no Closed        
+        [FieldOffset(68)]
         public int _bheadO;  // first block of Open;   0 if no Open
 
-        [FieldOffset(68)]
+
+        [FieldOffset(72)]
+        public long ImplicitBeforeAllKeys;
+        [FieldOffset(80)]
+        public long ImplicitAfterAllKeys;
+
+        [FieldOffset(88)]
         public fixed short Reject[257];
     }
 }

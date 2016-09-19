@@ -131,6 +131,7 @@ namespace Voron.Data.BTrees
             if (!Data.TryAllocateNode(out index, out ptr))
                 return CedarActionStatus.NotEnoughSpace;
 
+            // TODO: Make sure that updates (not inserts) will not consume a node allocation. 
             long from = 0;
             long tailPos = 0;
             CedarActionStatus result = Update(key.Content.Ptr, key.Content.Length, (short)index, ref from, ref tailPos);
@@ -324,6 +325,9 @@ namespace Voron.Data.BTrees
                 //Console.WriteLine($"_tail[{offset0 + 1}] = {value}");
                 Unsafe.Write(Tail.DirectWrite(offset0 + 1), value);
 
+                Header.SetWritable();
+                Header.Ptr->NumberOfEntries++;
+
                 return CedarActionStatus.Success;
             }
 
@@ -361,6 +365,9 @@ namespace Voron.Data.BTrees
             Tail.Length += needed;
 
             Unsafe.Write(&tailPtr[len + 1], value);
+
+            Header.SetWritable();
+            Header.Ptr->NumberOfEntries++;
 
             //Console.WriteLine($"_tail[{tailPtr + (len + 1) - Tail.DirectRead()}] = {value}");
 
@@ -1105,7 +1112,7 @@ namespace Voron.Data.BTrees
                 // @base: The pool location of root node (base[from])
                 // c: the first node label on the trie.
 
-                for (; c != 0 && @base >= 0; keyLength++)
+                for (; @base >= 0; keyLength++)
                 {
                     long currentFrom = @base ^ c;
                     while (_ninfo[currentFrom].Sibling != 0)
@@ -1122,7 +1129,7 @@ namespace Voron.Data.BTrees
                     c = _ninfo[from].Child;
                 }
 
-                if (@base >= 0) // it finishes in the trie
+                if (c != 0 && @base >= 0) // it finishes in the trie
                 {
                     key[keyLength] = c;
                     dataIndex = _array[@base ^ c].Value;
@@ -1156,13 +1163,13 @@ namespace Voron.Data.BTrees
         }
 
 
-        struct IteratorValue
+        internal struct IteratorValue
         {
             public short Value;
             public CedarResultCode Error;
         }
 
-        private IteratorValue Begin(ref long from, ref long len)
+        internal IteratorValue Begin(Slice key, ref long from, ref long len)
         {
             Node* _array = Blocks.Nodes;
             NodeInfo* _ninfo = Blocks.NodesInfo;
@@ -1181,27 +1188,40 @@ namespace Voron.Data.BTrees
 
                 for (; c != 0 && @base >= 0; len++)
                 {
+                    key[(int)len] = c;
+
                     from = @base ^ c;
                     @base = _array[from].Base;
                     c = _ninfo[from].Child;
                 }
 
                 if (@base >= 0) // it finishes in the trie
+                {
+                    key[(int)len] = c;
                     return new IteratorValue { Error = CedarResultCode.Success, Value = _array[@base ^ c].Value };
+                }
+                    
             }            
 
             // we have a suffix to look for
 
             byte* tail = Tail.DirectRead();
             int len_ = _strlen(tail - @base);
+
+            // Copy tail to key
+            Memory.Copy(key.Content.Ptr + len, tail - @base, len_);
+
             from &= TAIL_OFFSET_MASK;
             from |= ((long)(-@base + len_)) << 32; // this must be long
             len += len_;
 
+            // We shrink the key to match the size.
+            key.Shrink((int)len);
+
             return new IteratorValue { Error = CedarResultCode.Success, Value = *(short*)(tail - @base + len_ + 1) };
         }
 
-        private IteratorValue Next(ref long from, ref long len, long root = 0)
+        internal IteratorValue Next(Slice key, ref long from, ref long len, long root = 0)
         {
             Node* _array = Blocks.Nodes;
             NodeInfo* _ninfo = Blocks.NodesInfo;
@@ -1233,10 +1253,11 @@ namespace Voron.Data.BTrees
             if (c == 0)
                 return new IteratorValue { Error = CedarResultCode.NoPath };
 
+            key[(int)len] = c;
             from = _array[from].Base ^ c;
-            len++;
+            len++;            
 
-            return Begin(ref from, ref len);
+            return Begin(key, ref from, ref len);
         }
 
 
