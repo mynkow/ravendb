@@ -177,13 +177,17 @@ namespace Voron.Data.BTrees
                 {
                     if (pos == len)
                     {
-                        int current = Follow(from, 0);
+                        int current;                        
+                        if ( !TryFollow(from, 0, out current))
+                            return CedarActionStatus.NotEnoughSpace;
+
                         _array[current].Value = value;
 
                         return CedarActionStatus.Success;
                     }
 
-                    from = Follow(from, key[pos]);
+                    if (!TryFollow(from, key[pos], out from))
+                        return CedarActionStatus.NotEnoughSpace;
                 }
 
                 //Console.WriteLine("End 1");
@@ -233,7 +237,9 @@ namespace Voron.Data.BTrees
                     from &= TAIL_OFFSET_MASK; // reset to update tail offset
                     for (int offset_ = -_array[from].Base; offset_ < offset;)
                     {
-                        from = Follow(from, Tail[offset_]);
+                        if (!TryFollow(from, Tail[offset_], out from) )
+                            return CedarActionStatus.NotEnoughSpace;
+
                         offset_++;
                     }
 
@@ -243,15 +249,21 @@ namespace Voron.Data.BTrees
                 //Console.WriteLine("Begin 2");
 
                 for (long pos_ = pos_orig; pos_ < pos; pos_++)
-                    from = Follow(from, key[pos_]);
-
+                {
+                    if (!TryFollow(from, key[pos_], out from))
+                        return CedarActionStatus.NotEnoughSpace;
+                }
+  
                 //Console.WriteLine("End 2");                    
 
                 moved = pos - pos_orig;
                 if (tailPtr[pos] != 0)
                 {
                     // remember to move offset to existing tail
-                    long to_ = Follow(from, tailPtr[pos]);
+                    long to_;
+                    if (!TryFollow(from, tailPtr[pos], out to_))
+                        return CedarActionStatus.NotEnoughSpace;
+
                     moved++;
 
                     //Console.WriteLine($"_array[{to_}].Base = {-(int)(offset + moved)}");
@@ -281,7 +293,10 @@ namespace Voron.Data.BTrees
 
                 if (pos == len || tailPtr[pos] == '\0')
                 {
-                    long to = Follow(from, 0);
+                    long to;
+                    if (!TryFollow(from, 0, out to))
+                        return CedarActionStatus.NotEnoughSpace;
+
                     if (pos == len)
                     {
                         // TODO: Write in the proper endianness.
@@ -304,7 +319,9 @@ namespace Voron.Data.BTrees
                     }
                 }
 
-                from = Follow(from, key[pos]);
+                if (!TryFollow(from, key[pos], out from))
+                    return CedarActionStatus.NotEnoughSpace;
+
                 pos++;
             }
 
@@ -377,27 +394,36 @@ namespace Voron.Data.BTrees
             return CedarActionStatus.Success;
         }
 
-
-        private int Follow(long from, byte label)
+        private bool TryFollow(long from, byte label, out long to)
         {
-            int to = 0;
+            int to_;
+            var result = TryFollow(from, label, out to_);
+            to = to_;
+            return result;
+        }
+
+        private bool TryFollow(long from, byte label, out int to)
+        {
             int @base = Blocks.Nodes[from].Base;
             if (@base < 0 || Blocks.Nodes[to = @base ^ label].Check < 0) // TODO: Check if the rules are the same here as in C++
             {
-                to = _pop_enode(@base, label, (short)from);
+                if (!_try_pop_enode(@base, label, (short) from, out to))
+                    return false;
+
                 _push_sibling(from, to ^ label, label, @base >= 0);
             }
             else if (Blocks.Nodes[to].Check != (int)from)
             {
-                to = _resolve(from, @base, label);
+                if (!_try_resolve(from, @base, label, out to))
+                    return false;
             }
 
             //Console.WriteLine($"F->{to}");
 
-            return to;
+            return true;
         }
 
-        private int _pop_enode(int @base, byte label, short from)
+        private bool _try_pop_enode(int @base, byte label, short from, out int e)
         {
             //Console.WriteLine($"enters [{@base},{label},{from}] (_pop_enode)");
 
@@ -405,8 +431,16 @@ namespace Voron.Data.BTrees
             var _array = (Node*)Blocks.DirectWrite<Node>();
             var _block = (BlockMetadata*)Blocks.DirectWrite<BlockMetadata>();
 
-
-            int e = @base < 0 ? _find_place() : @base ^ label;
+            if (@base < 0)
+            {
+                if (!_try_find_place(out e))
+                    return false;                    
+            }
+            else
+            {
+                e = @base ^ label;
+            }
+            
             int bi = e >> 8;
 
             _block[bi].Num--;
@@ -452,7 +486,7 @@ namespace Voron.Data.BTrees
             }
 
             //Console.WriteLine($"returns: {e} (_pop_enode)");
-            return e;
+            return true;
         }
 
         private void _transfer_block(int bi, ref int head_in, ref int head_out)
@@ -489,7 +523,7 @@ namespace Voron.Data.BTrees
             //Console.WriteLine($"returns [{head_in}] (_pop_block)");
         }
 
-        private int _find_place()
+        private bool _try_find_place(out int result)
         {
             var _block = (BlockMetadata*)Blocks.DirectWrite<BlockMetadata>();
 
@@ -498,36 +532,38 @@ namespace Voron.Data.BTrees
             if (Header.Ptr->_bheadC != 0)
             {
                 //Console.WriteLine($"returns: {_block[Header.Ptr->_bheadC].Ehead} (_find_place)");
-                return _block[Header.Ptr->_bheadC].Ehead;
+                result = _block[Header.Ptr->_bheadC].Ehead;
+                return true;
             }
 
             if (Header.Ptr->_bheadO != 0)
             {
                 //Console.WriteLine($"returns: {_block[Header.Ptr->_bheadO].Ehead} (_find_place)");
-                return _block[Header.Ptr->_bheadO].Ehead;
+                result = _block[Header.Ptr->_bheadO].Ehead;
+                return true;
             }
 
-            int result = _add_block() << 8;
-            //Console.WriteLine($"returns: {result} (_find_place)");
+            if (Header.Ptr->Size != Header.Ptr->Capacity)
+            {
+                result = _add_block() << 8;
+                //Console.WriteLine($"returns: {result} (_find_place)");
 
-            return result;
+                return true;
+            }
+
+            result = -1;
+            return false;
         }
 
         private int _add_block()
         {
             //Console.WriteLine($"enters [] (_add_block)");
 
-            int size = Header.Ptr->Size;
-            int capacity = Header.Ptr->Capacity;
-            if (size == capacity)
-            {
-                // TODO: CHECK WHAT HAPPENS WHEN THIS KICKS OFF.
-                throw new NotImplementedException();
-            }
-
             Header.SetWritable();
             var _array = (Node*)Blocks.DirectWrite<Node>();
             var _block = (BlockMetadata*)Blocks.DirectWrite<BlockMetadata>();
+
+            int size = Header.Ptr->Size;
 
             _block[size >> 8].Ehead = size;
             _array[size] = new Node(-(size + 255), -(size + 1));
@@ -617,7 +653,7 @@ namespace Voron.Data.BTrees
         /// <summary>
         /// Resolve conflict on base_n ^ label_n = base_p ^ label_p
         /// </summary>
-        private int _resolve(long from_n, int base_n, byte label_n)
+        private bool _try_resolve(long from_n, int base_n, byte label_n, out int result)
         {
             var _array = (Node*)Blocks.DirectWrite<Node>();
             var _ninfo = (NodeInfo*)Blocks.DirectWrite<NodeInfo>();
@@ -637,7 +673,25 @@ namespace Voron.Data.BTrees
             byte* first = child;
             byte* last = flag ? _set_child(first, base_n, _ninfo[from_n].Child, label_n) : _set_child(first, base_p, _ninfo[from_p].Child);
 
-            int @base = (first == last ? _find_place() : _find_place(first, last)) ^ *first;
+            int @base;
+            if (first == last)
+            {
+                if (!_try_find_place(out @base))
+                {
+                    result = -1;
+                    return false;
+                }                    
+            }
+            else
+            {
+                if (!_try_find_place(first, last, out @base))
+                {
+                    result = -1;
+                    return false;
+                }
+            }
+
+            @base ^= *first;
 
             // replace & modify empty list
             int from = flag ? (int)from_n : from_p;
@@ -658,7 +712,14 @@ namespace Voron.Data.BTrees
             for (byte* p = first; p <= last; p++)
             {
                 // to_ => to
-                int to = _pop_enode(@base, *p, (short) from);
+                int to;
+                if (!_try_pop_enode(@base, *p, (short) from, out to))
+                {
+                    result = -1;
+                    return false;
+                }
+                    
+
                 int to_ = base_ ^ *p;
 
                 //Console.WriteLine($"to[{to}], to_[{to_}] (_resolve)");
@@ -719,7 +780,8 @@ namespace Voron.Data.BTrees
 
             //Console.WriteLine($"returns [{(flag ? @base ^ label_n : to_pn)}] (_resolve)");
 
-            return flag ? @base ^ label_n : to_pn;
+            result = flag ? @base ^ label_n : to_pn;
+            return true;
         }
 
         private void _push_enode(int e)
@@ -774,7 +836,7 @@ namespace Voron.Data.BTrees
         }
 
 
-        private int _find_place(byte* first, byte* last)
+        private bool _try_find_place(byte* first, byte* last, out int result)
         {
             //Console.WriteLine($"enters [{*first},{*last}] (_find_place)");
 
@@ -807,7 +869,8 @@ namespace Voron.Data.BTrees
                                     _block[bi].Ehead = e;
 
                                     //Console.WriteLine($"returns: {e} (_find_place)");
-                                    return e;
+                                    result = e;
+                                    return true;
                                 }
                             }
 
@@ -835,10 +898,16 @@ namespace Voron.Data.BTrees
                 }
             }
 
-            int result = _add_block() << 8;
-            //Console.WriteLine($"returns: {result} (_find_place)");
-            return result;
+            if (Header.Ptr->Size != Header.Ptr->Capacity)
+            {
+                result = _add_block() << 8;
+                //Console.WriteLine($"returns: {result} (_find_place)");
 
+                return true;
+            }
+
+            result = -1;
+            return false;
         }
 
         private byte* _set_child(byte* p, int @base, byte c)

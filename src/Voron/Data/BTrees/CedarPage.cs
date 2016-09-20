@@ -441,10 +441,6 @@ namespace Voron.Data.BTrees
             int totalPages = layout[0] + layout[1] + layout[2] + layout[3];
             var pages = llt.AllocatePages(layout, totalPages);
 
-            // Zero out the main page. 
-            byte* ptr = pages[0].DataPointer;
-            Memory.Set(ptr, 0, (pages[0].IsOverflow ? pages[0].OverflowSize : llt.PageSize) - sizeof(PageHeader));
-
             var header = (CedarPageHeader*)pages[0].Pointer;
 
             // We do not allow changing the amount of pages because of now we will consider them constants.
@@ -463,18 +459,26 @@ namespace Voron.Data.BTrees
             header->TreeFlags = pageType;
             Debug.Assert(header->TreeFlags == TreePageFlags.Leaf || header->TreeFlags == TreePageFlags.Branch);
 
-            return new CedarPage(llt, pages[0].PageNumber);
+            var page = new CedarPage(llt, pages[0].PageNumber);
+            page.Initialize();
+
+            return page;
         }
 
         internal void Initialize()
         {
             Header.SetWritable();
 
+            // Zero out the main page. 
+            PageHandlePtr mainPage = GetMainPage(true);
+            byte* ptr = mainPage.Value.Pointer + 40; // 40 is the first byte after the pages size definition.
+            Memory.Set(ptr, 0, (mainPage.Value.IsOverflow ? mainPage.Value.OverflowSize : _llt.PageSize) - 40);
+
             // Bulk zero out the content pages. 
             var pages = new[] { GetBlocksPage(true), GetDataNodesPage(true), GetTailPage(true)};
             foreach (var handle in pages)
             {
-                byte* ptr = handle.Value.DataPointer;
+                ptr = handle.Value.DataPointer;
                 Memory.Set(ptr, 0, (handle.Value.IsOverflow ? handle.Value.OverflowSize : _llt.PageSize) - sizeof(PageHeader));
             }
 

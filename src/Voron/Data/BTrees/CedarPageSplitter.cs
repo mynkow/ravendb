@@ -34,8 +34,7 @@ namespace Voron.Data.BTrees
             {
                 _cursor.Pop();
 
-                CedarPage newRootPage = CedarPage.Allocate(_tx, _tree.Layout, TreePageFlags.Branch);
-                newRootPage.Initialize();
+                CedarPage newRootPage = CedarPage.Allocate(_tx, _tree.Layout, TreePageFlags.Branch);                
 
                 _tree.State.PageCount++;
                 _tree.State.BranchPages++;
@@ -74,8 +73,7 @@ namespace Voron.Data.BTrees
                     // when we get a split at the end of a leaf page, we take that as a hint that the user is doing 
                     // sequential inserts, at that point, we are going to keep the current page as is and create a new 
                     // page, this will allow us to do minimal amount of work to get the best density.
-                    var rightPage = CedarPage.Allocate(_tx, page.Layout, TreePageFlags.Leaf);
-                    rightPage.Initialize();                    
+                    var rightPage = CedarPage.Allocate(_tx, page.Layout, TreePageFlags.Leaf);                
 
                     if (parentPage.AddBranchRef(keyPair.Key, rightPage.PageNumber) == CedarActionStatus.NotEnoughSpace )
                     {
@@ -169,7 +167,6 @@ namespace Voron.Data.BTrees
 
             // Allocate the new page.
             var rightPage = CedarPage.Allocate(_tx, leftPage.Layout, leftPage.Header.Ptr->TreeFlags);
-            rightPage.Initialize();
 
             if (leftPage.Header.Ptr->IsBranchPage)
                 _tree.State.BranchPages++;
