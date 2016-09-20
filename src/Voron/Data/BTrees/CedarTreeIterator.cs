@@ -10,7 +10,7 @@ namespace Voron.Data.BTrees
     /// <summary>
     /// The iteration allow us to iterate and seek over a Cedar Tree.
     /// </summary>
-    public unsafe class CedarIterator : IIterator
+    public unsafe class CedarTreeIterator : IIterator
     {
         private readonly CedarTree _tree;
         private readonly LowLevelTransaction _tx;
@@ -22,7 +22,7 @@ namespace Voron.Data.BTrees
         private Slice _currentKey = default(Slice);
         private Slice _currentInternalKey = default(Slice);
 
-        public CedarIterator(CedarTree tree, LowLevelTransaction tx, bool prefetch)
+        public CedarTreeIterator(CedarTree tree, LowLevelTransaction tx, bool prefetch)
         {
             _tree = tree;
             _tx = tx;
@@ -32,7 +32,7 @@ namespace Voron.Data.BTrees
         public bool Seek(Slice key)
         {
             if (_disposed)
-                throw new ObjectDisposedException($"{nameof(CedarIterator)} {_tree.Name}");
+                throw new ObjectDisposedException($"{nameof(CedarTreeIterator)} {_tree.Name}");
 
             // We look for the branch page that is going to host this data. 
             CedarPage _page = _tree.FindLocationFor(key, out _cursor);
@@ -60,7 +60,7 @@ namespace Voron.Data.BTrees
         public bool MoveNext()
         {
             if (_disposed)
-                throw new ObjectDisposedException($"{nameof(CedarIterator)} {_tree.Name}");
+                throw new ObjectDisposedException($"{nameof(CedarTreeIterator)} {_tree.Name}");
 
             throw new NotImplementedException();
         }
@@ -68,7 +68,7 @@ namespace Voron.Data.BTrees
         public bool MovePrev()
         {
             if (_disposed)
-                throw new ObjectDisposedException($"{nameof(CedarIterator)} {_tree.Name}");
+                throw new ObjectDisposedException($"{nameof(CedarTreeIterator)} {_tree.Name}");
 
             throw new NotImplementedException();
         }
@@ -77,7 +77,7 @@ namespace Voron.Data.BTrees
         public bool Skip(int count)
         {
             if (_disposed)
-                throw new ObjectDisposedException($"{nameof(CedarIterator)} {_tree.Name}");
+                throw new ObjectDisposedException($"{nameof(CedarTreeIterator)} {_tree.Name}");
 
             if (count != 0)
             {
@@ -102,7 +102,7 @@ namespace Voron.Data.BTrees
             get
             {
                 if (_disposed)
-                    throw new ObjectDisposedException($"{nameof(CedarIterator)} {_tree.Name}");
+                    throw new ObjectDisposedException($"{nameof(CedarTreeIterator)} {_tree.Name}");
 
                 return _currentKey;
             }
@@ -137,7 +137,7 @@ namespace Voron.Data.BTrees
         public ValueReader CreateReaderForCurrent()
         {
             if (_disposed)
-                throw new ObjectDisposedException($"{nameof(CedarIterator)} {_tree.Name}");
+                throw new ObjectDisposedException($"{nameof(CedarTreeIterator)} {_tree.Name}");
 
             throw new NotImplementedException();
         }

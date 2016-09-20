@@ -263,7 +263,7 @@ namespace Voron.Data.BTrees
             while (self.MoveNext());
         }
 
-        public unsafe static bool ValidateCurrentKey<T>(this T self, LowLevelTransaction tx, TreeNodeHeader* node) where T : IIterator
+        public static unsafe bool ValidateCurrentKey<T>(this T self, LowLevelTransaction tx, TreeNodeHeader* node) where T : IIterator
         {
             if (self.RequiredPrefix.HasValue)
             {
@@ -280,7 +280,7 @@ namespace Voron.Data.BTrees
             return true;
         }
 
-        public unsafe static bool ValidateCurrentKey<T>(this T self, Slice currentKey) where T : IIterator
+        public static bool ValidateCurrentKey<T>(this T self, Slice currentKey) where T : IIterator
         {
             if (self.RequiredPrefix.HasValue)
             {

@@ -103,7 +103,8 @@ namespace Voron.Data.BTrees
                     _cursor.Push(rightPage);
 
                     // Remove the promoted key from the leaf page.
-                    page.Remove(keyPair.Key);
+                    ushort _;
+                    page.Remove(keyPair.Key, out _);
 
                     _tree.State.PageCount++;
                     _tree.State.LeafPages++;

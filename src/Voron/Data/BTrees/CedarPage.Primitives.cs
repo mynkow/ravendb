@@ -120,9 +120,64 @@ namespace Voron.Data.BTrees
             } while (c != 0);
         }
 
-        public CedarActionStatus Remove(Slice key)
+        public CedarActionStatus Remove(Slice key, out ushort nodeVersion)
         {
-            throw new NotImplementedException();
+            //Console.WriteLine($"Begin Erase with len={len}");
+            long pos = 0;
+            long from = 0;
+
+            short value;
+            var i = _find(key.Content.Ptr, ref from, ref pos, key.Content.Length, out value);
+            if (i != CedarResultCode.Success)
+            {
+                nodeVersion = 0;
+                return CedarActionStatus.NotFound;
+            }                         
+
+            if (from >> 32 != 0)
+            {
+                // leave tail as is
+                from &= TAIL_OFFSET_MASK;
+            }
+
+            var _ninfo = Blocks.NodesInfo;
+
+            bool flag = Blocks.Nodes[from].Base < 0; // have siblings
+            int e = flag ? (int)from : Blocks.Nodes[from].Base ^ 0;
+            from = Blocks.Nodes[e].Check;
+
+            //Console.WriteLine($"flag={(flag ? 1 : 0)}, e={e}, from={from} (erase)");
+
+            do
+            {
+                Node* n = &Blocks.Nodes[from];
+
+                //Console.WriteLine($"n.Base={n.Base}, _ninfo[{from}].Child={_ninfo[from].Child} (erase)");
+                //Console.WriteLine($"_ninfo[{(n.Base ^ _ninfo[from].Child)}].Sibling={_ninfo[n.Base ^ _ninfo[from].Child].Sibling} (erase)");
+
+                flag = _ninfo[n->Base ^ _ninfo[from].Child].Sibling != 0;
+
+                //Console.WriteLine($"flag={(flag ? 1 : 0)}, e={e}, from={from}, n.Base={n.Base}, n.Check={n.Check} (erase)");
+
+                if (flag)
+                    _pop_sibling(from, n->Base, (byte)(n->Base ^ e));
+
+                _push_enode(e);
+                e = (int)from;
+                from = Blocks.Nodes[from].Check;
+            }
+            while (!flag);
+
+            //Console.WriteLine($"_ninfo[264] = [{_ninfo[264].Child},{_ninfo[264].Sibling}] (erase)");
+            //Console.WriteLine($"End Erase with len={len}");
+
+            // Get the node version.
+            nodeVersion = Data.DirectRead(value)->Version;
+
+            // Free the storage node.
+            Data.FreeNode(value);
+
+            return CedarActionStatus.Success;
         }
 
         public CedarActionStatus Update(Slice key, int size, out CedarDataPtr* ptr, ushort? version = null, CedarNodeFlags nodeFlag = CedarNodeFlags.Data)
@@ -611,6 +666,38 @@ namespace Voron.Data.BTrees
             }
 
             //Console.WriteLine($"returns [{head_out}] (_push_block)");
+        }
+
+        private void _pop_sibling(long from, int @base, byte label)
+        {
+            //Console.WriteLine($"enters [{from},{@base},{(int)label}] (_pop_sibling)");
+
+            // TODO: Review this and the push... the original uses pointers (and for a good reason) even though it is illegible what it is doing.
+
+            bool changeChild = true;
+
+            var _ninfo = (NodeInfo*)Blocks.DirectWrite<NodeInfo>();
+
+            byte c = _ninfo[from].Child;
+            while (c != label)
+            {
+                changeChild = false;
+
+                from = @base ^ c;
+                c = _ninfo[from].Sibling;
+            }
+
+            byte sibling = _ninfo[@base ^ label].Sibling;
+            if (changeChild)
+            {
+                //Console.WriteLine($"\t_ninfo[{from}].Child = {sibling} (_pop_sibling)");
+                _ninfo[from].Child = sibling;
+            }
+            else
+            {
+                //Console.WriteLine($"\t_ninfo[{@base ^ c}].Sibling = {sibling} (_pop_sibling)");
+                _ninfo[from].Sibling = sibling;
+            }
         }
 
         private void _push_sibling(long from, int @base, byte label, bool flag = true)
@@ -1238,6 +1325,11 @@ namespace Voron.Data.BTrees
             public CedarResultCode Error;
         }
 
+        internal IteratorValue Predecessor(Slice key, ref long from, ref long len)
+        {
+            throw new NotImplementedException();
+        }
+
         internal IteratorValue Begin(Slice key, ref long from, ref long len)
         {
             Node* _array = Blocks.Nodes;
@@ -1268,8 +1360,7 @@ namespace Voron.Data.BTrees
                 {
                     key[(int)len] = c;
                     return new IteratorValue { Error = CedarResultCode.Success, Value = _array[@base ^ c].Value };
-                }
-                    
+                }                    
             }            
 
             // we have a suffix to look for
@@ -1327,6 +1418,11 @@ namespace Voron.Data.BTrees
             len++;            
 
             return Begin(key, ref from, ref len);
+        }
+
+        internal IteratorValue Previous(Slice key, ref long from, ref long len, long root = 0)
+        {
+            throw new NotImplementedException();
         }
 
 

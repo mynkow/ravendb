@@ -23,6 +23,10 @@ namespace Voron.Data.BTrees
         /// Key does not fit into the Cedar page. We need to split it.
         /// </summary>
         NotEnoughSpace,
+        /// <summary>
+        /// Key was not found into the Cedar page.
+        /// </summary>
+        NotFound
     }
 
     public unsafe class CedarTree
@@ -132,12 +136,39 @@ namespace Voron.Data.BTrees
             return *((long*)pos);
         }
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void Delete(string key, ushort? version = null)
+        {
+            Delete(Slice.From(_tx.Allocator, key), version);
+        }
+
+        public void Delete(Slice key, ushort? version = null)
+        {
+            if (_llt.Flags != TransactionFlags.ReadWrite)
+                throw new ArgumentException("Cannot delete a value in a read only transaction");
+
+            State.IsModified = true;
+
+            // We look for the leaf page that is going to host this data. 
+            CedarCursor cursor;
+            CedarPage page = FindLocationFor(key, out cursor);
+
+            Debug.Assert(page.IsLeaf);
+
+            ushort nodeVersion;
+            if (page.Remove(key, out nodeVersion) == CedarActionStatus.Success)
+            {
+                CheckConcurrency(key, version, nodeVersion, ActionType.Delete);
+            }
+        }
+
+
         public byte* DirectRead(Slice key)
         {
             if (AbstractPager.IsKeySizeValid(key.Size) == false)
                 throw new ArgumentException($"Key size is too big, must be at most {AbstractPager.MaxKeySize} bytes, but was {(key.Size + AbstractPager.RequiredSpaceForNewNode)}", nameof(key));
 
-            // We look for the branch page that is going to host this data. 
+            // We look for the leaf page that is going to host this data. 
             CedarCursor cursor;
             CedarPage page = FindLocationFor(key, out cursor);
 
@@ -157,7 +188,7 @@ namespace Voron.Data.BTrees
             if (State.InWriteTransaction)
                 State.IsModified = true;
 
-            if (_llt.Flags == (TransactionFlags.ReadWrite) == false)
+            if (_llt.Flags != TransactionFlags.ReadWrite)
                 throw new ArgumentException("Cannot add a value in a read only transaction");
 
             if (AbstractPager.IsKeySizeValid(key.Size) == false)
@@ -167,7 +198,7 @@ namespace Voron.Data.BTrees
             if (size > 8 || size < 0)
                 throw new ArgumentOutOfRangeException(nameof(size), "The supported range is between 0 and 8 bytes.");
 
-            // We look for the branch page that is going to host this data. 
+            // We look for the leaf page that is going to host this data. 
             CedarCursor cursor;
             CedarPage page = FindLocationFor(key, out cursor);
 
@@ -211,9 +242,9 @@ namespace Voron.Data.BTrees
             return (byte*)&ptr->Data;
         }
 
-        public CedarIterator Iterate(bool prefetch)
+        public CedarTreeIterator Iterate(bool prefetch)
         {
-            throw new NotImplementedException();
+            return new CedarTreeIterator(this, _llt, prefetch);
         }
 
         internal CedarPage FindLocationFor(Slice key)

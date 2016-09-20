@@ -275,6 +275,7 @@ namespace FastTests.Voron.Cedar
         [Fact]
         public void InsertSameMultipleTimes()
         {
+            // TODO: Modify this to add 5000 times the same (to check for unwanted node allocations). 
             using (var tx = Env.WriteTransaction())
             {
                 var tree = tx.CreateTrie("foo");
@@ -453,9 +454,9 @@ namespace FastTests.Voron.Cedar
                 Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "pool")));
 
                 Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
-                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "progress")));               
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "progress")));
             }
-        }
+        }        
 
         [Fact]
         public void FindBounds()
@@ -502,6 +503,147 @@ namespace FastTests.Voron.Cedar
 
                 Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
                 Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "b")));
+            }
+        }
+
+
+        [Fact]
+        public void SingleNodeRemove()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var poolSlice = Slice.From(tx.Allocator, "pool");
+
+                var tree = tx.CreateTrie("foo");
+
+                tree.Add(poolSlice, 1);
+
+                CedarDataPtr* ptr;
+                CedarKeyPair resultKey;
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, poolSlice));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, poolSlice));
+
+                tree.Delete(poolSlice);
+
+                Assert.NotEqual((int)CedarResultCode.Success, (int)root.ExactMatchSearch(poolSlice, out resultKey, out ptr));
+            }
+        }
+
+        [Fact]
+        public void DualNodeRemove()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var firstSlice = Slice.From(tx.Allocator, "test");
+                var secondSlice = Slice.From(tx.Allocator, "test1234");
+
+
+                var tree = tx.CreateTrie("foo");
+
+                tree.Add(firstSlice, 1);
+                tree.Add(secondSlice, 2);
+
+                CedarDataPtr* ptr;
+                CedarKeyPair resultKey;
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, firstSlice));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, secondSlice));
+
+                tree.Delete(firstSlice);
+
+                Assert.NotEqual((int)CedarResultCode.Success, (int)root.ExactMatchSearch(firstSlice, out resultKey, out ptr));
+
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, secondSlice));
+
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, secondSlice));
+            }
+        }
+
+        [Fact]
+        public void RemoveLowerToHigher()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+
+                tree.Add("test", 1);
+                tree.Add("test1234", 2);
+                tree.Add("test12", 3);
+                tree.Add("test123456", 4);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal(4, root.NumberOfKeys);
+
+                CedarDataPtr* ptr;
+                CedarRef result;
+
+                tree.Delete("test");
+                Assert.NotEqual((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
+                Assert.Equal(3, root.NumberOfKeys);
+
+                tree.Delete("test1234");
+                Assert.NotEqual((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test1234"), out result, out ptr));
+                Assert.Equal(2, root.NumberOfKeys);
+
+                tree.Delete("test12");
+                Assert.NotEqual((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test12"), out result, out ptr));
+                Assert.Equal(1, root.NumberOfKeys);
+
+                tree.Delete("test123456");
+                Assert.NotEqual((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test123456"), out result, out ptr));
+                Assert.Equal(0, root.NumberOfKeys);
+            }
+        }
+
+        [Fact]
+        public void RemoveHigherToLower()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+
+                tree.Add("test", 1);
+                tree.Add("test1234", 2);
+                tree.Add("test12", 3);
+                tree.Add("test123456", 4);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal(4, root.NumberOfKeys);
+
+                CedarDataPtr* ptr;
+                CedarRef result;
+
+
+                tree.Delete("test123456");
+                Assert.NotEqual((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test123456"), out result, out ptr));
+
+                Assert.Equal(3, root.NumberOfKeys);
+
+                tree.Delete("test1234");
+                Assert.NotEqual((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test1234"), out result, out ptr));
+                Assert.Equal(2, root.NumberOfKeys);
+
+                tree.Delete("test12");
+                Assert.NotEqual((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test12"), out result, out ptr));
+                Assert.Equal(1, root.NumberOfKeys);
+
+                tree.Delete("test");
+                Assert.NotEqual((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
+                Assert.Equal(0, root.NumberOfKeys);
             }
         }
 
