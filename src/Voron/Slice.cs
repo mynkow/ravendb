@@ -117,6 +117,11 @@ namespace Voron
             this.Content.CopyTo(from, dest, offset, count);
         }
 
+        public void CopyTo(Slice dest)
+        {
+            this.Content.CopyTo(dest.Content);
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Slice Create(ByteStringContext context, int size, SliceOptions options = SliceOptions.Key)
         {

@@ -182,34 +182,31 @@ namespace Voron.Data.BTrees
 
         public CedarActionStatus Update(Slice key, int size, out CedarDataPtr* ptr, ushort? version = null, CedarNodeFlags nodeFlag = CedarNodeFlags.Data)
         {
-            int index;
-            if (!Data.TryAllocateNode(out index, out ptr))
+            ptr = null; // Default invalid value.
+
+            if (!Data.CanAllocateNode())
                 return CedarActionStatus.NotEnoughSpace;
 
             // TODO: Make sure that updates (not inserts) will not consume a node allocation. 
+            short index;
             long from = 0;
             long tailPos = 0;
-            CedarActionStatus result = Update(key.Content.Ptr, key.Content.Length, (short)index, ref from, ref tailPos);
-            if (result != CedarActionStatus.Success)
-            {
-                // Even though we could avoid freeing the node we just reserved,
-                // because we are going to split the page and reconstruct all pages.
-                // I prefer to err on the safe side here, unless we really need to
-                // make this extremely efficient (which I doubt will be needed anyways).
-                Data.FreeNode(index);
+            CedarActionStatus result = Update(key.Content.Ptr, key.Content.Length, out index, ref from, ref tailPos);            
+            if (result == CedarActionStatus.NotEnoughSpace)
+                return result; // We failed.
 
-                return result; 
-            }
-
+            ptr = Data.DirectWrite(index);
             ptr->Flags = nodeFlag;
             ptr->Version = version ?? 0;
-            ptr->DataSize = (byte)size;         
+            ptr->DataSize = (byte)size;
 
-            return CedarActionStatus.Success;
+            return result;
         }
 
-        private CedarActionStatus Update(byte* key, int len, short value, ref long from, ref long pos)
+        private CedarActionStatus Update(byte* key, int len, out short value, ref long from, ref long pos)
         {
+            value = -1; // Default invalid value.
+
             if (len == 0 && from == 0)
                 throw new ArgumentException("failed to insert zero-length key");
 
@@ -236,9 +233,9 @@ namespace Voron.Data.BTrees
                         if ( !TryFollow(from, 0, out current))
                             return CedarActionStatus.NotEnoughSpace;
 
-                        _array[current].Value = value;
+                        value = _array[current].Value;
 
-                        return CedarActionStatus.Success;
+                        return CedarActionStatus.Found;
                     }
 
                     if (!TryFollow(from, key[pos], out from))
@@ -252,7 +249,7 @@ namespace Voron.Data.BTrees
 
             long pos_orig;
             byte* tailPtr;
-            if (offset >= sizeof(int)) // go to _tail
+            if (offset >= sizeof(short)) // go to _tail
             {
                 long moved;
                 pos_orig = pos;
@@ -263,8 +260,6 @@ namespace Voron.Data.BTrees
 
                 if (pos == len && tailPtr[pos] == '\0')
                 {
-
-                    tailPtr = Tail.DirectWrite(offset - pos);
 
                     // we found an exact match
                     moved = pos - pos_orig;
@@ -278,12 +273,11 @@ namespace Voron.Data.BTrees
                     byte* ptr = tailPtr + (len + 1);
                     Debug.Assert(ptr + sizeof(short) - 1 < Tail.DirectRead() + Tail.Length);
 
-                    // TODO: Write in the proper endianness.
-                    Unsafe.Write(ptr, value);
+                    value = *(short*) ptr;
 
                     //Console.WriteLine($"_tail[{tailPtr + (len + 1) - Tail.DirectRead()}] = {Unsafe.Read<short>(ptr)}");
 
-                    return CedarActionStatus.Success;
+                    return CedarActionStatus.Found;
                 }
 
                 // otherwise, insert the common prefix in tail if any
@@ -328,7 +322,7 @@ namespace Voron.Data.BTrees
                 }
 
                 moved += offset;
-                for (int i = (int) offset; i <= moved; i += 1 + sizeof(short))
+                for (int i = (int)offset; i <= moved; i += 1 + sizeof(short))
                 {
                     Tail0.SetWritable();
                     Tail0.Length += 1;
@@ -354,11 +348,15 @@ namespace Voron.Data.BTrees
 
                     if (pos == len)
                     {
-                        // TODO: Write in the proper endianness.
-                        var n = (Node*) Blocks.DirectWrite<Node>(to);                       
+                        value = (short) Data.AllocateNode();
+
+                        var n = (Node*) Blocks.DirectWrite<Node>(to);
                         n->Value = value;
 
                         //Console.WriteLine($"_array[{to}].Value = {value}");
+
+                        Header.SetWritable();
+                        Header.Ptr->NumberOfEntries++;
 
                         return CedarActionStatus.Success;
                     }
@@ -381,7 +379,7 @@ namespace Voron.Data.BTrees
             }
 
             //
-            int needed = (int) (len - pos + 1 + sizeof(short));
+            int needed = (int)(len - pos + 1 + sizeof(short));
             if (pos == len && Tail0.Length != 0)
             {
                 Tail.SetWritable();
@@ -395,6 +393,7 @@ namespace Voron.Data.BTrees
                 Tail0.Length = Tail0.Length - 1;
 
                 //Console.WriteLine($"_tail[{offset0 + 1}] = {value}");
+                value = (short) Data.AllocateNode();
                 Unsafe.Write(Tail.DirectWrite(offset0 + 1), value);
 
                 Header.SetWritable();
@@ -436,6 +435,7 @@ namespace Voron.Data.BTrees
 
             Tail.Length += needed;
 
+            value = (short)Data.AllocateNode();
             Unsafe.Write(&tailPtr[len + 1], value);
 
             Header.SetWritable();
@@ -1167,6 +1167,7 @@ namespace Voron.Data.BTrees
             NodeInfo* _ninfo = Blocks.NodesInfo;
 
             // TODO: Check from where can I get the maximum key size. 
+            // TODO: Have a single of these ones per tree.
             var key = Slice.Create(_llt.Allocator, 4096);
             byte* slicePtr = key.Content.Ptr;
 
@@ -1240,6 +1241,7 @@ namespace Voron.Data.BTrees
             NodeInfo* _ninfo = Blocks.NodesInfo;
 
             // TODO: Check from where can I get the maximum key size. 
+            // TODO: Have a single of these ones per tree.
             var key = Slice.Create(_llt.Allocator, 4096);
 
             int keyLength = 0;
@@ -1321,16 +1323,39 @@ namespace Voron.Data.BTrees
 
         internal struct IteratorValue
         {
+            public int Length;
             public short Value;
-            public CedarResultCode Error;
+            public CedarResultCode Error;                                    
         }
 
-        internal IteratorValue Predecessor(Slice key, ref long from, ref long len)
+        internal IteratorValue Predecessor(Slice lookupKey, ref Slice outputKey, ref long from, ref long len)
         {
             throw new NotImplementedException();
         }
 
-        internal IteratorValue Begin(Slice key, ref long from, ref long len)
+        internal IteratorValue PredecessorOrEqual(Slice lookupKey, ref Slice outputKey, ref long from, ref long len)
+        {
+            throw new NotImplementedException();
+        }
+
+        internal IteratorValue Successor(Slice lookupKey, ref Slice outputKey, ref long from, ref long len)
+        {
+            short value;
+            var errorCode = _find(lookupKey.Content.Ptr, ref from, ref len, lookupKey.Content.Length, out value);
+            if (errorCode == CedarResultCode.Success)
+            {
+                // This is an exact match. 
+                lookupKey.CopyTo(outputKey);
+
+                return new IteratorValue { Error = CedarResultCode.Success, Length = (int) len, Value = value };
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }            
+        }
+
+        internal IteratorValue Begin(Slice outputKey, ref long from, ref long len)
         {
             Node* _array = Blocks.Nodes;
             NodeInfo* _ninfo = Blocks.NodesInfo;
@@ -1349,7 +1374,7 @@ namespace Voron.Data.BTrees
 
                 for (; c != 0 && @base >= 0; len++)
                 {
-                    key[(int)len] = c;
+                    outputKey[(int)len] = c;
 
                     from = @base ^ c;
                     @base = _array[from].Base;
@@ -1358,8 +1383,8 @@ namespace Voron.Data.BTrees
 
                 if (@base >= 0) // it finishes in the trie
                 {
-                    key[(int)len] = c;
-                    return new IteratorValue { Error = CedarResultCode.Success, Value = _array[@base ^ c].Value };
+                    outputKey[(int)len] = c;
+                    return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = _array[@base ^ c].Value };
                 }                    
             }            
 
@@ -1369,19 +1394,16 @@ namespace Voron.Data.BTrees
             int len_ = _strlen(tail - @base);
 
             // Copy tail to key
-            Memory.Copy(key.Content.Ptr + len, tail - @base, len_);
+            Memory.Copy(outputKey.Content.Ptr + len, tail - @base, len_);
 
             from &= TAIL_OFFSET_MASK;
             from |= ((long)(-@base + len_)) << 32; // this must be long
             len += len_;
 
-            // We shrink the key to match the size.
-            key.Shrink((int)len);
-
-            return new IteratorValue { Error = CedarResultCode.Success, Value = *(short*)(tail - @base + len_ + 1) };
+            return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = *(short*)(tail - @base + len_ + 1) };
         }
 
-        internal IteratorValue Next(Slice key, ref long from, ref long len, long root = 0)
+        internal IteratorValue Next(Slice outputKey, ref long from, ref long len, long root = 0)
         {
             Node* _array = Blocks.Nodes;
             NodeInfo* _ninfo = Blocks.NodesInfo;
@@ -1413,14 +1435,14 @@ namespace Voron.Data.BTrees
             if (c == 0)
                 return new IteratorValue { Error = CedarResultCode.NoPath };
 
-            key[(int)len] = c;
+            outputKey[(int)len] = c;
             from = _array[from].Base ^ c;
             len++;            
 
-            return Begin(key, ref from, ref len);
+            return Begin(outputKey, ref from, ref len);
         }
 
-        internal IteratorValue Previous(Slice key, ref long from, ref long len, long root = 0)
+        internal IteratorValue Previous(Slice outputKey, ref long from, ref long len, long root = 0)
         {
             throw new NotImplementedException();
         }

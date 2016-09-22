@@ -198,6 +198,18 @@ namespace Sparrow
             }
         }
 
+        public void CopyTo(ByteString dest)
+        {
+            Debug.Assert(HasValue);
+
+            if (dest._pointer->Size < this._pointer->Length)
+                throw new ArgumentException("There is no enough allocated space in the destination byte string to perform the copy.");
+
+            EnsureIsNotBadPointer();
+            Memory.CopyInline(dest._pointer->Ptr, _pointer->Ptr, _pointer->Length);
+            dest._pointer->Length = _pointer->Length;
+        }
+
         public void CopyTo(int from, byte* dest, int offset, int count)
         {
             Debug.Assert(HasValue);

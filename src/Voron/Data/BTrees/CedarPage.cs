@@ -62,11 +62,15 @@ namespace Voron.Data.BTrees
 
             public CedarDataPtr* DirectRead(long i = 0)
             {
+                Debug.Assert(i >= 0);
+
                 return (CedarDataPtr*)(_currentPtr.Value.DataPointer + sizeof(int)) + i;
             }
 
             public CedarDataPtr* DirectWrite(long i = 0)
             {
+                Debug.Assert(i >= 0);
+
                 if (!_currentPtr.IsWritable)
                     _currentPtr = _page.GetDataNodesPage(true);
 
@@ -81,22 +85,27 @@ namespace Voron.Data.BTrees
                 set { *(int*)_currentPtr.Value.DataPointer = value; }
             }
 
-            public bool TryAllocateNode(out int index, out CedarDataPtr* ptr)
+            public bool CanAllocateNode()
             {
                 // If there are no more allocable nodes, we fail.
                 if (NextFree == -1)
-                {
-                    index = -1;                 
-                    ptr = null;
                     return false;
-                }
+
+                return true;
+            }
+
+            public int AllocateNode()
+            {
+                // If there are no more allocable nodes, we fail.
+                if (NextFree == -1)
+                    throw new InvalidOperationException("Cannot allocate more nodes. There is no enough space. This cannot happen.");
 
                 // We need write access.
                 if (!_currentPtr.IsWritable)
                     _currentPtr = _page.GetDataNodesPage(true);
 
-                index = NextFree;
-                ptr = (CedarDataPtr*)(_currentPtr.Value.DataPointer + sizeof(int)) + index;
+                int index = NextFree;
+                var ptr = (CedarDataPtr*)(_currentPtr.Value.DataPointer + sizeof(int)) + index;
 
                 Debug.Assert(index >= 0, "Index cannot be negative.");
                 Debug.Assert(index < _page.Header.Ptr->DataNodesPerPage, "Index cannot be bigger than the quantity of nodes available to use.");
@@ -106,7 +115,7 @@ namespace Voron.Data.BTrees
                 NextFree = (int)ptr->Data;
                 ptr->IsFree = false;
 
-                return true;
+                return index;
             }
 
             public void FreeNode(int index)
@@ -343,8 +352,6 @@ namespace Voron.Data.BTrees
             }
         }
 
-
-
         internal const int BlockSize = 256;
 
         private readonly LowLevelTransaction _llt;
@@ -489,8 +496,8 @@ namespace Voron.Data.BTrees
             header->Capacity = header->BlocksPerPage - (header->BlocksPerPage % BlockSize);
 
             header->NumberOfEntries = 0;
-            header->ImplicitAfterAllKeys = Page.Invalid;
-            header->ImplicitBeforeAllKeys = Page.Invalid;
+            header->ImplicitAfterAllKeys = CedarPageHeader.InvalidImplicitKey;
+            header->ImplicitBeforeAllKeys = CedarPageHeader.InvalidImplicitKey;
 
             // Aligned to 16 bytes
             int offset = sizeof(CedarPageHeader) + 16;
@@ -605,23 +612,37 @@ namespace Voron.Data.BTrees
 
         public CedarActionStatus AddBranchRef(Slice key, long pageNumber)
         {
-            Debug.Assert(this.IsBranch);            
+            Debug.Assert(this.IsBranch);
 
-            if ( key.Options == SliceOptions.BeforeAllKeys )
-                this.Header.Ptr->ImplicitBeforeAllKeys = pageNumber;
-            else if (key.Options == SliceOptions.AfterAllKeys)
-                this.Header.Ptr->ImplicitAfterAllKeys = pageNumber;
-            else
+            if (key.Options == SliceOptions.Key)
             {
                 CedarDataPtr* ptr;
                 var status = this.Update(key, sizeof(long), out ptr, nodeFlag: CedarNodeFlags.Branch);
-                if ( status == CedarActionStatus.Success)
+                if (status == CedarActionStatus.Success || status == CedarActionStatus.Found)
                     ptr->Data = pageNumber;
 
                 return status;
             }
+            else
+            {
+                int index = this.Data.AllocateNode();
 
-            return CedarActionStatus.Success;
+                CedarDataPtr* ptr = this.Data.DirectWrite(index);
+                ptr->Flags = CedarNodeFlags.Branch;
+                ptr->PageNumber = pageNumber;
+                ptr->DataSize = sizeof(long);
+
+                if (key.Options == SliceOptions.BeforeAllKeys)
+                {
+                    this.Header.Ptr->ImplicitBeforeAllKeys = (short)index;
+                }
+                else if (key.Options == SliceOptions.AfterAllKeys)
+                {
+                    this.Header.Ptr->ImplicitAfterAllKeys = (short)index;
+                }
+
+                return CedarActionStatus.Success;
+            }            
         }
     }
 

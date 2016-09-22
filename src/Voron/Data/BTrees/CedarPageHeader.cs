@@ -12,6 +12,8 @@ namespace Voron.Data.BTrees
     [StructLayout(LayoutKind.Explicit, Pack = 1)]
     public unsafe struct CedarPageHeader
     {
+        public const short InvalidImplicitKey = -1;
+
         public bool IsValid => Flags == PageFlags.CedarTreePage && (TreeFlags == TreePageFlags.Branch || TreeFlags == TreePageFlags.Leaf);
         public bool IsBranchPage => TreeFlags == TreePageFlags.Branch;
         public bool IsLeafPage => TreeFlags == TreePageFlags.Leaf;
@@ -108,9 +110,9 @@ namespace Voron.Data.BTrees
 
 
         [FieldOffset(72)]
-        public long ImplicitBeforeAllKeys;
-        [FieldOffset(80)]
-        public long ImplicitAfterAllKeys;
+        public short ImplicitBeforeAllKeys;
+        [FieldOffset(74)]
+        public short ImplicitAfterAllKeys;
 
         [FieldOffset(88)]
         public fixed short Reject[257];

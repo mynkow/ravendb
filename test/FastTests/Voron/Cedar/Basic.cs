@@ -234,6 +234,7 @@ namespace FastTests.Voron.Cedar
                 Assert.Equal(512, root.Header.Ptr->Size);
                 Assert.Equal(4, root.NumberOfKeys);
                 Assert.Equal(12, root.NonZeroSize);
+                Assert.Equal(4, root.Header.Ptr->NumberOfEntries);
 
                 tx.Commit();
             }
@@ -274,17 +275,34 @@ namespace FastTests.Voron.Cedar
 
         [Fact]
         public void InsertSameMultipleTimes()
-        {
-            // TODO: Modify this to add 5000 times the same (to check for unwanted node allocations). 
+        {            
             using (var tx = Env.WriteTransaction())
             {
                 var tree = tx.CreateTrie("foo");
-                tree.Add("test", 1);
-                tree.Add("test", 2);
-                tree.Add("test", 3);
 
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(0, root.NumberOfKeys);
+
+                CedarDataPtr* ptr;
+                CedarRef result;
+
+                tree.Add("test", 1);
                 Assert.Equal(1, root.NumberOfKeys);
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
+                Assert.Equal(1, ptr->Data);
+                Assert.Equal(1, root.Header.Ptr->NumberOfEntries);
+
+                tree.Add("test", 2);
+                Assert.Equal(1, root.NumberOfKeys);
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
+                Assert.Equal(2, ptr->Data);
+                Assert.Equal(1, root.Header.Ptr->NumberOfEntries);
+
+                tree.Add("test", 3);
+                Assert.Equal(1, root.NumberOfKeys);
+                Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
+                Assert.Equal(3, ptr->Data);
+                Assert.Equal(1, root.Header.Ptr->NumberOfEntries);
 
                 tx.Commit();
             }
@@ -301,6 +319,48 @@ namespace FastTests.Voron.Cedar
                 CedarRef result;
                 Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
                 Assert.Equal(3, ptr->Data);
+
+                CedarKeyPair resultKey;
+                Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
+                Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "test")));
+            }
+        }
+
+
+        [Fact]
+        public void InsertSameMultipleTimesX10000()
+        {
+            List<Slice> items = new List<Slice>();
+            for (int i = 0; i < 100; i++ )
+                items.Add(Slice.From(Allocator, GenerateRandomString(5,2)));
+
+
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");                
+
+                foreach (Slice t in items)
+                    tree.Add(t, -1);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Random r = new Random(1);
+                for (int i = 0; i < 10000; i++)
+                {
+                    Slice item = items[r.Next(items.Count)];
+                    tree.Add(item, i);
+
+                    Assert.Equal(100, root.NumberOfKeys);
+
+                    CedarRef result;
+                    CedarDataPtr* ptr;
+                    Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(item, out result, out ptr));
+                    Assert.Equal(i, ptr->Data);
+
+                    Assert.Equal(100, root.Header.Ptr->NumberOfEntries);
+                }
+
+                tx.Commit();
             }
         }
 
@@ -315,6 +375,7 @@ namespace FastTests.Voron.Cedar
 
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
                 Assert.Equal(2, root.NumberOfKeys);
+                Assert.Equal(2, root.Header.Ptr->NumberOfEntries);
 
                 tx.Commit();
             }
@@ -348,6 +409,7 @@ namespace FastTests.Voron.Cedar
 
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
                 Assert.Equal(3, root.NumberOfKeys);
+                Assert.Equal(3, root.Header.Ptr->NumberOfEntries);
 
                 tx.Commit();
             }
@@ -423,9 +485,7 @@ namespace FastTests.Voron.Cedar
                     Assert.Equal("a", it.CurrentKey.ToString());
                 }
 
-                Assert.Equal(1, actual);
-
-                
+                Assert.Equal(1, actual);                
             }
         }
 
@@ -449,6 +509,7 @@ namespace FastTests.Voron.Cedar
                 CedarDataPtr* ptr;
                 CedarKeyPair resultKey;
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(6, root.Header.Ptr->NumberOfEntries);
 
                 Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
                 Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "pool")));
@@ -764,6 +825,45 @@ namespace FastTests.Voron.Cedar
                     }
                 }
             }
+        }
+
+
+
+
+        private static readonly string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+        private static string GenerateRandomString(Random generator, int size, int clusteredSize)
+        {
+            var stringChars = new char[size];
+
+            var clusterStart = generator.Next(10);
+            for (int i = 0; i < clusteredSize; i++)
+                stringChars[i] = chars[(clusterStart + i) % chars.Length];
+
+            for (int i = clusteredSize; i < stringChars.Length; i++)
+                stringChars[i] = chars[generator.Next(chars.Length)];
+
+            return new String(stringChars);
+        }
+
+        private static uint _seed = 1;
+
+        private static string GenerateRandomString(int size, int clusteredSize)
+        {
+            var stringChars = new char[size];
+
+            _seed = (_seed * 23 + 7);
+            var clusterStart = _seed % 10;
+            for (int i = 0; i < clusteredSize; i++)
+                stringChars[i] = chars[(int)((clusterStart + i) % chars.Length)];
+
+            for (int i = clusteredSize; i < stringChars.Length; i++)
+            {
+                _seed = (_seed * 23 + 7);
+                stringChars[i] = chars[(int)(_seed % chars.Length)];
+            }
+
+            return new String(stringChars);
         }
     }
 }

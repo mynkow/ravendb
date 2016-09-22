@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
 using Voron.Impl;
 
 namespace Voron.Data.BTrees
@@ -12,11 +12,12 @@ namespace Voron.Data.BTrees
     /// </summary>
     public unsafe class CedarCursor : IDisposable
     {
-        private readonly LowLevelTransaction _llt;        
+        private readonly LowLevelTransaction _llt;
         private readonly List<long> _path;
         private readonly CedarTree _tree;
 
         private CedarPage _currentPage;
+        private Slice _outputKey;
 
         public CedarCursor(LowLevelTransaction llt, CedarTree tree, CedarPage currentPage, List<long> pathFromRoot)
         {
@@ -27,11 +28,13 @@ namespace Voron.Data.BTrees
 
             if (this._path.Last() != currentPage.PageNumber)
                 this._path.Add(currentPage.PageNumber);
+
+            this._outputKey = Slice.Create(llt.Allocator, 4096);
         }
 
         public CedarCursor(LowLevelTransaction llt, CedarTree tree, CedarPage currentPage)
             : this(llt, tree, currentPage, new List<long> { currentPage.PageNumber })
-        {            
+        {
         }
 
         public CedarPage CurrentPage
@@ -44,7 +47,7 @@ namespace Voron.Data.BTrees
         {
             get
             {
-                if ( _path.Count == 0 )
+                if (_path.Count == 0)
                     throw new InvalidOperationException("Cannot request the ParentPage of a root node.");
 
                 return _tree.GetPage(_path[_path.Count - 1]);
@@ -85,7 +88,7 @@ namespace Voron.Data.BTrees
                 if (Pointer == null)
                     throw new InvalidOperationException();
 
-                return (byte*) &Pointer->Data;
+                return (byte*)&Pointer->Data;
             }
         }
 
@@ -132,14 +135,14 @@ namespace Voron.Data.BTrees
         public void Push(CedarPage page)
         {
             this._path.Add(_currentPage.PageNumber);
-            _currentPage = page;
+            this._currentPage = page;
         }
 
         public CedarPage Pop()
         {
             var result = _currentPage;
 
-            _currentPage = _tree.GetPage(_path[_path.Count - 1]);
+            this._currentPage = _tree.GetPage(_path[_path.Count - 1]);
             this._path.RemoveAt(_path.Count - 1);
 
             return result;
@@ -147,65 +150,206 @@ namespace Voron.Data.BTrees
 
         #endregion
 
-        public void Seek(Slice key)
+        /// <summary>
+        /// The difference between Seek and Lookup is that we dont care about finding the actual data node, only the page where it can reside. 
+        /// </summary>
+        /// <param name="key">The key we want to find the leaf page for.</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        public bool Lookup(Slice key)
         {
             if (key.Options == SliceOptions.Key)
             {
-                Lookup(key);
+                while (_currentPage.IsBranch)
+                {
+                    long from = 0;
+                    long keyLength = 0;
+                    CedarPage.IteratorValue iterator = _currentPage.PredecessorOrEqual(key, ref _outputKey, ref @from, ref keyLength);
+
+                    // We do not have a key that matches the range.
+                    CedarDataPtr* ptr;
+                    if (iterator.Error == CedarResultCode.Success)
+                    {
+                        ptr = _currentPage.Data.DirectRead(iterator.Value);
+                    }
+                    else if (iterator.Error == CedarResultCode.NoValue)
+                    {
+                        // We check if there is an implicit node.    
+                        short implicitBeforeNode = _currentPage.Header.Ptr->ImplicitBeforeAllKeys;
+                        if (implicitBeforeNode != CedarPageHeader.InvalidImplicitKey)
+                            ptr = _currentPage.Data.DirectRead(implicitBeforeNode);
+                        else
+                            goto FAIL;
+                    }
+                    else
+                        goto FAIL;
+
+                    Debug.Assert(ptr != null);
+                    Debug.Assert(!ptr->IsFree && ptr->Flags == CedarNodeFlags.Branch);
+
+                    var nextPage = _tree.GetPage(ptr->Data);
+                    Debug.Assert(nextPage.PageNumber == ptr->Data, $"Requested Page: #{ptr->Data}. Got CurrentPage: #{nextPage.PageNumber}");
+
+                    Push(nextPage);
+                }
+
+                Debug.Assert(_currentPage.IsLeaf, "At the end of the process the current page must be a leaf");
+
+                Key = Slices.BeforeAllKeys;
+                Pointer = null;
+
+                return true;
             }
-            else if (key.Options == SliceOptions.BeforeAllKeys)
+
+            if (key.Options == SliceOptions.BeforeAllKeys)
             {
-                LookupFirst();
+                Key = Slices.BeforeAllKeys;
+                Pointer = null;
             }
             else if (key.Options == SliceOptions.AfterAllKeys)
             {
-                LookupLast();
+                Key = Slices.AfterAllKeys;
+                Pointer = null;
+
             }
-        }
+            return true;
 
-        private void LookupLast()
-        {
-            Key = Slices.AfterAllKeys;
+            FAIL:
+            Key = Slices.Empty;
             Pointer = null;
 
-            if (_currentPage.IsLeaf)
-                return;
-
-            throw new NotImplementedException();
+            return false;
         }
 
-        private void LookupFirst()
+        public bool Seek(Slice key)
         {
-            Key = Slices.BeforeAllKeys;
-            Pointer = null;
-
-            if (_currentPage.IsLeaf)
-                return;
-
-            throw new NotImplementedException();
-        }
-
-        private void Lookup(Slice key)
-        {
-            if (_currentPage.IsLeaf)
+            if (key.Options == SliceOptions.Key)
             {
+                // Prepare the temporary output key to be reused.
+                _outputKey.Reset();
+
+                long from;
+                long keyLength;
+
                 CedarDataPtr* ptr;
+                CedarPage.IteratorValue iterator;
+                while (_currentPage.IsBranch)
+                {
+                    from = 0;
+                    keyLength = 0;
+                    iterator = _currentPage.PredecessorOrEqual(key, ref _outputKey, ref from, ref keyLength);
 
-                if (_currentPage.ExactMatchSearch(key, out Result, out ptr) == CedarResultCode.Success)
-                {
-                    Key = key;
-                    Pointer = ptr;
+                    // We do not have a key that matches the range.
+                    if (iterator.Error == CedarResultCode.Success)
+                    {
+                        ptr = _currentPage.Data.DirectRead(iterator.Value);
+                    }
+                    else if (iterator.Error == CedarResultCode.NoValue)
+                    {
+                        // We check if there is an implicit node.    
+                        short implicitBeforeNode = _currentPage.Header.Ptr->ImplicitBeforeAllKeys;
+                        if (implicitBeforeNode != CedarPageHeader.InvalidImplicitKey)
+                            ptr = _currentPage.Data.DirectRead(implicitBeforeNode);
+                        else
+                            goto FAIL;
+                    }
+                    else
+                        goto FAIL;
+
+                    Debug.Assert(ptr != null);
+                    Debug.Assert(!ptr->IsFree && ptr->Flags == CedarNodeFlags.Branch);
+
+                    var nextPage = _tree.GetPage(ptr->Data);
+                    Debug.Assert(nextPage.PageNumber == ptr->Data, $"Requested Page: #{ptr->Data}. Got CurrentPage: #{nextPage.PageNumber}");
+
+                    Push(nextPage);
                 }
-                else
+
+                Debug.Assert(_currentPage.IsLeaf, "At the end of the process the current page must be a leaf");
+
+                from = 0;
+                keyLength = 0;
+                iterator = _currentPage.Successor(key, ref _outputKey, ref from, ref keyLength);
+
+                if (iterator.Error == CedarResultCode.Success)
                 {
-                    Key = Slices.Empty;
+                    _outputKey.Shrink(iterator.Length);
+
+                    Key = _outputKey.Clone(_llt.Allocator);
+                    Pointer = _currentPage.Data.DirectRead(iterator.Value);
+                }
+                else if (iterator.Error == CedarResultCode.NoValue)
+                {
+                    Key = Slices.BeforeAllKeys;
                     Pointer = null;
-                }
 
-                return;
+                    return MoveNext();
+                }
             }
+            else if (key.Options == SliceOptions.BeforeAllKeys)
+            {
+                Key = Slices.BeforeAllKeys;
+                Pointer = null;
+            }
+            else if (key.Options == SliceOptions.AfterAllKeys)
+            {
+                Key = Slices.AfterAllKeys;
+                Pointer = null;
+
+            }
+            return true;
+
+            FAIL:
+            Key = Slices.Empty;
+            Pointer = null;
+
+            return false;
+        }
+
+        public void Reset()
+        {
+            // We are already in the root of the tree.
+            if (this._path.Count == 1)
+                return;
 
             throw new NotImplementedException();
+        }
+
+        public bool MoveNext()
+        {
+            if (Key.Options == SliceOptions.Key)
+            {
+                // Prepare the temporary output key to be reused.
+                _outputKey.Reset();
+
+                throw new NotImplementedException();
+            }
+            else if (Key.Options == SliceOptions.BeforeAllKeys)
+            {
+                // Get the first from the root.
+
+                throw new NotImplementedException();
+            }
+
+            return false;
+        }
+
+        public bool MovePrev()
+        {
+            if (Key.Options == SliceOptions.Key)
+            {
+                // Prepare the temporary output key to be reused.
+                _outputKey.Reset();
+
+                throw new NotImplementedException();
+            }
+            else if (Key.Options == SliceOptions.AfterAllKeys)
+            {
+                // Get the last from the root.
+
+                throw new NotImplementedException();
+            }
+
+            return false;
         }
     }
 }
