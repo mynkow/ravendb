@@ -347,6 +347,8 @@ namespace Sparrow
 
         public void Shrink(int length)
         {
+            Debug.Assert(length > 0);
+
             if (length > this._pointer->Length)
                 throw new ArgumentException("Cannot shrink an slice that is smaller than the required size.", nameof(length));
 
@@ -358,8 +360,20 @@ namespace Sparrow
 
         public void Expand(int length)
         {
+            Debug.Assert(length > 0);
+
             if (length < this._pointer->Length)
                 throw new ArgumentException("Cannot expand an slice that is bigger than the required size.", nameof(length));
+
+            if (length > this._pointer->Size)
+                throw new ArgumentOutOfRangeException(nameof(length), "Cannot expand an slice out of allocated size bounds.");
+
+            this._pointer->Length = length;
+        }
+
+        public void SetLength(int length)
+        {
+            Debug.Assert(length > 0);
 
             if (length > this._pointer->Size)
                 throw new ArgumentOutOfRangeException(nameof(length), "Cannot expand an slice out of allocated size bounds.");

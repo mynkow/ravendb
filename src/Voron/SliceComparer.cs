@@ -86,7 +86,7 @@ namespace Voron
             return obj.GetHashCode();
         }
 
-        public unsafe static bool StartWith(Slice value, Slice prefix)
+        public static unsafe bool StartWith(Slice value, Slice prefix)
         {
             int prefixSize = prefix.Content.Length;
             if (!value.Content.HasValue || prefixSize > value.Content.Length)

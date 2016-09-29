@@ -29,7 +29,7 @@ namespace FastTests.Voron.Cedar
                 Assert.Equal(256, root.Header.Ptr->Size);
                 Assert.Equal(root.Header.Ptr->BlocksPerPage - (root.Header.Ptr->BlocksPerPage % 256), root.Header.Ptr->Capacity);
                 Assert.Equal(0,  root.Header.Ptr->Capacity % 256);
-
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(0, root.NumberOfKeys);
                 Assert.Equal(0, root.NonZeroSize);
                 Assert.Equal(0, root.NonZeroLength);
@@ -54,7 +54,7 @@ namespace FastTests.Voron.Cedar
 
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
                 Assert.Equal(256, root.Header.Ptr->Size);
-
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(1, root.NumberOfKeys);
                 Assert.Equal(1, root.NonZeroSize);
 
@@ -68,6 +68,7 @@ namespace FastTests.Voron.Cedar
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
                 Assert.Equal(256, root.Header.Ptr->Size);
 
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(1, root.NumberOfKeys);
                 Assert.Equal(1, root.NonZeroSize);
 
@@ -114,7 +115,7 @@ namespace FastTests.Voron.Cedar
 
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
                 Assert.Equal(256, root.Header.Ptr->Size);
-
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(2, root.NumberOfKeys);
                 Assert.Equal(2, root.NonZeroSize);
 
@@ -146,7 +147,7 @@ namespace FastTests.Voron.Cedar
 
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
                 Assert.Equal(512, root.Header.Ptr->Size);
-
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(2, root.NumberOfKeys);
                 Assert.Equal(5, root.NonZeroSize);
 
@@ -160,6 +161,7 @@ namespace FastTests.Voron.Cedar
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
                 Assert.Equal(512, root.Header.Ptr->Size);
 
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(2, root.NumberOfKeys);
                 Assert.Equal(5, root.NonZeroSize);
 
@@ -187,6 +189,7 @@ namespace FastTests.Voron.Cedar
 
                 Assert.Equal(512, root.Header.Ptr->Size);
                 Assert.Equal(3, root.NumberOfKeys);
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(6, root.NonZeroSize);
 
                 tx.Commit();
@@ -200,6 +203,7 @@ namespace FastTests.Voron.Cedar
 
                 Assert.Equal(512, root.Header.Ptr->Size);
                 Assert.Equal(3, root.NumberOfKeys);
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(6, root.NonZeroSize);
 
                 CedarDataPtr* ptr;
@@ -233,6 +237,7 @@ namespace FastTests.Voron.Cedar
 
                 Assert.Equal(512, root.Header.Ptr->Size);
                 Assert.Equal(4, root.NumberOfKeys);
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(12, root.NonZeroSize);
                 Assert.Equal(4, root.Header.Ptr->NumberOfEntries);
 
@@ -247,6 +252,7 @@ namespace FastTests.Voron.Cedar
 
                 Assert.Equal(512, root.Header.Ptr->Size);
                 Assert.Equal(4, root.NumberOfKeys);
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(12, root.NonZeroSize);
 
                 CedarDataPtr* ptr;
@@ -281,6 +287,7 @@ namespace FastTests.Voron.Cedar
                 var tree = tx.CreateTrie("foo");
 
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(0, root.NumberOfKeys);
 
                 CedarDataPtr* ptr;
@@ -288,18 +295,21 @@ namespace FastTests.Voron.Cedar
 
                 tree.Add("test", 1);
                 Assert.Equal(1, root.NumberOfKeys);
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
                 Assert.Equal(1, ptr->Data);
                 Assert.Equal(1, root.Header.Ptr->NumberOfEntries);
 
                 tree.Add("test", 2);
                 Assert.Equal(1, root.NumberOfKeys);
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
                 Assert.Equal(2, ptr->Data);
                 Assert.Equal(1, root.Header.Ptr->NumberOfEntries);
 
                 tree.Add("test", 3);
                 Assert.Equal(1, root.NumberOfKeys);
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal((int)CedarResultCode.Success, (int)root.ExactMatchSearch(Slice.From(tx.Allocator, "test"), out result, out ptr));
                 Assert.Equal(3, ptr->Data);
                 Assert.Equal(1, root.Header.Ptr->NumberOfEntries);
@@ -313,6 +323,7 @@ namespace FastTests.Voron.Cedar
 
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
 
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(1, root.NumberOfKeys);
 
                 CedarDataPtr* ptr;
@@ -358,6 +369,7 @@ namespace FastTests.Voron.Cedar
                     Assert.Equal(i, ptr->Data);
 
                     Assert.Equal(100, root.Header.Ptr->NumberOfEntries);
+                    Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 }
 
                 tx.Commit();
@@ -386,6 +398,7 @@ namespace FastTests.Voron.Cedar
 
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
 
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(2, root.NumberOfKeys);
 
                 CedarDataPtr* ptr;
@@ -420,6 +433,7 @@ namespace FastTests.Voron.Cedar
 
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
 
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(3, root.NumberOfKeys);
 
                 CedarDataPtr* ptr;
@@ -453,6 +467,8 @@ namespace FastTests.Voron.Cedar
                 CedarKeyPair resultKey;
 
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
 
                 Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
                 Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "b")));
@@ -509,6 +525,7 @@ namespace FastTests.Voron.Cedar
                 CedarDataPtr* ptr;
                 CedarKeyPair resultKey;
                 var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
                 Assert.Equal(6, root.Header.Ptr->NumberOfEntries);
 
                 Assert.Equal((int)CedarResultCode.Success, (int)root.GetFirst(out resultKey, out ptr));
@@ -516,8 +533,177 @@ namespace FastTests.Voron.Cedar
 
                 Assert.Equal((int)CedarResultCode.Success, (int)root.GetLast(out resultKey, out ptr));
                 Assert.True(SliceComparer.Equals(resultKey.Key, Slice.From(tx.Allocator, "progress")));
+
+                long from = 0;
+                long len = 0;
+                var outputKey = Slice.Create(tx.Allocator, 4096);
+                var iterator = root.Successor(Slice.From(tx.Allocator, "pqql"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prepare")));
+
+                from = 0;
+                len = 0;
+                iterator = root.Successor(Slice.From(tx.Allocator, "prfze"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prize")));
+
+                from = 0;
+                len = 0;
+                iterator = root.PredecessorOrEqual(Slice.From(tx.Allocator, "prize"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prize")));
+
+                from = 0;
+                len = 0;
+                iterator = root.PredecessorOrEqual(Slice.From(tx.Allocator, "pria"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "preview")));
+
+                from = 0;
+                len = 0;
+                iterator = root.PredecessorOrEqual(Slice.From(tx.Allocator, "prfze"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "preview")));
+
+                from = 0;
+                len = 0;
+                iterator = root.PredecessorOrEqual(Slice.From(tx.Allocator, "prjze"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prize")));
             }
-        }        
+        }
+
+
+        [Fact]
+        public void Predecessor()
+        {
+            // This example is generated to look like the following graph: https://linux.thai.net/~thep/datrie/trie2.gif
+
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+
+                tree.Add("pool", 1);
+                tree.Add("prize", 2);
+                tree.Add("preview", 3);
+                tree.Add("prepare", 4);
+                tree.Add("produce", 5);
+                tree.Add("producer", 7);
+                tree.Add("progress", 6);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
+                Assert.Equal(7, root.Header.Ptr->NumberOfEntries);
+
+                var outputKey = Slice.Create(tx.Allocator, 4096);
+
+                long from = 0;
+                long len = 0;
+                var iterator = root.Predecessor(Slice.From(tx.Allocator, "poop"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "pool")));
+                outputKey.Reset();
+
+                from = 0;
+                len = 0;
+                iterator = root.Predecessor(Slice.From(tx.Allocator, "priz"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "preview")));
+                outputKey.Reset();
+
+                from = 0;
+                len = 0;
+                iterator = root.Predecessor(Slice.From(tx.Allocator, "pra"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "pool")));
+                outputKey.Reset();
+
+                from = 0;
+                len = 0;
+                iterator = root.Predecessor(Slice.From(tx.Allocator, "pr"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "pool")));
+                outputKey.Reset();
+
+                from = 0;
+                len = 0;
+                iterator = root.Predecessor(Slice.From(tx.Allocator, "pre"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "pool")));
+                outputKey.Reset();
+
+                from = 0;
+                len = 0;
+                iterator = root.Predecessor(Slice.From(tx.Allocator, "prep"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "pool")));
+                outputKey.Reset();
+
+                from = 0;
+                len = 0;
+                iterator = root.Predecessor(Slice.From(tx.Allocator, "prepare"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "pool")));
+                outputKey.Reset();
+
+                from = 0;
+                len = 0;
+                iterator = root.Predecessor(Slice.From(tx.Allocator, "producer"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "produce")));
+                outputKey.Reset();
+
+                from = 0;
+                len = 0;
+                iterator = root.Predecessor(Slice.From(tx.Allocator, "pooa"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.NoPath, (int)iterator.Error);
+            }
+        }
+
+        [Fact]
+        public void PredecessorSharedPrefix()
+        {
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+
+                tree.Add("ace", 1);
+                tree.Add("acer", 2);
+                tree.Add("ac", 1);
+                tree.Add("a", 1);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
+                var outputKey = Slice.Create(tx.Allocator, 4096);
+
+                long from = 0;
+                long len = 0;
+                var iterator = root.Predecessor(Slice.From(tx.Allocator, "acer"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "ace")));
+                outputKey.Reset();
+
+                from = 0;
+                len = 0;
+                iterator = root.Predecessor(Slice.From(tx.Allocator, "ace"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "ac")));
+                outputKey.Reset();
+
+                from = 0;
+                len = 0;
+                iterator = root.Predecessor(Slice.From(tx.Allocator, "ac"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "a")));
+                outputKey.Reset();
+
+                from = 0;
+                len = 0;
+                iterator = root.Predecessor(Slice.From(tx.Allocator, "a"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.NoPath, (int)iterator.Error);
+                outputKey.Reset();
+            }
+        }
 
         [Fact]
         public void FindBounds()

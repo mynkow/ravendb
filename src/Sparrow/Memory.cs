@@ -5,9 +5,9 @@ using System.Security;
 
 namespace Sparrow
 {
-    public unsafe static class Memory
+    public static unsafe class Memory
     {
-        public readonly static int CompareInlineVsCallThreshold = 128;
+        public static readonly int CompareInlineVsCallThreshold = 128;
 
         public static int Compare(byte* p1, byte* p2, int size)
         {

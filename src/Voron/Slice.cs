@@ -177,6 +177,13 @@ namespace Voron
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetSize(int length)
+        {
+            this.Content.SetLength(length);
+        }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Reset()
         {
             this.Content.Reset();
