@@ -196,15 +196,16 @@ namespace Voron.Data.BTrees
                 throw new ArgumentOutOfRangeException(nameof(size), "The supported range is between 0 and 8 bytes.");
 
             // We look for the leaf page that is going to host this data. 
-            CedarCursor cursor = FindLocationFor(key);            
-
-            CedarDataPtr* ptr;
-            CedarPage page = cursor.CurrentPage;
+            CedarCursor cursor = FindLocationFor(key);
 
             // Updates may fail if we have to split the page. 
+            CedarDataPtr* ptr;
             CedarActionStatus status;
             do
             {
+                // We always need the current one, just in case that a page split happened.
+                CedarPage page = cursor.CurrentPage;
+
                 // It will output the position of the data to be written to. 
                 status = page.Update(key, size, out ptr);
                 if (status == CedarActionStatus.NotEnoughSpace)

@@ -134,8 +134,8 @@ namespace Voron.Data.BTrees
 
         public void Push(CedarPage page)
         {
-            this._path.Add(_currentPage.PageNumber);
             this._currentPage = page;
+            this._path.Add(page.PageNumber);
         }
 
         public CedarPage Pop()
@@ -144,6 +144,9 @@ namespace Voron.Data.BTrees
 
             this._currentPage = _tree.GetPage(_path[_path.Count - 1]);
             this._path.RemoveAt(_path.Count - 1);
+
+            if (this._path.Count == 0)
+                _currentPage = null;
 
             return result;
         }
@@ -171,7 +174,7 @@ namespace Voron.Data.BTrees
                     {
                         ptr = _currentPage.Data.DirectRead(iterator.Value);
                     }
-                    else if (iterator.Error == CedarResultCode.NoValue)
+                    else if (iterator.Error == CedarResultCode.NoPath)
                     {
                         // We check if there is an implicit node.    
                         short implicitBeforeNode = _currentPage.Header.Ptr->ImplicitBeforeAllKeys;
@@ -230,7 +233,6 @@ namespace Voron.Data.BTrees
                 long from;
                 long keyLength;
 
-                CedarDataPtr* ptr;
                 CedarPage.IteratorValue iterator;
                 while (_currentPage.IsBranch)
                 {
@@ -239,11 +241,12 @@ namespace Voron.Data.BTrees
                     iterator = _currentPage.PredecessorOrEqual(key, ref _outputKey, ref from, ref keyLength);
 
                     // We do not have a key that matches the range.
+                    CedarDataPtr* ptr;
                     if (iterator.Error == CedarResultCode.Success)
                     {
                         ptr = _currentPage.Data.DirectRead(iterator.Value);
                     }
-                    else if (iterator.Error == CedarResultCode.NoValue)
+                    else if (iterator.Error == CedarResultCode.NoPath)
                     {
                         // We check if there is an implicit node.    
                         short implicitBeforeNode = _currentPage.Header.Ptr->ImplicitBeforeAllKeys;
@@ -272,14 +275,14 @@ namespace Voron.Data.BTrees
 
                 if (iterator.Error == CedarResultCode.Success)
                 {
-                    _outputKey.Shrink(iterator.Length);
+                    _outputKey.SetSize(iterator.Length);                   
 
                     Key = _outputKey.Clone(_llt.Allocator);
                     Pointer = _currentPage.Data.DirectRead(iterator.Value);
                 }
-                else if (iterator.Error == CedarResultCode.NoValue)
+                else if (iterator.Error == CedarResultCode.NoPath)
                 {
-                    Key = Slices.BeforeAllKeys;
+                    Key = Slices.AfterAllKeys;
                     Pointer = null;
 
                     return MoveNext();

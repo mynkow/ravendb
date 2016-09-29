@@ -153,16 +153,13 @@ namespace Voron.Data.BTrees
                 ptr = temp.Data.DirectRead(b.Value);
 
                 // We shrink the key.
-                key.Shrink(b.Length);
+                key.SetSize(b.Length);
 
                 status = leftPage.Update(key, ptr->DataSize, out newPtr);
                 if (status == CedarActionStatus.NotEnoughSpace)
                     throw new InvalidOperationException("This is an splitting bug. It cannot happen that a splitting page will not have space after an split.");
 
                 *newPtr = *ptr; // Copy the structure
-
-                // We reset the key to its size again.
-                key.Reset();
             }           
 
             b = temp.Next(key, ref from, ref p, root);
@@ -183,16 +180,13 @@ namespace Voron.Data.BTrees
                 ptr = temp.Data.DirectRead(b.Value);
 
                 // We shrink the key.
-                key.Shrink(b.Length);
+                key.SetSize(b.Length);
 
                 status = rightPage.Update(key, ptr->DataSize, out newPtr);
                 if (status == CedarActionStatus.NotEnoughSpace)
                     throw new InvalidOperationException("This is an splitting bug. It cannot happen that a splitting page will not have space after an split.");
 
                 *newPtr = *ptr; // Copy the structure
-
-                // Reset the key to its maximum size.
-                key.Reset(); 
 
                 b = temp.Next(key, ref from, ref p, root);
             }
