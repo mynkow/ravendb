@@ -681,27 +681,212 @@ namespace FastTests.Voron.Cedar
                 var iterator = root.Predecessor(Slice.From(tx.Allocator, "acer"), ref outputKey, ref from, ref len);
                 Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
                 Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "ace")));
-                outputKey.Reset();
 
                 from = 0;
                 len = 0;
                 iterator = root.Predecessor(Slice.From(tx.Allocator, "ace"), ref outputKey, ref from, ref len);
                 Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
                 Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "ac")));
-                outputKey.Reset();
 
                 from = 0;
                 len = 0;
                 iterator = root.Predecessor(Slice.From(tx.Allocator, "ac"), ref outputKey, ref from, ref len);
                 Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
                 Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "a")));
-                outputKey.Reset();
+
 
                 from = 0;
                 len = 0;
                 iterator = root.Predecessor(Slice.From(tx.Allocator, "a"), ref outputKey, ref from, ref len);
                 Assert.Equal((int)CedarResultCode.NoPath, (int)iterator.Error);
-                outputKey.Reset();
+            }
+        }
+
+        [Fact]
+        public void Successor()
+        {
+            // This example is generated to look like the following graph: https://linux.thai.net/~thep/datrie/trie2.gif
+
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+
+                tree.Add("pool", 1);
+                tree.Add("prize", 2);
+                tree.Add("preview", 3);
+                tree.Add("prepare", 4);
+                tree.Add("produce", 5);
+                tree.Add("producer", 7);
+                tree.Add("progress", 6);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
+                Assert.Equal(7, root.Header.Ptr->NumberOfEntries);
+
+                var outputKey = Slice.Create(tx.Allocator, 4096);
+
+                long from = 0;
+                long len = 0;
+                var iterator = root.Successor(Slice.From(tx.Allocator, "pooa"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "pool")));
+
+                from = 0;
+                len = 0;
+                iterator = root.Successor(Slice.From(tx.Allocator, "poola"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prepare")));
+
+
+                from = 0;
+                len = 0;
+                iterator = root.Successor(Slice.From(tx.Allocator, "priz"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prize")));
+
+                from = 0;
+                len = 0;
+                iterator = root.Successor(Slice.From(tx.Allocator, "pop"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prepare")));
+
+                from = 0;
+                len = 0;
+                iterator = root.Successor(Slice.From(tx.Allocator, "po"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "pool")));
+
+                from = 0;
+                len = 0;
+                iterator = root.Successor(Slice.From(tx.Allocator, "pri"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prize")));
+
+
+                from = 0;
+                len = 0;
+                iterator = root.Successor(Slice.From(tx.Allocator, "pre"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prepare")));
+
+                from = 0;
+                len = 0;
+                iterator = root.Successor(Slice.From(tx.Allocator, "prev"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "preview")));
+
+                from = 0;
+                len = 0;
+                iterator = root.Successor(Slice.From(tx.Allocator, "pool"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prepare")));
+
+                from = 0;
+                len = 0;
+                iterator = root.Successor(Slice.From(tx.Allocator, "produce"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "producer")));
+
+                from = 0;
+                len = 0;
+                iterator = root.Successor(Slice.From(tx.Allocator, "progs"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.NoPath, (int)iterator.Error);
+
+                from = 0;
+                len = 0;
+                iterator = root.Successor(Slice.From(tx.Allocator, "progressive"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.NoPath, (int)iterator.Error);
+            }
+        }
+
+        [Fact]
+        public void SuccessorOrEquals()
+        {
+            // This example is generated to look like the following graph: https://linux.thai.net/~thep/datrie/trie2.gif
+
+            using (var tx = Env.WriteTransaction())
+            {
+                var tree = tx.CreateTrie("foo");
+
+                tree.Add("pool", 1);
+                tree.Add("prize", 2);
+                tree.Add("preview", 3);
+                tree.Add("prepare", 4);
+                tree.Add("produce", 5);
+                tree.Add("producer", 7);
+                tree.Add("progress", 6);
+
+                var root = new CedarPage(tx.LowLevelTransaction, tree.State.RootPageNumber);
+                Assert.Equal(root.Header.Ptr->NumberOfEntries, root.NumberOfKeys);
+                Assert.Equal(7, root.Header.Ptr->NumberOfEntries);
+
+                var outputKey = Slice.Create(tx.Allocator, 4096);
+
+                long from = 0;
+                long len = 0;
+                var iterator = root.SuccessorOrEqual(Slice.From(tx.Allocator, "pooa"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "pool")));
+
+                from = 0;
+                len = 0;
+                iterator = root.SuccessorOrEqual(Slice.From(tx.Allocator, "pool"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "pool")));
+
+
+                from = 0;
+                len = 0;
+                iterator = root.SuccessorOrEqual(Slice.From(tx.Allocator, "priz"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prize")));
+
+                from = 0;
+                len = 0;
+                iterator = root.SuccessorOrEqual(Slice.From(tx.Allocator, "pop"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prepare")));
+
+                from = 0;
+                len = 0;
+                iterator = root.SuccessorOrEqual(Slice.From(tx.Allocator, "po"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "produce")));
+
+                from = 0;
+                len = 0;
+                iterator = root.SuccessorOrEqual(Slice.From(tx.Allocator, "pri"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prize")));
+
+
+                from = 0;
+                len = 0;
+                iterator = root.SuccessorOrEqual(Slice.From(tx.Allocator, "pre"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "prepare")));
+
+                from = 0;
+                len = 0;
+                iterator = root.SuccessorOrEqual(Slice.From(tx.Allocator, "prev"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "preview")));
+
+                from = 0;
+                len = 0;
+                iterator = root.SuccessorOrEqual(Slice.From(tx.Allocator, "producer"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.Success, (int)iterator.Error);
+                Assert.True(SliceComparer.Equals(outputKey, Slice.From(tx.Allocator, "producer")));
+
+                from = 0;
+                len = 0;
+                iterator = root.SuccessorOrEqual(Slice.From(tx.Allocator, "progs"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.NoPath, (int)iterator.Error);
+
+                from = 0;
+                len = 0;
+                iterator = root.Successor(Slice.From(tx.Allocator, "progressive"), ref outputKey, ref from, ref len);
+                Assert.Equal((int)CedarResultCode.NoPath, (int)iterator.Error);
             }
         }
 

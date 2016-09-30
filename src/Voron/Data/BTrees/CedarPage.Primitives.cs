@@ -1334,23 +1334,25 @@ namespace Voron.Data.BTrees
         }
 
         private interface IComparerDirective { }
-        private struct PredecessorComparer : IComparerDirective { }
-        private struct PredecessorOrEqualComparer : IComparerDirective { }
+        private struct StrictComparer : IComparerDirective { }
+        private struct IncludeEqualsComparer : IComparerDirective { }
 
         internal IteratorValue Predecessor(Slice lookupKey, ref Slice outputKey, ref long from, ref long len)
         {
-            return Predecessor<PredecessorComparer>(lookupKey, ref outputKey, ref from, ref len);
+            return Predecessor<StrictComparer>(lookupKey, ref outputKey, ref from, ref len);
         }
 
         internal IteratorValue PredecessorOrEqual(Slice lookupKey, ref Slice outputKey, ref long from, ref long len)
         {
-            return Predecessor<PredecessorOrEqualComparer>(lookupKey, ref outputKey, ref from, ref len);
+            return Predecessor<IncludeEqualsComparer>(lookupKey, ref outputKey, ref from, ref len);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private IteratorValue Predecessor<T>(Slice lookupKey, ref Slice outputKey, ref long from, ref long len)
             where T : struct, IComparerDirective
         {
+            outputKey.Reset();
+
             Node* _array = Blocks.Nodes;
             NodeInfo* _ninfo = Blocks.NodesInfo;
 
@@ -1407,7 +1409,7 @@ namespace Voron.Data.BTrees
                     goto PrepareOutputKey;
                 
                 // We are looking for equals, the length of both must be equal. 
-                if (typeof(T) == typeof(PredecessorOrEqualComparer) && r == 0 && len_ == (lookupKey.Content.Length - (int)len))
+                if (typeof(T) == typeof(IncludeEqualsComparer) && r == 0 && len_ == (lookupKey.Content.Length - (int)len))
                     goto PrepareOutputKey;
 
                 // The current tail value is bigger.
@@ -1434,7 +1436,7 @@ namespace Voron.Data.BTrees
             long currentFrom = from;
             while ( _ninfo[currentFrom].Sibling != 0 && 
                         (_ninfo[currentFrom].Sibling < currentC || 
-                        (typeof(T) == typeof(PredecessorOrEqualComparer) && _ninfo[currentFrom].Sibling == currentC))) 
+                        (typeof(T) == typeof(IncludeEqualsComparer) && _ninfo[currentFrom].Sibling == currentC))) 
             {
                 c = _ninfo[currentFrom].Sibling;
                 currentFrom = @base ^ c;
@@ -1471,10 +1473,10 @@ namespace Voron.Data.BTrees
 
             len_ = _strlen(tail - @base);
 
-            PrepareOutputKey: 
+            PrepareOutputKey:
 
             // Copy tail to key
-            Memory.Copy(outputKey.Content.Ptr + len, tail - @base, len_);            
+            Memory.Copy(outputKey.Content.Ptr + len, tail - @base, len_);
 
             from &= TAIL_OFFSET_MASK;
             from |= ((long)(-@base + len_)) << 32; // this must be long
@@ -1603,74 +1605,205 @@ namespace Voron.Data.BTrees
 
         internal IteratorValue Successor(Slice lookupKey, ref Slice outputKey, ref long from, ref long len)
         {
-            lookupKey.CopyTo(outputKey);
+            return Successor<StrictComparer>(lookupKey, ref outputKey, ref from, ref len);
+        }
 
-            short value;
-            var errorCode = _find(lookupKey.Content.Ptr, ref from, ref len, lookupKey.Content.Length, out value);
-            if (errorCode == CedarResultCode.Success)
+        internal IteratorValue SuccessorOrEqual(Slice lookupKey, ref Slice outputKey, ref long from, ref long len)
+        {
+            return Successor<IncludeEqualsComparer>(lookupKey, ref outputKey, ref from, ref len);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private IteratorValue Successor<T>(Slice lookupKey, ref Slice outputKey, ref long from, ref long len)
+            where T : struct, IComparerDirective
+        {
+            outputKey.Reset();
+
+            Node* _array = Blocks.Nodes;
+            NodeInfo* _ninfo = Blocks.NodesInfo;
+
+            int len_;
+            byte* tail = Tail.DirectRead();
+
+            int @base = from >> 32 != 0 ? -(int)(from >> 32) : _array[from].Base;
+            if (@base < 0)
+                throw new InvalidOperationException("This shouldnt happen.");
+
+            // on trie
+            byte c = _ninfo[from].Child;
+            if (from == 0)
             {
-                // This is an exact match. 
-                return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = value };
+                c = _ninfo[@base ^ c].Sibling;
+                if (c > lookupKey[0]) // no entry strictly smaller than the key. 
+                    return new IteratorValue { Error = CedarResultCode.NoPath };
             }
-            else
+
+            // Until we consume the entire key we can have a few possible outcomes
+            // 1st: The char exists to we go down that direction.
+            // 2nd: The char doesnt exists so we either get the first greater than the key OR
+            // 3rd: We need to back-off because there is no such first greater.
+            // 4th: We are at the tail start. If the value is greater than the key, we have our successor. If not we need to back-off. 
+            // 5th: We consumed the whole lookup key and therefore we need to either get the first or fail and back-off. 
+
+            byte currentC;
+            for (; @base >= 0; len++)
             {
-                Node* _array = Blocks.Nodes;
-                NodeInfo* _ninfo = Blocks.NodesInfo;
+                if (len >= lookupKey.Size)
+                    break; // We will continue if the is somewhere to go down. 
 
-                int @base = from >> 32 != 0 ? -(int)(from >> 32) : _array[from].Base;
-                if (@base >= 0)
-                {
-                    // on trie
-                    byte c = _ninfo[from].Child;
-                    if (from == 0)
-                    {
-                        c = _ninfo[@base ^ c].Sibling;
-                        if (c == 0) // no entry
-                            return new IteratorValue { Error = CedarResultCode.NoPath };
-                    }
+                // We will try to go down as much as possible. [1]
+                currentC = lookupKey[(int)len];
 
-                    byte currentC = lookupKey[(int)len];
+                int to = @base ^ currentC;
+                if (_array[to].Check != from)
+                    break;
 
-                    long currentFrom = @base ^ c;
-                    while (_ninfo[currentFrom].Sibling != 0 && c < currentC)
-                    {
-                        c = _ninfo[currentFrom].Sibling;
-                        currentFrom = @base ^ c;
-                    }
+                outputKey[(int)len] = currentC;
 
-                    from = currentFrom;
-
-                    for (; c != 0 && @base >= 0; len++)
-                    {
-                        outputKey[(int)len] = c;
-
-                        from = @base ^ c;
-                        @base = _array[from].Base;
-                        c = _ninfo[from].Child;
-                    }
-
-                    if (@base >= 0) // it finishes in the trie
-                    {
-                        outputKey[(int)len] = c;
-                        return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = _array[@base ^ c].Value };
-                    }
-                }
-
-                // we have a suffix to look for
-
-                byte* tail = Tail.DirectRead();
-                int len_ = _strlen(tail - @base);
-
-                // Copy tail to key
-                outputKey.SetSize((int) ( len + len_ ));
-                Memory.Copy(outputKey.Content.Ptr + len, tail - @base, len_);
-
-                from &= TAIL_OFFSET_MASK;
-                from |= ((long)(-@base + len_)) << 32; // this must be long
-                len += len_;
-
-                return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = *(short*)(tail - @base + len_ + 1) };
+                from = @base ^ currentC;
+                @base = _array[from].Base;
             }
+
+            IteratorValue result;
+
+            // We need to know if we are still on the trie nodes section.
+            if (@base < 0)
+            {
+                // As we are at the edge, we need to check if the tail is the predecessor.
+                len_ = _strlen(tail - @base);
+
+                int comparableKeyLen = Math.Min(len_, lookupKey.Size - (int)len);
+                int r = Memory.Compare(tail - @base, lookupKey.Content.Ptr + len, comparableKeyLen);
+                if (r > 0)
+                    goto PrepareOutputKey;
+
+                if (r == 0 && (lookupKey.Size - (int)len) < len_)
+                    goto PrepareOutputKey;                
+
+                // We are looking for equals, the length of both must be equal. 
+                if (typeof(T) == typeof(IncludeEqualsComparer) && r == 0 && len_ == (lookupKey.Size - (int)len))
+                    goto PrepareOutputKey;
+
+                // The current tail value is smaller.
+                // We need to backoff and get the next.
+                result = Next(outputKey, ref from, ref len);
+                goto PrepareBeginNextResult;
+            }
+
+            // Here len is either the same or smaller because we failed at a tail. 
+            // We need to retry the lookup key.
+            currentC = lookupKey[(int)len - 1];
+            c = _ninfo[from].Child;
+
+            // At position len the current character doesnt exist in the siblings list. 
+            // Now we need to try for [2] and if there is no options go for [3]      
+            if (c > currentC)
+            {
+                // The current child node holds the successor.
+                result = Begin(outputKey, ref from, ref len);
+                goto PrepareBeginNextResult;
+            }
+
+            // We will now try to get a sibling that is greater than the current, if not we need to backoff            
+
+            long currentFrom = @base ^ c;
+            while (_ninfo[currentFrom].Sibling != 0 && c < currentC)
+            {
+                c = _ninfo[currentFrom].Sibling;
+                currentFrom = @base ^ c;
+            }
+
+            // If we couldnt find any greater value in this node, we need to backoff. 
+            if (c < currentC)
+            {
+                result = Next(outputKey, ref from, ref len);
+                goto PrepareBeginNextResult;
+            }
+
+            // We have a greater inside here. 
+            // We consume the character we selected.
+            outputKey[(int)len] = c;
+            len++;
+            from = currentFrom;
+
+            // We have found what we need with the new from. 
+            result = Begin(outputKey, ref from, ref len);
+            goto PrepareBeginNextResult;
+
+            PrepareOutputKey:
+
+            // Copy tail to key
+            Memory.Copy(outputKey.Content.Ptr + len, tail - @base, len_);
+
+            from &= TAIL_OFFSET_MASK;
+            from |= ((long)(-@base + len_)) << 32; // this must be long
+            len += len_;
+
+            outputKey.SetSize((int)len);
+
+            return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = *(short*)(tail - @base + len_ + 1) };
+
+            PrepareBeginNextResult:
+
+            if ( result.Error == CedarResultCode.Success)
+                outputKey.SetSize((int)len);
+
+            return result;
+
+            //int @base = from >> 32 != 0 ? -(int)(from >> 32) : _array[from].Base;
+            //if (@base >= 0)
+            //{
+            //    // on trie
+            //    byte c = _ninfo[from].Child;
+            //    if (from == 0)
+            //    {
+            //        c = _ninfo[@base ^ c].Sibling;
+            //        if (c == 0) // no entry
+            //            return new IteratorValue { Error = CedarResultCode.NoPath };
+            //    }
+
+            //    byte currentC = lookupKey[(int)len];
+
+            //    long currentFrom = @base ^ c;
+            //    while (_ninfo[currentFrom].Sibling != 0 && c < currentC)
+            //    {
+            //        c = _ninfo[currentFrom].Sibling;
+            //        currentFrom = @base ^ c;
+            //    }
+
+            //    from = currentFrom;
+
+            //    for (; c != 0 && @base >= 0; len++)
+            //    {
+            //        outputKey[(int)len] = c;
+
+            //        from = @base ^ c;
+            //        @base = _array[from].Base;
+            //        c = _ninfo[from].Child;
+            //    }
+
+            //    if (@base >= 0) // it finishes in the trie
+            //    {
+            //        outputKey[(int)len] = c;
+            //        return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = _array[@base ^ c].Value };
+            //    }
+
+            //}
+
+            //// we have a suffix to look for
+
+            //byte* tail = Tail.DirectRead();
+            //int len_ = _strlen(tail - @base);
+
+            //// Copy tail to key
+            //outputKey.SetSize((int) ( len + len_ ));
+            //Memory.Copy(outputKey.Content.Ptr + len, tail - @base, len_);
+
+            //from &= TAIL_OFFSET_MASK;
+            //from |= ((long)(-@base + len_)) << 32; // this must be long
+            //len += len_;
+
+            //return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = *(short*)(tail - @base + len_ + 1) };
         }
 
         internal IteratorValue Begin(Slice outputKey, ref long from, ref long len)
