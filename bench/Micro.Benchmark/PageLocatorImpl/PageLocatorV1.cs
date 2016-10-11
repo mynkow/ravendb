@@ -1,24 +1,22 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
+using Voron;
 using Voron.Impl;
 
-namespace Voron
+namespace Regression.PageLocator
 {
-    public class PageLocator
+    public class PageLocatorV1
     {
         private readonly LowLevelTransaction _tx;
-        private readonly PageHandlePtr[] _cache;
+        private readonly PageHandlePtrV1[] _cache;
         private int _current;
 
-        public PageLocator ( LowLevelTransaction tx, int cacheSize = 4)
+        public PageLocatorV1(LowLevelTransaction tx, int cacheSize = 4)
         {
-            Debug.Assert(tx != null);
+            //Debug.Assert(tx != null);
 
             _tx = tx;
-            _cache = new PageHandlePtr[cacheSize];
+            _cache = new PageHandlePtrV1[cacheSize];
         }
 
         public Page GetReadOnlyPage(long pageNumber)
@@ -37,14 +35,14 @@ namespace Voron
                     itemsLeft--;
                     position++;
 
-                    continue;                   
-                }            
+                    continue;
+                }
 
                 return _cache[i].Value;
             }
 
-            _current = (_current++) % _cache.Length;
-            _cache[_current] = new PageHandlePtr(_tx.GetPage(pageNumber), false);
+            _current = (++_current) % _cache.Length;
+            _cache[_current] = new PageHandlePtrV1(LowLevelTransactionStub.GetPage(pageNumber), false);
             return _cache[_current].Value;
         }
 
@@ -69,19 +67,19 @@ namespace Voron
                 }
 
                 if (!_cache[i].IsWritable)
-                    _cache[i] = new PageHandlePtr(_tx.ModifyPage(pageNumber), true);
+                    _cache[i] = new PageHandlePtrV1(LowLevelTransactionStub.ModifyPage(pageNumber), true);
 
                 return _cache[i].Value;
             }
 
-            _current = (_current++) % _cache.Length;
-            _cache[_current] = new PageHandlePtr(_tx.ModifyPage(pageNumber), true);
+            _current = (++_current) % _cache.Length;
+            _cache[_current] = new PageHandlePtrV1(LowLevelTransactionStub.ModifyPage(pageNumber), true);
             return _cache[_current].Value;
         }
 
-        public void Clear ()
+        public void Clear()
         {
-            Array.Clear(_cache, 0, _cache.Length);            
+            Array.Clear(_cache, 0, _cache.Length);
         }
 
         public void Reset(long pageNumber)
@@ -90,7 +88,7 @@ namespace Voron
             {
                 if (_cache[i].PageNumber == pageNumber)
                 {
-                    _cache[i] = new PageHandlePtr();
+                    _cache[i] = new PageHandlePtrV1();
                     return;
                 }
             }
