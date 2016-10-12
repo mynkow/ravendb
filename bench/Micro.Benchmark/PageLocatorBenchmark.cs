@@ -28,7 +28,7 @@ namespace Micro.Benchmark
                     Mode = Mode.SingleRun,
                     LaunchCount = 1,
                     WarmupCount = 1,
-                    TargetCount = 1,
+                    TargetCount = 3,
                 });
 
                 // Exporters for data
@@ -48,8 +48,8 @@ namespace Micro.Benchmark
 
         private const int NumberOfOperations = 10000;
 
-        //[Params(1, 2, 4, 8, 16, 32, 64, 128)]
-        [Params(4, 8, 16, 32)]
+        [Params(8, 16, 32, 64, 128)]
+        //[Params(4, 8, 16, 32)]
         public int CacheSize { get; set; }
 
         [Params(5)]
@@ -102,22 +102,22 @@ namespace Micro.Benchmark
         //    }
         //}
 
-        //[Benchmark(OperationsPerInvoke = NumberOfOperations)]
-        //public void Basic_PageLocatorV3()
-        //{
-        //    foreach (var pageNumber in _pageNumbers)
-        //    {
-        //        _cacheV3.GetReadOnlyPage(pageNumber);
-        //    }
-        //}
-
         [Benchmark(OperationsPerInvoke = NumberOfOperations)]
-        public void Basic_PageLocatorV4()
+        public void Basic_PageLocatorV3()
         {
             foreach (var pageNumber in _pageNumbers)
             {
-                _cacheV4.GetReadOnlyPage(pageNumber);
+                _cacheV3.GetReadOnlyPage(pageNumber);
             }
         }
+
+        //[Benchmark(OperationsPerInvoke = NumberOfOperations)]
+        //public void Basic_PageLocatorV4()
+        //{
+        //    foreach (var pageNumber in _pageNumbers)
+        //    {
+        //        _cacheV4.GetReadOnlyPage(pageNumber);
+        //    }
+        //}
     }
 }

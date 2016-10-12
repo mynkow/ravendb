@@ -24,27 +24,17 @@ namespace Regression.PageLocator
 
     public class PageLocatorV3
     {
-        private static readonly Vector<ushort> _indexes;
-
-        private const ushort Invalid = unchecked((ushort)-1);
+        private const short Invalid = -1;
 
         private readonly LowLevelTransaction _tx;
         // This is the size of the cache, required to be _cacheSize % Vector<long>.Count == 0
         private readonly int _cacheSize;
 
-        private readonly ushort[] _fingerprints;
+        private readonly short[] _fingerprints;
         private readonly PageHandlePtrV3[] _cache;
 
         private int _current;
 
-        static PageLocatorV3()
-        {
-            var indexes = new ushort[Vector<ushort>.Count];
-            for (ushort i = 0; i < Vector<ushort>.Count; i++)
-                indexes[i] = (ushort) (i + 1);
-
-            _indexes = new Vector<ushort>(indexes);
-        }
 
         public PageLocatorV3(LowLevelTransaction tx, int cacheSize = 4)
         {
@@ -56,42 +46,26 @@ namespace Regression.PageLocator
 
             // Align cache size to Vector<ushort>.Count
             _cacheSize = cacheSize;
-            if (_cacheSize % Vector<short>.Count != 0)
-                _cacheSize += Vector<short>.Count - cacheSize % Vector<short>.Count;
 
             _current = 0;
 
             _cache = new PageHandlePtrV3[_cacheSize];
 
-            _fingerprints = new ushort[_cacheSize];
+            _fingerprints = new short[_cacheSize];
             for (short i = 0; i < _fingerprints.Length; i++)
                 _fingerprints[i] = Invalid;
         }
 
         public MyPage GetReadOnlyPage(long pageNumber)
         {
-            ushort fingerprint = (ushort)pageNumber;
+            short fingerprint = (short)pageNumber;
 
-            var lookup = new Vector<ushort>(fingerprint);
-            for (int i = 0; i < _cacheSize; i += Vector<short>.Count)
+            int i;
+            for (i = 0; i < _cacheSize; i++)
             {
-                var pageNumbers = new Vector<ushort>(_fingerprints, i);
-
-                var comparison = Vector.Equals(pageNumbers, lookup);
-                var result = Vector.ConditionalSelect(comparison, Vector<ushort>.One, Vector<ushort>.Zero);
-                ushort index = Vector.Dot(_indexes, result);
-
-                if (index != 0)
-                {
-                    int j = i + index - 1;
-                    if (_cache[j].PageNumber == pageNumber)
-                    {
-                        return _cache[j].Value;
-                    }
-
-                    _cache[j] = new PageHandlePtrV3(pageNumber, LowLevelTransactionStub.GetPage(pageNumber), false);
-                    return _cache[j].Value;
-                }                
+                // This is used to force the JIT to layout the code as if unlikely() compiler directive exists.
+                if (_fingerprints[i] == fingerprint)
+                    goto Found;
             }
 
             // If we got here, there was a cache miss
@@ -100,39 +74,42 @@ namespace Regression.PageLocator
             _fingerprints[_current] = fingerprint;
 
             return _cache[_current].Value;
+
+            Found:
+            // This is not the common case on the loop and we are returning anyways. It doesnt matter the jump is far.
+            if (_cache[i].PageNumber == pageNumber)
+                return _cache[i].Value;
+
+            _cache[i] = new PageHandlePtrV3(pageNumber, LowLevelTransactionStub.GetPage(pageNumber), false);
+            return _cache[i].Value;
         }
 
         public MyPage GetWritablePage(long pageNumber)
         {
-            ushort fingerprint = (ushort)pageNumber;
+            short fingerprint = (short)pageNumber;
 
-            var lookup = new Vector<ushort>(fingerprint);
-            for (int i = 0; i < _cacheSize; i += Vector<ushort>.Count)
+            int i;
+            for (i = 0; i < _cacheSize; i++)
             {
-                var pageNumbers = new Vector<ushort>(_fingerprints, i);                
-                var comparison = Vector.Equals(pageNumbers, lookup);
-                var result = Vector.ConditionalSelect(comparison, Vector<ushort>.One, Vector<ushort>.Zero);
-
-                ushort index = Vector.Dot(_indexes, result);
-                if (index != 0)
-                {
-                    int j = i + index - 1;
-                    if (_cache[j].PageNumber == pageNumber && _cache[j].IsWritable)
-                    {
-                        return _cache[j].Value;
-                    }
-
-                    _cache[j] = new PageHandlePtrV3(pageNumber, LowLevelTransactionStub.GetPage(pageNumber), true);
-                    return _cache[j].Value;
-                }
+                // This is used to force the JIT to layout the code as if unlikely() compiler directive exists.
+                if (_fingerprints[i] == fingerprint)
+                    goto Found;
             }
 
             // If we got here, there was a cache miss
             _current = (_current++) % _cacheSize;
-            _cache[_current] = new PageHandlePtrV3(pageNumber, LowLevelTransactionStub.GetPage(pageNumber), true);
+            _cache[_current] = new PageHandlePtrV3(pageNumber, LowLevelTransactionStub.ModifyPage(pageNumber), true);
             _fingerprints[_current] = fingerprint;
 
             return _cache[_current].Value;
+
+            Found:
+
+            if (_cache[i].PageNumber == pageNumber && _cache[i].IsWritable)
+                return _cache[i].Value;
+
+            _cache[i] = new PageHandlePtrV3(pageNumber, LowLevelTransactionStub.ModifyPage(pageNumber), true);
+            return _cache[i].Value;
         }
 
         public void Clear()
@@ -146,22 +123,13 @@ namespace Regression.PageLocator
 
         public void Reset(long pageNumber)
         {
-            ushort fingerprint = (ushort)pageNumber;
+            short fingerprint = (short)pageNumber;
 
-            var lookup = new Vector<ushort>(fingerprint);
-            for (int i = 0; i < _cacheSize; i += Vector<ushort>.Count)
+            for (int i = 0; i < _cacheSize; i++)
             {
-                var pageNumbers = new Vector<ushort>(_fingerprints, i);
-                var comparison = Vector.Equals(pageNumbers, lookup);
-                var result = Vector.ConditionalSelect(comparison, Vector<ushort>.One, Vector<ushort>.Zero);
-
-                ushort index = Vector.Dot(_indexes, result);
-                if (index != 0)
-                {
-                    int j = i + index - 1;
-                    _cache[j] = new PageHandlePtrV3();
-                    _fingerprints[j] = Invalid;
-
+                if (_fingerprints[i] == fingerprint)
+                {   
+                    _cache[i] = new PageHandlePtrV3();
                     return;
                 }
             }

@@ -64,27 +64,31 @@ namespace Regression.PageLocator
             int fingerprint = (int)pageNumber;
 
             var lookup = new Vector<int>(fingerprint);
-            for (int i = 0; i < _cacheSize; i += Vector<int>.Count)
+
+            int count = Vector<short>.Count;
+
+            for (int i = 0; i < _cacheSize; i += count)
             {
                 var pageNumbers = new Vector<int>(_fingerprints, i);
 
-                var comparison = Vector.Equals(pageNumbers, lookup);
-                //var result = Vector.ConditionalSelect(comparison, Vector<int>.One, Vector<int>.Zero);
-                var result = Vector.ConditionalSelect(comparison, One, Zero);
-
-                int index = Vector.Dot(_indexes, result);
-                if (index != 0)
+                if (Vector.EqualsAny(pageNumbers, lookup))
                 {
-                    int j = i + index - 1;
-                    if (_cache[j].PageNumber == pageNumber)
+                    for (int index = 0; index < count; index++)
                     {
-                        return _cache[j].Value;
+                        int j = i + index;
+                        if (_fingerprints[j] == fingerprint)
+                        {
+                            if (_cache[j].PageNumber == pageNumber)
+                                return _cache[j].Value;
+
+                            _cache[j] = new PageHandlePtrV3(pageNumber, LowLevelTransactionStub.GetPage(pageNumber), false);
+                            return _cache[j].Value;
+                        }
                     }
 
-                    _cache[j] = new PageHandlePtrV3(pageNumber, LowLevelTransactionStub.GetPage(pageNumber), false);
-                    return _cache[j].Value;
-                }                
-            }
+                    throw new InvalidOperationException("This cant happen");
+                }
+            }         
 
             // If we got here, there was a cache miss
             _current = (_current++) % _cacheSize;
