@@ -25,7 +25,7 @@ namespace Micro.Benchmark.Tests
         [MemberData(nameof(CacheSize))]
         public void TestGetReadonly(int cacheSize)
         {
-            var cache = new PageLocatorV3(null, cacheSize);
+            var cache = new PageLocatorV4(null, cacheSize);
 
             // Test readonly page
             var p11 = cache.GetReadOnlyPage(5);

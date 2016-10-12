@@ -15,8 +15,8 @@ namespace Regression.PageLocator
         private readonly LowLevelTransaction _tx;
         // This is the size of the cache, required to be _cacheSize % Vector<long>.Count == 0
         private readonly int _cacheSize;
-        
-        private readonly Page[] _cache;
+
+        private readonly MyPage[] _cache;
         private readonly long[] _pages;
         private readonly bool[] _writeable;
 
@@ -46,7 +46,7 @@ namespace Regression.PageLocator
 
             _current = 0;
 
-            _cache = new Page[_cacheSize];
+            _cache = new MyPage[_cacheSize];
             _writeable = new bool[_cacheSize];
 
             _pages = new long[_cacheSize];
@@ -54,7 +54,7 @@ namespace Regression.PageLocator
                 _pages[i] = -1;
         }
 
-        public Page GetReadOnlyPage(long pageNumber)
+        public MyPage GetReadOnlyPage(long pageNumber)
         {
             var lookup = new Vector<long>(pageNumber);
 
@@ -77,7 +77,7 @@ namespace Regression.PageLocator
             return _cache[_current];
         }
 
-        public Page GetWritablePage(long pageNumber)
+        public MyPage GetWritablePage(long pageNumber)
         {
            
             var lookup = new Vector<long>(pageNumber);

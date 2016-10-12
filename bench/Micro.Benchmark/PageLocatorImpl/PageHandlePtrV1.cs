@@ -3,14 +3,19 @@ using Voron;
 
 namespace Regression.PageLocator
 {
+    public class MyPage
+    {
+        public long PageNumber;
+    }
+
     public struct PageHandlePtrV1
     {
-        public readonly Page Value;
+        public readonly MyPage Value;
         public readonly bool IsWritable;
 
         private const int Invalid = -1;
 
-        public PageHandlePtrV1(Page value, bool isWritable)
+        public PageHandlePtrV1(MyPage value, bool isWritable)
         {
             this.Value = value;
             this.IsWritable = isWritable;

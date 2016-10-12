@@ -7,21 +7,21 @@ namespace Regression.PageLocator
     {
         // TODO: implement register shuffling here.
         [MethodImpl(MethodImplOptions.NoOptimization | MethodImplOptions.NoInlining)]
-        public static Page ModifyPage(long pageNumber)
+        public static MyPage ModifyPage(long pageNumber)
         {
             unsafe
             {
-                return new Page(null, null);
+                return new MyPage { PageNumber = pageNumber };
             }
         }
 
         // TODO: implement register shuffling here.
         [MethodImpl(MethodImplOptions.NoOptimization | MethodImplOptions.NoInlining)]
-        public static Page GetPage(long pageNumber)
+        public static MyPage GetPage(long pageNumber)
         {
             unsafe
             {
-                return new Page(null, null);
+                return new MyPage { PageNumber = pageNumber };
             }
         }
     }

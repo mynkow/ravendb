@@ -9,10 +9,19 @@
     }
   },
 
+  
+  "configurations": {
+    "Release": {
+      "buildOptions": {
+        "optimize": true
+      }
+    }
+  },
+
   "dependencies": {
     "BenchmarkDotNet": "0.9.9",
     "Microsoft.NETCore.App": {
-      "type": "platform",
+      "type": "build",
       "version": "1.0.0"
     },
     "Voron": "4.0.0-*",
@@ -23,5 +32,12 @@
     "netcoreapp1.0": {
       "imports": "dnxcore50"
     }
+  },
+
+  "runtimes": {
+    "win7-x64": {},
+    "win8-x64": {},
+    "win10-x64": {},
+    "ubuntu.14.04-x64": {} 
   }
 }

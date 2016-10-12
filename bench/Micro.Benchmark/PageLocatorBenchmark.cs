@@ -22,7 +22,7 @@ namespace Micro.Benchmark
                 Add(new Job
                 {
                     Runtime = Runtime.Core,
-                    Platform = BenchmarkDotNet.Jobs.Platform.X64,
+                    Platform = Platform.X64,
                     Jit = Jit.RyuJit,
                     // TODO: Next line is just for testing. Fine tune parameters.
                     Mode = Mode.SingleRun,
@@ -48,21 +48,31 @@ namespace Micro.Benchmark
 
         private const int NumberOfOperations = 10000;
 
-        [Params(1, 2, 4, 8, 16, 32, 64, 128)]
+        //[Params(1, 2, 4, 8, 16, 32, 64, 128)]
+        [Params(4, 8, 16, 32)]
         public int CacheSize { get; set; }
 
         [Params(5)]
         public int RandomSeed { get; set; }
 
-        private List<long> _pageNumbers = new List<long>();
-        private PageLocatorV3 _cache;
+        private List<long> _pageNumbers;
+
+        private PageLocatorV1 _cacheV1;
+        private PageLocatorV2 _cacheV2;
+        private PageLocatorV3 _cacheV3;
+        private PageLocatorV4 _cacheV4;
 
         [Setup]
         public void Setup()
         {
-            _cache = new PageLocatorV3(null, CacheSize);
+            _cacheV1 = new PageLocatorV1(null, CacheSize);
+            _cacheV2 = new PageLocatorV2(null, CacheSize);
+            _cacheV3 = new PageLocatorV3(null, CacheSize);
+            _cacheV4 = new PageLocatorV4(null, CacheSize);
+
             var generator = new Random(RandomSeed);
 
+            _pageNumbers = new List<long>();
             for (int i = 0; i < NumberOfOperations; i++)
             {
                 long valueBuffer = generator.Next();
@@ -75,11 +85,38 @@ namespace Micro.Benchmark
         }
 
         [Benchmark(OperationsPerInvoke = NumberOfOperations)]
-        void BasicReadOnlyBenchmark()
+        public void Basic_PageLocatorV1()
         {
             foreach (var pageNumber in _pageNumbers)
             {
-                _cache.GetReadOnlyPage(pageNumber);
+                _cacheV1.GetReadOnlyPage(pageNumber);
+            }
+        }
+
+        //[Benchmark(OperationsPerInvoke = NumberOfOperations)]
+        //public void Basic_PageLocatorV2()
+        //{
+        //    foreach (var pageNumber in _pageNumbers)
+        //    {
+        //        _cacheV2.GetReadOnlyPage(pageNumber);
+        //    }
+        //}
+
+        //[Benchmark(OperationsPerInvoke = NumberOfOperations)]
+        //public void Basic_PageLocatorV3()
+        //{
+        //    foreach (var pageNumber in _pageNumbers)
+        //    {
+        //        _cacheV3.GetReadOnlyPage(pageNumber);
+        //    }
+        //}
+
+        [Benchmark(OperationsPerInvoke = NumberOfOperations)]
+        public void Basic_PageLocatorV4()
+        {
+            foreach (var pageNumber in _pageNumbers)
+            {
+                _cacheV4.GetReadOnlyPage(pageNumber);
             }
         }
     }

@@ -19,7 +19,7 @@ namespace Regression.PageLocator
             _cache = new PageHandlePtrV1[cacheSize];
         }
 
-        public Page GetReadOnlyPage(long pageNumber)
+        public MyPage GetReadOnlyPage(long pageNumber)
         {
             int position = _current;
 
@@ -46,7 +46,7 @@ namespace Regression.PageLocator
             return _cache[_current].Value;
         }
 
-        public Page GetWritablePage(long pageNumber)
+        public MyPage GetWritablePage(long pageNumber)
         {
             int position = _current;
 

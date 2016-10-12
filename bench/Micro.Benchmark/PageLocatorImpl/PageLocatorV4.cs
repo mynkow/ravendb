@@ -8,23 +8,9 @@ using Voron.Impl;
 
 namespace Regression.PageLocator
 {
-    public struct PageHandlePtrV3
-    {        
-        public readonly long PageNumber;        
-        public readonly MyPage Value;
-        public readonly bool IsWritable;        
-
-        public PageHandlePtrV3(long pageNumber, MyPage value, bool isWritable)
-        {
-            this.Value = value;
-            this.PageNumber = pageNumber;
-            this.IsWritable = isWritable;
-        }
-    }
-
-    public class PageLocatorV3
+    public class PageLocatorV4
     {
-        private static readonly Vector<ushort> _indexes;
+        private static readonly Vector<int> _indexes;
 
         private const ushort Invalid = unchecked((ushort)-1);
 
@@ -32,21 +18,23 @@ namespace Regression.PageLocator
         // This is the size of the cache, required to be _cacheSize % Vector<long>.Count == 0
         private readonly int _cacheSize;
 
-        private readonly ushort[] _fingerprints;
+        private readonly int[] _fingerprints;
         private readonly PageHandlePtrV3[] _cache;
+        private readonly Vector<int> One;
+        private readonly Vector<int> Zero;
 
         private int _current;
 
-        static PageLocatorV3()
+        static PageLocatorV4()
         {
-            var indexes = new ushort[Vector<ushort>.Count];
-            for (ushort i = 0; i < Vector<ushort>.Count; i++)
-                indexes[i] = (ushort) (i + 1);
+            var indexes = new int[Vector<int>.Count];
+            for (int i = 0; i < Vector<int>.Count; i++)
+                indexes[i] = i + 1;
 
-            _indexes = new Vector<ushort>(indexes);
+            _indexes = new Vector<int>(indexes);
         }
 
-        public PageLocatorV3(LowLevelTransaction tx, int cacheSize = 4)
+        public PageLocatorV4(LowLevelTransaction tx, int cacheSize = 4)
         {
             //Debug.Assert(tx != null);
             _tx = tx;
@@ -56,31 +44,35 @@ namespace Regression.PageLocator
 
             // Align cache size to Vector<ushort>.Count
             _cacheSize = cacheSize;
-            if (_cacheSize % Vector<short>.Count != 0)
-                _cacheSize += Vector<short>.Count - cacheSize % Vector<short>.Count;
+            if (_cacheSize % Vector<int>.Count != 0)
+                _cacheSize += Vector<int>.Count - cacheSize % Vector<int>.Count;
 
             _current = 0;
 
             _cache = new PageHandlePtrV3[_cacheSize];
 
-            _fingerprints = new ushort[_cacheSize];
-            for (short i = 0; i < _fingerprints.Length; i++)
+            _fingerprints = new int[_cacheSize];
+            for (int i = 0; i < _fingerprints.Length; i++)
                 _fingerprints[i] = Invalid;
+
+            One = new Vector<int>(1);
+            Zero = new Vector<int>(0);
         }
 
         public MyPage GetReadOnlyPage(long pageNumber)
         {
-            ushort fingerprint = (ushort)pageNumber;
+            int fingerprint = (int)pageNumber;
 
-            var lookup = new Vector<ushort>(fingerprint);
-            for (int i = 0; i < _cacheSize; i += Vector<short>.Count)
+            var lookup = new Vector<int>(fingerprint);
+            for (int i = 0; i < _cacheSize; i += Vector<int>.Count)
             {
-                var pageNumbers = new Vector<ushort>(_fingerprints, i);
+                var pageNumbers = new Vector<int>(_fingerprints, i);
 
                 var comparison = Vector.Equals(pageNumbers, lookup);
-                var result = Vector.ConditionalSelect(comparison, Vector<ushort>.One, Vector<ushort>.Zero);
-                ushort index = Vector.Dot(_indexes, result);
+                //var result = Vector.ConditionalSelect(comparison, Vector<int>.One, Vector<int>.Zero);
+                var result = Vector.ConditionalSelect(comparison, One, Zero);
 
+                int index = Vector.Dot(_indexes, result);
                 if (index != 0)
                 {
                     int j = i + index - 1;
@@ -104,16 +96,16 @@ namespace Regression.PageLocator
 
         public MyPage GetWritablePage(long pageNumber)
         {
-            ushort fingerprint = (ushort)pageNumber;
+            int fingerprint = (int)pageNumber;
 
-            var lookup = new Vector<ushort>(fingerprint);
-            for (int i = 0; i < _cacheSize; i += Vector<ushort>.Count)
+            var lookup = new Vector<int>(fingerprint);
+            for (int i = 0; i < _cacheSize; i += Vector<int>.Count)
             {
-                var pageNumbers = new Vector<ushort>(_fingerprints, i);                
+                var pageNumbers = new Vector<int>(_fingerprints, i);                
                 var comparison = Vector.Equals(pageNumbers, lookup);
-                var result = Vector.ConditionalSelect(comparison, Vector<ushort>.One, Vector<ushort>.Zero);
+                var result = Vector.ConditionalSelect(comparison, Vector<int>.One, Vector<int>.Zero);
 
-                ushort index = Vector.Dot(_indexes, result);
+                int index = Vector.Dot(_indexes, result);
                 if (index != 0)
                 {
                     int j = i + index - 1;
@@ -146,16 +138,16 @@ namespace Regression.PageLocator
 
         public void Reset(long pageNumber)
         {
-            ushort fingerprint = (ushort)pageNumber;
+            int fingerprint = (int)pageNumber;
 
-            var lookup = new Vector<ushort>(fingerprint);
-            for (int i = 0; i < _cacheSize; i += Vector<ushort>.Count)
+            var lookup = new Vector<int>(fingerprint);
+            for (int i = 0; i < _cacheSize; i += Vector<int>.Count)
             {
-                var pageNumbers = new Vector<ushort>(_fingerprints, i);
+                var pageNumbers = new Vector<int>(_fingerprints, i);
                 var comparison = Vector.Equals(pageNumbers, lookup);
-                var result = Vector.ConditionalSelect(comparison, Vector<ushort>.One, Vector<ushort>.Zero);
+                var result = Vector.ConditionalSelect(comparison, Vector<int>.One, Vector<int>.Zero);
 
-                ushort index = Vector.Dot(_indexes, result);
+                int index = Vector.Dot(_indexes, result);
                 if (index != 0)
                 {
                     int j = i + index - 1;
