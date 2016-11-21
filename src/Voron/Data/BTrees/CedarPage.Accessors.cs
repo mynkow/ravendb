@@ -11,6 +11,8 @@ namespace Voron.Data.BTrees
         public struct HeaderAccessor
         {
             private readonly CedarPage _page;
+
+            private bool _isWritable;
             public CedarPageHeader* Ptr;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -18,16 +20,26 @@ namespace Voron.Data.BTrees
             {
                 _page = page;
 
-                Ptr = (CedarPageHeader*)_page._mainPage.Value.Pointer;
+                Ptr = (CedarPageHeader*)_page.GetHeaderPagePointer(false);
+                _isWritable = false;
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public HeaderAccessor(CedarPage page, byte* ptr)
+            {
+                _page = page;
+
+                Ptr = (CedarPageHeader*)ptr;
+                _isWritable = true;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetWritable()
             {
-                if (!_page._mainPage.IsWritable)
-                    _page.AcquireMainPage(true);
+                if (_isWritable) return;
 
-                Ptr = (CedarPageHeader*)_page._mainPage.Value.Pointer;
+                Ptr = (CedarPageHeader*)_page.GetHeaderPagePointer(true);
+                _isWritable = true;
             }
         }
 
@@ -458,7 +470,7 @@ namespace Voron.Data.BTrees
             public BlockMetadata* Read(int index)
             {
                 var dataPtr = _page._pageLocator.GetReadOnlyDataPointer(_page.PageNumber);
-                return (BlockMetadata*)(dataPtr + _page.Header.Ptr->MetadataOffset) + index;
+                return (BlockMetadata*)(dataPtr + CedarPageHeader.MetadataOffset) + index;
             }
         }
 
@@ -475,13 +487,13 @@ namespace Voron.Data.BTrees
             public BlockMetadata* Write(int index)
             {
                 var dataPtr = _page._pageLocator.GetWritableDataPointer(_page.PageNumber);
-                return (BlockMetadata*)(dataPtr + _page.Header.Ptr->MetadataOffset) + index;
+                return (BlockMetadata*)(dataPtr + CedarPageHeader.MetadataOffset) + index;
             }
 
             public BlockMetadata* Read(int index)
             {
                 var dataPtr = _page._pageLocator.GetReadOnlyDataPointer(_page.PageNumber);
-                return (BlockMetadata*)(dataPtr + _page.Header.Ptr->MetadataOffset) + index;
+                return (BlockMetadata*)(dataPtr + CedarPageHeader.MetadataOffset) + index;
             }
         }
 
@@ -564,12 +576,27 @@ namespace Voron.Data.BTrees
 
         internal struct Tail0Accessor
         {
-            private readonly CedarPage _page;
+            private bool _isWritable;
+            private CedarPage _page;
+            private int* _dataPtr;
+
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public Tail0Accessor(CedarPage page)
             {
                 _page = page;
+
+                _dataPtr = (int*)(_page.GetHeaderPagePointer(false) + CedarPageHeader.Tail0Offset);
+                _isWritable = false;
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public Tail0Accessor(CedarPage page, byte* ptr)
+            {
+                _page = page;
+
+                _dataPtr = (int*)(ptr + CedarPageHeader.Tail0Offset);
+                _isWritable = true;
             }
 
             public int Length
@@ -585,23 +612,23 @@ namespace Voron.Data.BTrees
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 get
                 {
-                    int* ptr = (int*)(_page._mainPage.Value.Pointer + _page.Header.Ptr->Tail0Offset);
-                    return *(ptr + i);
+                    return *(_dataPtr + i);
                 }
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 set
                 {
                     SetWritable();
-
-                    int* ptr = (int*)(_page._mainPage.Value.Pointer + _page.Header.Ptr->Tail0Offset);
-                    *(ptr + i) = value;
+                   
+                    *(_dataPtr + i) = value;
                 }
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void SetWritable()
             {
-                _page.AcquireMainPage(true);
+                if (_isWritable) return;
+                _dataPtr = (int*)(_page.GetHeaderPagePointer(true) + CedarPageHeader.Tail0Offset);
+                _isWritable = true;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -610,9 +637,7 @@ namespace Voron.Data.BTrees
                 SetWritable();
 
                 int length = this[0];
-
-                byte* ptr = _page._mainPage.Value.Pointer + _page.Header.Ptr->Tail0Offset;
-                Memory.SetInline(ptr, 0, (length + 1) * sizeof(int));
+                Memory.SetInline((byte*)_dataPtr, 0, (length + 1) * sizeof(int));
             }
         }
 
@@ -987,6 +1012,15 @@ namespace Voron.Data.BTrees
 
                 return length;
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private byte* GetHeaderPagePointer( bool writable )
+        {
+            if (writable)
+                return _pageLocator.GetWritablePage(this.PageNumber).Pointer;
+            else
+                return _pageLocator.GetReadOnlyPage(this.PageNumber).Pointer;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

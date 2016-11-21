@@ -14,11 +14,11 @@ namespace Voron.Data.BTrees
     [StructLayout(LayoutKind.Explicit, Pack = 1)]
     public unsafe struct CedarDataNode
     {
-        public const int Size = 11;
+        public const int SizeOf = 11;
 
         static CedarDataNode()
         {
-            Constants.Assert(() => CedarDataNode.Size == sizeof(CedarDataNode), () => $"Update the Size constant to match the size of the {nameof(CedarDataNode)} struct.");
+            Constants.Assert(() => CedarDataNode.SizeOf == sizeof(CedarDataNode), () => $"Update the Size constant to match the size of the {nameof(CedarDataNode)} struct.");
         }
 
         public const byte FreeNode = 0x80;

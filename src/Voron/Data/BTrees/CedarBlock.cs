@@ -13,11 +13,11 @@ namespace Voron.Data.BTrees
         [StructLayout(LayoutKind.Explicit, Pack = 1)]
         internal unsafe struct Node
         {
-            public const int Size = 4;
+            public const int SizeOf = 4;
 
             static Node()
             {
-                Constants.Assert(() => Node.Size == sizeof(Node), () => $"Update the Size constant to match the size of the {nameof(Node)} struct.");
+                Constants.Assert(() => Node.SizeOf == sizeof(Node), () => $"Update the Size constant to match the size of the {nameof(Node)} struct.");
             }
 
             [FieldOffset(0)]
@@ -40,11 +40,11 @@ namespace Voron.Data.BTrees
         [StructLayout(LayoutKind.Explicit, Pack = 1)]
         internal unsafe struct NodeInfo // x1.5 update speed; +.25 % memory (8n -> 10n)
         {
-            public const int Size = 2;
+            public const int SizeOf = 2;
 
             static NodeInfo()
             {
-                Constants.Assert(() => NodeInfo.Size == sizeof(NodeInfo), () => $"Update the Size constant to match the size of the {nameof(NodeInfo)} struct.");
+                Constants.Assert(() => NodeInfo.SizeOf == sizeof(NodeInfo), () => $"Update the Size constant to match the size of the {nameof(NodeInfo)} struct.");
             }
 
             [FieldOffset(0)]
@@ -63,11 +63,11 @@ namespace Voron.Data.BTrees
         [StructLayout(LayoutKind.Explicit, Pack = 1)]
         internal unsafe struct BlockMetadata // a BlockMetadata w/ 256 elements
         {
-            public const int Size = 20;
+            public const int SizeOf = 20;
 
             static BlockMetadata()
             {
-                Constants.Assert(() => BlockMetadata.Size == sizeof(BlockMetadata), () => $"Update the Size constant to match the size of the {nameof(BlockMetadata)} struct.");
+                Constants.Assert(() => BlockMetadata.SizeOf == sizeof(BlockMetadata), () => $"Update the Size constant to match the size of the {nameof(BlockMetadata)} struct.");
             }
 
             [FieldOffset(0)]

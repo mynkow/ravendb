@@ -318,6 +318,7 @@ namespace Voron.Data.BTrees
 
             // Chances are that we will need to Write on the array, so getting the write version is the way to go here. 
             NodesWritePtr _array = Blocks.DirectWrite<NodesWritePtr>();
+            NodesInfoWritePtr _ninfo = Blocks.DirectWrite<NodesInfoWritePtr>();
 
             long offset = from >> 32;
             if (offset == 0)
@@ -329,7 +330,7 @@ namespace Voron.Data.BTrees
                     if (pos == len)
                     {
                         int current;                        
-                        if ( !TryFollow(ref _array, from, 0, out current))
+                        if ( !TryFollow(ref _array, ref _ninfo, from, 0, out current))
                             return CedarActionStatus.NotEnoughSpace;
 
                         Header.SetWritable();
@@ -341,7 +342,7 @@ namespace Voron.Data.BTrees
                         return CedarActionStatus.Success;
                     }
 
-                    if (!TryFollow(ref _array, from, key[pos], out from))
+                    if (!TryFollow(ref _array, ref _ninfo, from, key[pos], out from))
                         return CedarActionStatus.NotEnoughSpace;
                 }
 
@@ -387,7 +388,7 @@ namespace Voron.Data.BTrees
                     from &= TAIL_OFFSET_MASK; // reset to update tail offset
                     for (int offset_ = -_array.Read(from)->Base; offset_ < offset;)
                     {
-                        if (!TryFollow(ref _array, from, Tail[offset_], out from) )
+                        if (!TryFollow(ref _array, ref _ninfo, from, Tail[offset_], out from) )
                             return CedarActionStatus.NotEnoughSpace;
 
                         offset_++;
@@ -400,7 +401,7 @@ namespace Voron.Data.BTrees
 
                 for (long pos_ = pos_orig; pos_ < pos; pos_++)
                 {
-                    if (!TryFollow(ref _array, from, key[pos_], out from))
+                    if (!TryFollow(ref _array, ref _ninfo, from, key[pos_], out from))
                         return CedarActionStatus.NotEnoughSpace;
                 }
   
@@ -411,7 +412,7 @@ namespace Voron.Data.BTrees
                 {
                     // remember to move offset to existing tail
                     long to_;
-                    if (!TryFollow(ref _array, from, tailPtr[(int)pos], out to_))
+                    if (!TryFollow(ref _array, ref _ninfo, from, tailPtr[(int)pos], out to_))
                         return CedarActionStatus.NotEnoughSpace;
 
                     moved++;
@@ -444,7 +445,7 @@ namespace Voron.Data.BTrees
                 if (pos == len || tailPtr[(int)pos] == '\0')
                 {
                     long to;
-                    if (!TryFollow(ref _array, from, 0, out to))
+                    if (!TryFollow(ref _array, ref _ninfo, from, 0, out to))
                         return CedarActionStatus.NotEnoughSpace;
 
                     if (pos == len)
@@ -472,7 +473,7 @@ namespace Voron.Data.BTrees
                     }
                 }
 
-                if (!TryFollow(ref _array, from, key[pos], out from))
+                if (!TryFollow(ref _array, ref _ninfo, from, key[pos], out from))
                     return CedarActionStatus.NotEnoughSpace;
 
                 pos++;
@@ -545,23 +546,23 @@ namespace Voron.Data.BTrees
             return CedarActionStatus.Success;
         }
 
-        private bool TryFollow(ref NodesWritePtr _array, long from, byte label, out long to)
+        private bool TryFollow(ref NodesWritePtr _array, ref NodesInfoWritePtr _ninfo, long from, byte label, out long to)
         {
             int to_;
-            var result = TryFollow(ref _array, from, label, out to_);
+            var result = TryFollow(ref _array, ref _ninfo, from, label, out to_);
             to = to_;
             return result;
         }
 
-        private bool TryFollow(ref NodesWritePtr _array, long from, byte label, out int to)
+        private bool TryFollow(ref NodesWritePtr _array, ref NodesInfoWritePtr _ninfo, long from, byte label, out int to)
         {
             int @base = _array.Read(from)->Base;
             if (@base < 0 || _array.Read(to = @base ^ label)->Check < 0) // TODO: Check if the rules are the same here as in C++
             {
-                if (!_try_pop_enode(ref _array, @base, label, (short) from, out to))
+                if (!_try_pop_enode(ref _array, @base, label, (short)from, out to))
                     return false;
 
-                _push_sibling(from, to ^ label, label, @base >= 0);
+                _push_sibling(ref _ninfo, from, to ^ label, label, @base >= 0);
             }
             else if (_array.Read(to)->Check != (int)from)
             {
@@ -790,10 +791,8 @@ namespace Voron.Data.BTrees
             }
         }
 
-        private void _push_sibling(long from, int @base, byte label, bool flag = true)
+        private void _push_sibling(ref NodesInfoWritePtr _ninfo, long from, int @base, byte label, bool flag = true)
         {
-            NodesInfoWritePtr _ninfo = Blocks.DirectWrite<NodesInfoWritePtr>();
-
             //Console.WriteLine($"enters [{from},{@base},{(int)label},{(flag ? 1 : 0)}] (_push_sibling)");
 
             bool changeChild = true;
@@ -929,7 +928,7 @@ namespace Voron.Data.BTrees
                 if (!flag && to_ == to_pn)
                 {
                     // the address is immediately used
-                    _push_sibling(from_n, to_pn ^ label_n, label_n);
+                    _push_sibling(ref _ninfo, from_n, to_pn ^ label_n, label_n);
 
                     //Console.WriteLine($"_ninfo[{to_}].Child = 0 (_resolve)");
                     _ninfo.Write(to_)->Child = 0; // remember to reset child

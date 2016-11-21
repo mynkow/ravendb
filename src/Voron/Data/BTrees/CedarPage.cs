@@ -2,9 +2,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Sparrow;
-using Voron.Data.BTrees.Cedar;
 using Voron.Impl;
-using Voron.Global;
 
 namespace Voron.Data.BTrees
 {
@@ -24,14 +22,13 @@ namespace Voron.Data.BTrees
 
         private readonly LowLevelTransaction _llt;
         private FixedPageLocator _pageLocator;
-        private PageHandlePtr _mainPage;
 
         public HeaderAccessor Header;
         public DataAccessor Data;
 
         internal BlocksAccessor Blocks;
         internal TailAccessor Tail;
-        internal Tail0Accessor Tail0;   
+        internal Tail0Accessor Tail0;
 
         /// <summary>
         /// This version of the constructor is used for temporary pages. It will initialize everything in Read-Write mode.
@@ -46,17 +43,16 @@ namespace Voron.Data.BTrees
             // Because the storage for this page is "raw memory" we need to add all the pages to the page locator to fool the 
             // code on thinking that it is getting the pages from the storage. 
 
-            // OPTIMIZE: This locator should be allocated from the transaction pool instead. 
-            
+            // OPTIMIZE: This locator should be allocated from the transaction pool instead.             
             
             for (int i = 0; i < layout.TotalPages; i++)
             {
                 var tempPage = new Page(storage);               
 
                 if (i == 0)
-                {
-                    this._mainPage = new PageHandlePtr(tempPage, true);
-                    this._pageLocator = new FixedPageLocator(_llt, _mainPage.PageNumber);
+                {                  
+                    this._pageLocator = new FixedPageLocator(_llt, tempPage.PageNumber);
+                    this.PageNumber = tempPage.PageNumber;
                 }
 
                 this._pageLocator.AddWritable(tempPage);
@@ -70,29 +66,54 @@ namespace Voron.Data.BTrees
             this.Data = new DataAccessor(this);
         }
 
+        public CedarPage(LowLevelTransaction llt, Page page, CedarLayout layout, TreePageFlags pageType)
+        {
+            this._llt = llt;
+            this.PageNumber = page.PageNumber;
+
+            var header = (CedarPageHeader*)page.Pointer;
+
+            // We do not allow changing the amount of pages because of now we will consider them constants.
+            header->BlocksPageCount = layout.BlockPages;
+            header->BlocksPageNumber = header->PageNumber + 1;
+
+            header->TailPageCount = layout.TailPages;
+            header->TailPageNumber = header->BlocksPageNumber + header->BlocksPageCount;
+
+            header->DataNodesPageCount = layout.DataPages;
+            header->DataNodesPageNumber = header->TailPageNumber + header->TailPageCount;
+
+            header->TreeFlags = pageType;
+            Debug.Assert(header->TreeFlags == TreePageFlags.Leaf || header->TreeFlags == TreePageFlags.Branch);
+
+            // The idea here is that the PageLocator should never evict one of these pages therefore it must have
+            // enough holding space for the whole tree section pages. 
+            this._pageLocator = new FixedPageLocator(_llt, page.PageNumber);
+
+            this.Header = new HeaderAccessor(this, page.Pointer);
+            this.Tail0 = new Tail0Accessor(this, page.Pointer);
+            this.Blocks = new BlocksAccessor(this);
+            this.Tail = new TailAccessor(this);
+            this.Data = new DataAccessor(this);
+        }
+
         public CedarPage(LowLevelTransaction llt, long pageNumber)
         {
             this._llt = llt;
+            this.PageNumber = pageNumber;
 
             // The idea here is that the PageLocator should never evict one of these pages therefore it must have
             // enough holding space for the whole tree section pages. 
             this._pageLocator = new FixedPageLocator(_llt, pageNumber);
 
-            var mainPage = _pageLocator.GetReadOnlyPage(pageNumber);
-            this._mainPage = new PageHandlePtr(mainPage, false);
-
             this.Header = new HeaderAccessor(this);
             this.Tail0 = new Tail0Accessor(this);
             this.Blocks = new BlocksAccessor(this);
-            this.Tail = new TailAccessor(this);            
+            this.Tail = new TailAccessor(this);
             this.Data = new DataAccessor(this);
         }
 
-        public long PageNumber
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return Header.Ptr->PageNumber; }
-        }
+        public readonly long PageNumber;
 
         public bool IsBranch
         {
@@ -159,30 +180,11 @@ namespace Voron.Data.BTrees
             var page = llt.AllocatePage(totalPages, zeroPage: true);
             llt.BreakLargeAllocationToSeparatePages(page.PageNumber); // Separate all pages.
 
-            InitializePageHeader(llt, layout, pageType, page);
-
-            var cedarPage = new CedarPage(llt, page.PageNumber);
+            var cedarPage = new CedarPage(llt, page, layout, pageType);
             cedarPage.Initialize();
             return cedarPage;
         }
 
-        private static void InitializePageHeader(LowLevelTransaction llt, CedarLayout layout, TreePageFlags pageType, Page page)
-        {
-            var header = (CedarPageHeader*)page.Pointer;
-
-            // We do not allow changing the amount of pages because of now we will consider them constants.
-            header->BlocksPageCount = layout.BlockPages;
-            header->BlocksPageNumber = header->PageNumber + 1;
-
-            header->TailPageCount = layout.TailPages;
-            header->TailPageNumber = header->BlocksPageNumber + header->BlocksPageCount;
-
-            header->DataNodesPageCount = layout.DataPages;       
-            header->DataNodesPageNumber = header->TailPageNumber + header->TailPageCount;         
-
-            header->TreeFlags = pageType;
-            Debug.Assert(header->TreeFlags == TreePageFlags.Leaf || header->TreeFlags == TreePageFlags.Branch);
-        }
 
         internal void Initialize()
         {
@@ -197,15 +199,7 @@ namespace Voron.Data.BTrees
 
             header->NumberOfEntries = 0;
             header->ImplicitAfterAllKeys = CedarPageHeader.InvalidImplicitKey;
-            header->ImplicitBeforeAllKeys = CedarPageHeader.InvalidImplicitKey;
-            
-            // Aligned to 16 bytes
-            int offset = sizeof(CedarPageHeader) + 16;
-            header->MetadataOffset = offset - offset % 16;
-            header->Tail0Offset = header->MetadataOffset + (header->Capacity / BlockSize + 1) * sizeof(BlockMetadata);
-
-            Debug.Assert(header->MetadataOffset > sizeof(CedarPageHeader));
-            Debug.Assert(header->Tail0Offset < _llt.PageSize - 1024); // We need at least 1024 bytes for it. 
+            header->ImplicitBeforeAllKeys = CedarPageHeader.InvalidImplicitKey;           
         
             for (int i = 0; i < BlockSize; i++)
                 header->Reject[i] = (short)(i + 1);
@@ -231,20 +225,6 @@ namespace Voron.Data.BTrees
             // Zero out the tail pages.            
             Tail.Length = sizeof(int);
         }
-
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void AcquireMainPage(bool writable = false)
-        {
-            if (writable)
-                Debug.Assert(_llt.Flags == TransactionFlags.ReadWrite, "Create is being called in a read transaction.");
-
-            var mainPage = writable ?
-                _pageLocator.GetWritablePage(_mainPage.PageNumber) :
-                _pageLocator.GetReadOnlyPage(_mainPage.PageNumber);
-
-            this._mainPage = new PageHandlePtr(mainPage, writable);
-        } 
 
         public CedarActionStatus AddBranchRef(Slice key, long pageNumber)
         {

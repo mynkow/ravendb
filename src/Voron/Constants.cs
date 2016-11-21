@@ -21,7 +21,7 @@ namespace Voron.Global
             public const int PageSize = 4 * Size.Kilobyte;
 
             static Storage()
-            {								
+            {
                 GC.KeepAlive(new int[
                     // this is a way to have static assert
                     PageSize > ushort.MaxValue || PageSize < 4*Constants.Size.Kilobyte ||
@@ -29,9 +29,12 @@ namespace Voron.Global
                         ? -1
                         : 0
                     ]);
-				Constants.Assert(() => PageHeaderSize == sizeof(PageHeader), () => "PageHeader size has changed and not updated at Voron.Global.Constants");                
+                Constants.Assert(() => PageHeaderSize == sizeof(PageHeader), () => "PageHeader size has changed and not updated at Voron.Global.Constants");                
+
+                Constants.Assert(() => CedarPageHeaderSize == sizeof(CedarPageHeader), () => "CedarPageHeader size has changed and not updated at Voron.Global.Constants");
             }
             public const int PageHeaderSize = 16;
+            public const int CedarPageHeaderSize = 618;
         }
 
         public static class Compression

@@ -112,6 +112,9 @@ namespace Voron.Data.BTrees
                 }
             };
 
+            if (tree.Layout.BlockPages * CedarPageHeader.BlocksPerPage / 256 > CedarPageHeader.MaxSupportedBlocks)
+                throw new NotSupportedException($"Cedar Trees only allow a maximum of {CedarPageHeader.MaxSupportedBlocks} metadata blocks.");
+
             tree.State.RecordNewPage(leaf, 1);
             return tree;
         }
