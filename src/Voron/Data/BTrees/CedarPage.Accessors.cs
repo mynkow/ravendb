@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Sparrow;
 using Voron.Data.BTrees.Cedar;
+using Voron.Global;
 
 namespace Voron.Data.BTrees
 {
@@ -644,12 +645,10 @@ namespace Voron.Data.BTrees
         internal struct TailAccessor
         {
             private readonly CedarPage _page;
-            private readonly int _offset;
 
-            public TailAccessor(CedarPage page, int offset = 0)
+            public TailAccessor(CedarPage page)
             {
                 this._page = page;
-                this._offset = offset;
             }
 
             public int Length
@@ -658,42 +657,12 @@ namespace Voron.Data.BTrees
                 set { *(int*)_page.GetTailWritePointer(0) = value; } 
             }
 
-            public int TotalBytes => (CedarTree.PageSize - sizeof(PageHeader)) * _page.Layout.TailPages;
+            public int TotalBytes => (CedarTree.PageSize - Constants.Storage.PageHeaderSize) * _page.Layout.TailPages;
 
             public byte this[int i]
             {
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 get { return Read<byte>(i); }
-            }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static TailAccessor operator ++(TailAccessor ptr)
-            {
-                return new TailAccessor(ptr._page, ptr._offset + 1);
-            }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static TailAccessor operator +(TailAccessor ptr, int i)
-            {
-                return new TailAccessor(ptr._page, ptr._offset + i);
-            }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static TailAccessor operator -(TailAccessor ptr, int i)
-            {
-                return new TailAccessor(ptr._page, ptr._offset - i);
-            }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static TailAccessor operator +(TailAccessor ptr, long i)
-            {
-                return new TailAccessor(ptr._page, ptr._offset + (int)i);
-            }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static TailAccessor operator -(TailAccessor ptr, long i)
-            {
-                return new TailAccessor(ptr._page, ptr._offset - (int)i);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -704,7 +673,7 @@ namespace Voron.Data.BTrees
                 if (typeof(T) == typeof(short))
                 {
                     byte* end;
-                    byte* ptr = _page.GetTailReadPointer(_offset + pos, out end);
+                    byte* ptr = _page.GetTailReadPointer(pos, out end);
                     if (end - ptr >= sizeof(short))
                     {
                         // Likely case we just write and be done with it.
@@ -717,7 +686,7 @@ namespace Voron.Data.BTrees
 
                 if (typeof(T) == typeof(byte))
                 {
-                    byte value = *_page.GetTailReadPointer(_offset + pos);
+                    byte value = *_page.GetTailReadPointer(pos);
                     return (T)(object)value;
                 }
 
@@ -732,7 +701,7 @@ namespace Voron.Data.BTrees
                 if (typeof(T) == typeof(short))
                 {
                     byte* end;
-                    byte* ptr = _page.GetTailWritePointer(_offset + pos, out end);
+                    byte* ptr = _page.GetTailWritePointer(pos, out end);
                     if (end - ptr >= sizeof(short))
                     {
                         // Likely case we just write and be done with it.
@@ -740,12 +709,12 @@ namespace Voron.Data.BTrees
                     }
                     else
                     {
-                        UnlikelyWriteShort(pos, (short)(object)value, ptr);
+                        UnlikelyWriteShort(pos, (short)(object)(value), ptr);
                     }
                 }
                 else if (typeof(T) == typeof(byte))
                 {
-                    *_page.GetTailWritePointer(_offset + pos) = (byte)(object)value;
+                    *_page.GetTailWritePointer(pos) = (byte)(object)value;
                 }
                 else
                 {
@@ -769,7 +738,7 @@ namespace Voron.Data.BTrees
             private short UnlikelyReadShort(int pos, byte* ptr)
             {
                 // Unlikely and more costly case.
-                byte* nextPtr = _page.GetTailReadPointer(_offset + pos + 1);
+                byte* nextPtr = _page.GetTailReadPointer(pos + 1);
                 short svalue = (short)((*nextPtr << 8) + *ptr);
                 return svalue;
             }
@@ -779,7 +748,7 @@ namespace Voron.Data.BTrees
                 // OPTIMIZE: Verify for inlining if it would make sense for this branch to be a method call. 
 
                 // Unlikely and more costly case.
-                byte* nextPtr = _page.GetTailWritePointer(_offset + pos + 1);
+                byte* nextPtr = _page.GetTailWritePointer(pos + 1);
 
                 *ptr = (byte)value;
                 *nextPtr = (byte)(value >> 8);
@@ -797,10 +766,8 @@ namespace Voron.Data.BTrees
                 Write((int)pos, value);
             }
 
-            public int StrLength()
+            public int StrLength(int offset)
             {
-                int offset = _offset;
-
                 byte* end;
                 byte* ptr = _page.GetTailReadPointer(offset, out end);
 
@@ -818,13 +785,10 @@ namespace Voron.Data.BTrees
                 }
 
                 return length;
-            }
+            }       
 
-
-            public int Compare(byte* p2, int length, out int distance)
+            public int Compare(int offset, byte* p2, int length, out int distance)
             {
-                int offset = this._offset;
-
                 int leftToProcess = length;
 
                 distance = 0;
@@ -852,10 +816,8 @@ namespace Voron.Data.BTrees
                 return 0;
             }
 
-            public int Compare(byte* p2, int length)
+            public int Compare(int offset, byte* p2, int length)
             {
-                int offset = this._offset;
-
                 int leftToProcess = length;
                 while (leftToProcess > 0)
                 {
@@ -908,10 +870,8 @@ namespace Voron.Data.BTrees
                 }                                
             }
 
-            public int CopyDataTo(byte* dest)
+            public int CopyDataTo(int offset, byte* dest)
             {
-                int offset = _offset;
-
                 byte* end = null;
                 byte* ptr = null;
 
@@ -928,7 +888,7 @@ namespace Voron.Data.BTrees
                 }
                 while (*ptr++ != 0);
 
-                if (end - ptr > sizeof(short))
+                if (end - ptr >= sizeof(short))
                 {
                     // Likely case we just write and be done with it.
                     *(short*)&dest[i] = *(short*)ptr;
@@ -936,15 +896,15 @@ namespace Voron.Data.BTrees
                 else
                 {
                     // This Read<short> statement will include the offset. 
-                    *(short*)&dest[i] = Read<short>(i);
+                    *(short*)&dest[i] = Read<short>(offset);
                 }
 
                 return i + sizeof(short);
             }
 
-            public void CopyFrom(int offset, byte* src, int length)
+            public void CopyFrom(int offset, int startOffset, byte* src, int length)
             {
-                offset += this._offset;
+                offset += startOffset;
 
                 int leftToProcess = length;
                 while (leftToProcess > 0)
@@ -964,13 +924,11 @@ namespace Voron.Data.BTrees
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void CopyFrom(byte* src, int length)
             {
-                CopyFrom(0, src, length);
+                CopyFrom(0, 0, src, length);
             }
 
-            public int CopyKeyTo(byte* dest)
+            public int CopyKeyTo(int offset, byte* dest)
             {
-                int offset = _offset;
-
                 byte* end;
                 byte* ptr = _page.GetTailReadPointer(offset, out end);
 
@@ -993,10 +951,8 @@ namespace Voron.Data.BTrees
                 return i;
             }
 
-            public int CopyTo(byte* dest, int length)
+            public int CopyTo(int offset, byte* dest, int length)
             {
-                int offset = this._offset;
-
                 int leftToProcess = length;
                 while (leftToProcess > 0)
                 {

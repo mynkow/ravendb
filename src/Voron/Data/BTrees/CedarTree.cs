@@ -112,6 +112,9 @@ namespace Voron.Data.BTrees
                 }
             };
 
+            if (tree.Layout.TailPages * CedarPageHeader.TailBytesPerPage >= short.MaxValue)
+                throw new NotSupportedException($"Tail pages cannot have more bytes than {short.MaxValue}.");
+
             if (tree.Layout.BlockPages * CedarPageHeader.BlocksPerPage / 256 > CedarPageHeader.MaxSupportedBlocks)
                 throw new NotSupportedException($"Cedar Trees only allow a maximum of {CedarPageHeader.MaxSupportedBlocks} metadata blocks.");
 

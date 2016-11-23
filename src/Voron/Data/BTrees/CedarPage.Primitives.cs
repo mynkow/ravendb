@@ -112,9 +112,8 @@ namespace Voron.Data.BTrees
                 if (Tail.Length < -@base + 1 + sizeof(short))
                     throw new Exception($"Fail in tail offset {from}");
 
-                var tail = Tail - @base;
-                int len = tail.StrLength();
-                short v = tail.Read<short>(len + 1);
+                int len = Tail.StrLength(-@base);
+                short v = Tail.Read<short>(-@base + len + 1);
 
                 if (nodes.Contains(v))
                     throw new Exception($"Node already seen. Multiple tails cannot share data nodes.");
@@ -179,7 +178,7 @@ namespace Voron.Data.BTrees
 
         internal void ShrinkTail()
         {
-            TailAccessor _tail = Tail;
+            //TailAccessor _tail = Tail;
             NodesWritePtr _array = Blocks.DirectWrite<NodesWritePtr>();
 
             int _size = Header.Ptr->Size;
@@ -190,25 +189,25 @@ namespace Voron.Data.BTrees
             {
                 Memory.Set(tempTail.Ptr, 0, tailBytes); // Zero out the memory
 
-                ShrinkHelper t = new ShrinkHelper(tempTail.Ptr) { Length = sizeof(int) };
+                ShrinkHelper newMemoryTail = new ShrinkHelper(tempTail.Ptr) { Length = sizeof(int) };
 
                 for (int to = 0; to < _size; ++to)
                 {
                     Node* n = _array.Write(to);
                     if (n->Check >= 0 && _array.Read(n->Check)->Base != to && n->Base < 0)
                     {
-                        byte* tail = &t.Tail[t.Length];
+                        byte* memoryTail = &newMemoryTail.Tail[newMemoryTail.Length];
 
-                        TailAccessor tail_ = _tail + (-n->Base);
-                        n->Base = (short)-t.Length;
+                        int offset = (-n->Base);
+                        n->Base = (short)-newMemoryTail.Length;
 
-                        int written = tail_.CopyDataTo(tail);
-                        t.Length += written; // Increment the length
+                        int written = Tail.CopyDataTo(offset, memoryTail);
+                        newMemoryTail.Length += written; // Increment the length
                     }
                 }
 
-                _tail.Set(0); // Zero out the destination memory.
-                _tail.CopyFrom(t.Tail, t.Length); // Copy the temp into the final.  
+                Tail.Set(0); // Zero out the destination memory.
+                Tail.CopyFrom(newMemoryTail.Tail, newMemoryTail.Length); // Copy the temp into the final.  
 
                 Tail0.Reset();
             }
@@ -351,18 +350,18 @@ namespace Voron.Data.BTrees
                 offset = -_array.Read(from)->Base;
             }
 
-            long pos_orig;
-            TailAccessor tailPtr;
+            long pos_orig;            
             if (offset >= sizeof(short)) // go to _tail
             {
                 long moved;
                 pos_orig = pos;
 
-                tailPtr = Tail + (offset - pos);
-                while (pos < len && key[pos] == tailPtr[(int)pos])
+
+                int tailPtrOffset = (int)(offset - pos);
+                while (pos < len && key[pos] == Tail[tailPtrOffset + (int)pos])
                     pos++;
 
-                if (pos == len && tailPtr[(int)pos] == '\0')
+                if (pos == len && Tail[tailPtrOffset + (int)pos] == '\0')
                 {
 
                     // we found an exact match
@@ -374,8 +373,7 @@ namespace Voron.Data.BTrees
                         from |= (offset + moved) << 32;
                     }
 
-                    TailAccessor ptr = tailPtr + (len + 1);
-                    value = ptr.Read<short>();
+                    value = Tail.Read<short>(tailPtrOffset + (len + 1));
 
                     //Console.WriteLine($"_tail[{tailPtr + (len + 1) - Tail.DirectRead()}] = {Unsafe.Read<short>(ptr)}");
 
@@ -408,11 +406,11 @@ namespace Voron.Data.BTrees
                 //Console.WriteLine("End 2");                    
 
                 moved = pos - pos_orig;
-                if (tailPtr[(int)pos] != 0)
+                if (Tail[tailPtrOffset + (int)pos] != 0)
                 {
                     // remember to move offset to existing tail
                     long to_;
-                    if (!TryFollow(ref _array, ref _ninfo, from, tailPtr[(int)pos], out to_))
+                    if (!TryFollow(ref _array, ref _ninfo, from, Tail[tailPtrOffset +(int)pos], out to_))
                         return CedarActionStatus.NotEnoughSpace;
 
                     moved++;
@@ -442,7 +440,7 @@ namespace Voron.Data.BTrees
                     Tail0[Tail0.Length] = i;
                 }
 
-                if (pos == len || tailPtr[(int)pos] == '\0')
+                if (pos == len || Tail[tailPtrOffset + (int)pos] == '\0')
                 {
                     long to;
                     if (!TryFollow(ref _array, ref _ninfo, from, 0, out to))
@@ -464,7 +462,7 @@ namespace Voron.Data.BTrees
                     }
                     else
                     {
-                        short toValue = tailPtr.Read<short>((int) (pos + 1));
+                        short toValue = Tail.Read<short>((int)(tailPtrOffset + pos + 1));
 
                         var n = _array.Write(to);
                         n->Value = toValue;
@@ -518,22 +516,23 @@ namespace Voron.Data.BTrees
             //}
 
             //Console.WriteLine($"_array[{from}].Base = {-Tail.Length}");
-            _array.Write(from)->Base = (short) -Tail.Length;
+            int tailLength = Tail.Length;
+
+            _array.Write(from)->Base = (short)-tailLength;
             pos_orig = pos;
 
-            tailPtr = Tail + (Tail.Length - pos);
+            int tailOffset = tailLength - (int)pos;            
             if (pos < len)
             {
+                Tail.CopyFrom(tailOffset, (int)pos, key + pos, len - (int)pos);
 
-                tailPtr.CopyFrom((int)pos, key + pos, len - (int)pos);
-
-                from |= ((long) (Tail.Length) + (len - pos_orig)) << 32;
+                from |= ((long)(tailLength) + (len - pos_orig)) << 32;
             }
 
             Tail.Length += needed;
 
             value = (short)Data.AllocateNode();
-            tailPtr.Write<short>(len + 1, value);
+            Tail.Write<short>(tailOffset + len + 1, value);
 
             Header.SetWritable();
             Header.Ptr->NumberOfEntries++;
@@ -859,7 +858,7 @@ namespace Voron.Data.BTrees
             }
             else
             {
-                if (!_try_find_place(first, last, out @base))
+                if (!_try_find_place(ref _block, first, last, out @base))
                 {
                     result = -1;
                     return false;
@@ -1016,7 +1015,7 @@ namespace Voron.Data.BTrees
         }
 
 
-        private bool _try_find_place(byte* first, byte* last, out int result)
+        private bool _try_find_place(ref BlockMetadataWritePtr _block, byte* first, byte* last, out int result)
         {
             //Console.WriteLine($"enters [{*first},{*last}] (_find_place)");
 
@@ -1025,7 +1024,6 @@ namespace Voron.Data.BTrees
             {
                 Header.SetWritable();
 
-                BlockMetadataWritePtr _block = Blocks.DirectWrite<BlockMetadataWritePtr>();
                 NodesWritePtr _array = Blocks.DirectWrite<NodesWritePtr>();
 
                 int bz = _block.Read(Header.Ptr->_bheadO)->Prev;
@@ -1192,13 +1190,12 @@ namespace Voron.Data.BTrees
             // switch to _tail to match suffix
             long pos_orig = pos; // start position in reading _tail
 
-            TailAccessor tail = Tail + (offset - pos);
+            int tailOffset = (int)(offset - pos);
 
             if (pos < len)
             {
-
                 int consumed;
-                (tail + pos).Compare(key + pos, len - (int)pos, out consumed);
+                Tail.Compare((int)offset, key + pos, len - (int)pos, out consumed);
                 pos += consumed;
 
                 long moved = pos - pos_orig;
@@ -1212,10 +1209,10 @@ namespace Voron.Data.BTrees
                     return CedarResultCode.NoPath; // input > tail, input != tail
             }
 
-            if (tail[(int)pos] != 0)
+            if (Tail[tailOffset + (int)pos] != 0)
                 return CedarResultCode.NoValue; // input < tail
 
-            result = tail.Read<short>(len + 1);
+            result = Tail.Read<short>(tailOffset + len + 1);
             return CedarResultCode.Success;
         }
 
@@ -1305,10 +1302,8 @@ namespace Voron.Data.BTrees
             }
 
             // we have a suffix to look for
-            TailAccessor tail = Tail - @base;
-
-            int len_ = tail.CopyKeyTo(slicePtr + keyLength); // Also returns the length that has been copied.
-            dataIndex = tail.Read<short>(len_ + 1);
+            int len_ = Tail.CopyKeyTo(-@base, slicePtr + keyLength); // Also returns the length that has been copied.
+            dataIndex = Tail.Read<short>(-@base + len_ + 1);
             keyLength += len_;
 
             PrepareResult:
@@ -1389,10 +1384,8 @@ namespace Voron.Data.BTrees
             }
 
             // we have a suffix to look for
-            TailAccessor tail = Tail - @base;
-
-            int len_ = tail.CopyKeyTo(key.Content.Ptr + keyLength); // Also returns the length that has been copied.
-            dataIndex = tail.Read<short>(len_ + 1);
+            int len_ = Tail.CopyKeyTo(-@base, key.Content.Ptr + keyLength); // Also returns the length that has been copied.
+            dataIndex = Tail.Read<short>(-@base + len_ + 1);
             keyLength += len_;
 
             PrepareResult:
@@ -1441,7 +1434,7 @@ namespace Voron.Data.BTrees
             NodesInfoReadPtr _ninfo = Blocks.NodesInfo;
 
             int len_;
-            TailAccessor tail = Tail;
+            //TailAccessor tail = Tail;
 
             int @base = from >> 32 != 0 ? -(int)(from >> 32) : _array[from]->Base;
             if (@base < 0)
@@ -1486,11 +1479,11 @@ namespace Voron.Data.BTrees
             {
                 // As we are at the edge, we need to check if the tail is the predecessor.
                 // len_ = _strlen(tail - @base);
-                len_ = (tail - @base).StrLength();
+                len_ = Tail.StrLength(-@base);
 
                 int comparableKeyLen = Math.Min(len_, lookupKey.Content.Length - (int)len);
 
-                int r = (tail - @base).Compare(lookupKey.Content.Ptr + len, comparableKeyLen);
+                int r = Tail.Compare(-@base, lookupKey.Content.Ptr + len, comparableKeyLen);
                 if (r < 0)
                     goto PrepareOutputKey;
                 
@@ -1556,13 +1549,13 @@ namespace Voron.Data.BTrees
             }
 
             // we have a suffix to look for
-            
-            len_ = (tail - @base).StrLength();
+
+            len_ = Tail.StrLength(-@base);
 
             PrepareOutputKey:
 
             // Copy tail to key
-            len_ = (tail - @base).CopyTo(outputKey.Content.Ptr + len, len_);            
+            len_ = Tail.CopyTo(-@base, outputKey.Content.Ptr + len, len_);            
 
             from &= TAIL_OFFSET_MASK;
             from |= ((long)(-@base + len_)) << 32; // this must be long
@@ -1570,7 +1563,7 @@ namespace Voron.Data.BTrees
 
             outputKey.SetSize((int)len);
 
-            return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = tail.Read<short>(-@base + len_ + 1) };
+            return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = Tail.Read<short>(-@base + len_ + 1) };
         }
 
         private IteratorValue BackoffAndGetLast(Slice lookupKey, ref Slice outputKey, ref long to, ref long len)
@@ -1677,13 +1670,12 @@ namespace Voron.Data.BTrees
             PrepareResult:
 
             // we have a suffix to look for
-            TailAccessor tail = Tail - @base;
-            int len_ = tail.CopyKeyTo(outputKey.Content.Ptr + len);
+            int len_ = Tail.CopyKeyTo(-@base, outputKey.Content.Ptr + len);
             len += len_;
 
             outputKey.SetSize((int)len);
 
-            return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = tail.Read<short>(len_ + 1) };
+            return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = Tail.Read<short>(-@base + len_ + 1) };
         }
 
         internal IteratorValue Successor(Slice lookupKey, ref Slice outputKey, ref long from, ref long len)
@@ -1706,8 +1698,6 @@ namespace Voron.Data.BTrees
             NodesInfoReadPtr _ninfo = Blocks.NodesInfo;
 
             int len_;
-            TailAccessor tail = Tail;
-
             int @base = from >> 32 != 0 ? -(int)(from >> 32) : _array[from]->Base;
             if (@base < 0)
                 throw new InvalidOperationException("This shouldnt happen.");
@@ -1753,10 +1743,10 @@ namespace Voron.Data.BTrees
             if (@base < 0)
             {
                 // As we are at the edge, we need to check if the tail is the predecessor.
-                len_ = (tail - @base).StrLength();
+                len_ = Tail.StrLength(-@base);
 
                 int comparableKeyLen = Math.Min(len_, lookupKey.Size - (int)len);
-                int r = (tail - @base).Compare(lookupKey.Content.Ptr + len, comparableKeyLen);
+                int r = Tail.Compare(-@base, lookupKey.Content.Ptr + len, comparableKeyLen);
                 if (r > 0)
                     goto PrepareOutputKey;
 
@@ -1839,7 +1829,7 @@ namespace Voron.Data.BTrees
             PrepareOutputKey:
 
             // Copy tail to key
-            (tail - @base).CopyTo(outputKey.Content.Ptr + len, len_);
+            Tail.CopyTo(-@base, outputKey.Content.Ptr + len, len_);
 
             from &= TAIL_OFFSET_MASK;
             from |= ((long)(-@base + len_)) << 32; // this must be long
@@ -1847,7 +1837,7 @@ namespace Voron.Data.BTrees
 
             outputKey.SetSize((int)len);
 
-            return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = tail.Read<short>(-@base + len_ + 1)};
+            return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = Tail.Read<short>(-@base + len_ + 1)};
 
             PrepareBeginNextResult:
 
@@ -1891,16 +1881,15 @@ namespace Voron.Data.BTrees
             }
 
             // we have a suffix to look for
-            TailAccessor tail = Tail - @base;
 
             // Copy tail to key
-            int len_ = tail.CopyKeyTo(outputKey.Content.Ptr + len);
+            int len_ = Tail.CopyKeyTo(-@base, outputKey.Content.Ptr + len);
 
             from &= TAIL_OFFSET_MASK;
             from |= ((long)(-@base + len_)) << 32; // this must be long
             len += len_;
 
-            return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = tail.Read<short>(len_ + 1) };
+            return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = Tail.Read<short>(-@base + len_ + 1) };
         }
 
         internal IteratorValue Next(Slice outputKey, ref long from, ref long len, long root = 0)
@@ -2000,17 +1989,16 @@ namespace Voron.Data.BTrees
                 }
             }
 
-            // we have a suffix to look for
-            TailAccessor tail = Tail - @base;
+            // We have a suffix to look for
 
             // Copy tail to key
-            int len_ = tail.CopyKeyTo(outputKey.Content.Ptr + len);
+            int len_ = Tail.CopyKeyTo(-@base, outputKey.Content.Ptr + len);
 
             from &= TAIL_OFFSET_MASK;
             from |= ((long)(-@base + len_)) << 32; // this must be long
             len += len_;
 
-            return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = tail.Read<short>(len_ + 1)  };
+            return new IteratorValue { Error = CedarResultCode.Success, Length = (int)len, Value = Tail.Read<short>(-@base + len_ + 1)  };
         }
     }
 }
