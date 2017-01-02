@@ -177,8 +177,6 @@ namespace Voron.Data.BTrees
                 ushort nodeVersion;
                 if (page.Remove(key, out nodeVersion) == CedarActionStatus.Success)
                 {
-                    CheckConcurrency(key, version, nodeVersion, ActionType.Delete);
-
                     if (page.Header.Ptr->NumberOfEntries == 0 && !cursor.IsRoot)
                         throw new NotImplementedException("We didnt implement yet the remove when we are the only value in the node.");
 
@@ -279,17 +277,6 @@ namespace Voron.Data.BTrees
 
             return cursor;
         }
-
-        private void CheckConcurrency(Slice key, ushort? expectedVersion, ushort nodeVersion, ActionType actionType)
-        {
-            if (expectedVersion.HasValue && nodeVersion != expectedVersion.Value)
-                throw new ConcurrencyException(string.Format("Cannot {0} '{1}' to '{4}' tree. Version mismatch. Expected: {2}. Actual: {3}.", actionType.ToString().ToLowerInvariant(), key, expectedVersion.Value, nodeVersion, Name))
-                {
-                    ActualETag = nodeVersion,
-                    ExpectedETag = expectedVersion.Value,
-                };
-        }
-
 
         private CedarPage _lastUsedPage;
 

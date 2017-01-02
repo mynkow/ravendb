@@ -11,7 +11,7 @@ namespace Voron.Data.BTrees
         private readonly CedarTree _tree;
         private readonly Slice _keyToInsert;
 
-        private CedarCursor _cursor;
+        private readonly CedarCursor _cursor;
 
 
         public CedarPageSplitter(LowLevelTransaction llt, CedarTree tree, CedarCursor cursor, Slice keyToInsert)
