@@ -13,12 +13,6 @@ namespace FastTests.Voron.Cedar
 {
     public class RandomizedCedarTests : StorageTest
     {        
-        protected override void Configure(StorageEnvironmentOptions options)
-        {
-            options.PageSize = 4 * Constants.Size.Kilobyte;
-            base.Configure(options);
-        }
-
         public static IEnumerable<object[]> InsertionParams
         {
             get

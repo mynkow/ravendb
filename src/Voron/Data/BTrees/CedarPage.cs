@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Sparrow;
+using Voron.Global;
 using Voron.Impl;
 
 namespace Voron.Data.BTrees
@@ -56,7 +57,7 @@ namespace Voron.Data.BTrees
                 }
 
                 this._pageLocator.AddWritable(tempPage);
-                storage += llt.PageSize;
+                storage += Constants.Storage.PageSize;
             }
 
             this.Header = new HeaderAccessor(this);
@@ -153,11 +154,11 @@ namespace Voron.Data.BTrees
         public static IDisposable CloneInMemory(LowLevelTransaction llt, CedarPage srcPage, out CedarPage destPage)
         {
             ByteString tempStorage;
-            var scope = new TemporaryPageScope(llt.Allocator.Allocate(srcPage.Layout.TotalPages * llt.PageSize, out tempStorage));
+            var scope = new TemporaryPageScope(llt.Allocator.Allocate(srcPage.Layout.TotalPages * Constants.Storage.PageSize, out tempStorage));
 
             long firstPageNumber = srcPage.Header.Ptr->PageNumber;
-            
-            int pageSize = llt.PageSize;
+
+            int pageSize = Constants.Storage.PageSize;
             byte* destBuffer = tempStorage.Ptr;            
             for (long i = 0; i < srcPage.Layout.TotalPages; i++)
             {

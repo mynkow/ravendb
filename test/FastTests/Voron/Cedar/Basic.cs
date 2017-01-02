@@ -14,12 +14,6 @@ namespace FastTests.Voron.Cedar
     public unsafe class Basic : StorageTest
     {
 
-        protected override void Configure(StorageEnvironmentOptions options)
-        {
-            options.PageSize = 4 * Constants.Size.Kilobyte;
-            base.Configure(options);
-        }
-
         [Fact]
         public void Construction()
         {

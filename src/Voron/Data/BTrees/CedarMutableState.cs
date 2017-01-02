@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using Voron.Global;
 using Voron.Impl;
 
 namespace Voron.Data.BTrees
@@ -105,7 +106,7 @@ namespace Voron.Data.BTrees
     Depth: {0}, TreeFlags: {3}
     Root Page: {4}
     Leafs: {5:#,#} Overflow: {6:#,#} Branches: {7:#,#}
-    Size: {8:F2} Mb", Depth, PageCount, NumberOfEntries, Flags, RootPageNumber, LeafPages, OverflowPages, BranchPages, ((float)(PageCount * _tx.DataPager.PageSize) / (1024 * 1024)));
+    Size: {8:F2} Mb", Depth, PageCount, NumberOfEntries, Flags, RootPageNumber, LeafPages, OverflowPages, BranchPages, ((float)(PageCount * Constants.Storage.PageSize) / (1024 * 1024)));
         }
     }
 }

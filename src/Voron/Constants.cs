@@ -28,12 +28,11 @@ namespace Voron.Global
                     PageSize%Constants.Size.Sector != 0
                         ? -1
                         : 0
-                    ]);
-                Constants.Assert(() => PageHeaderSize == sizeof(PageHeader), () => "PageHeader size has changed and not updated at Voron.Global.Constants");                
+                    ]);               
 
                 Constants.Assert(() => CedarPageHeaderSize == sizeof(CedarPageHeader), () => "CedarPageHeader size has changed and not updated at Voron.Global.Constants");
             }
-            public const int PageHeaderSize = 16;
+
             public const int CedarPageHeaderSize = 618;
         }
 

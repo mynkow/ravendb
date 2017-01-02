@@ -32,11 +32,6 @@ namespace Voron.Data.BTrees
 
     public unsafe class CedarTree
     {
-        /// <summary>
-        /// Analyze the impact of having page size as a constant. 
-        /// </summary>
-        internal const int PageSize = Constants.Storage.PageSize;
-
         private readonly Transaction _tx;
         private readonly LowLevelTransaction _llt;
         private readonly CedarMutableState _state;
@@ -70,9 +65,6 @@ namespace Voron.Data.BTrees
 
         public static CedarTree Open(LowLevelTransaction llt, Transaction tx, CedarRootHeader* header)
         {
-            if (PageSize != llt.PageSize)
-                throw new NotSupportedException("Cedar Trees are only supported on transactions running the same size of Voron pages as configured in the global constants.");
-
             return new CedarTree(llt, tx, header->RootPageNumber)
             {
                 _state =
@@ -95,9 +87,6 @@ namespace Voron.Data.BTrees
         public static CedarTree Create(LowLevelTransaction llt, Transaction tx, TreeFlags flags = TreeFlags.None)
         {
             Debug.Assert(llt.Flags == TransactionFlags.ReadWrite, "Create is being called in a read transaction.");
-
-            if (PageSize != llt.PageSize)
-                throw new NotSupportedException("Cedar Trees are only supported on transactions running the same size of Voron pages as configured in the global constants.");
 
             var leaf = CedarPage.Allocate(llt, CedarRootHeader.DefaultLayout, TreePageFlags.Leaf);
             leaf.Header.Ptr->TreeFlags = TreePageFlags.Leaf;

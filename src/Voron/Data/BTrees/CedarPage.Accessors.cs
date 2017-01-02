@@ -657,7 +657,7 @@ namespace Voron.Data.BTrees
                 set { *(int*)_page.GetTailWritePointer(0) = value; } 
             }
 
-            public int TotalBytes => (CedarTree.PageSize - Constants.Storage.PageHeaderSize) * _page.Layout.TailPages;
+            public int TotalBytes => (Constants.Storage.PageSize - PageHeader.SizeOf) * _page.Layout.TailPages;
 
             public byte this[int i]
             {
@@ -857,7 +857,7 @@ namespace Voron.Data.BTrees
             {
                 CedarPageHeader* header = _page.Header.Ptr;
 
-                int pageSize = _page._llt.PageSize;
+                int pageSize = Constants.Storage.PageSize;
                 int tailPageCount = header->TailPageCount;
                 long tailPageNumber = header->TailPageNumber;
 

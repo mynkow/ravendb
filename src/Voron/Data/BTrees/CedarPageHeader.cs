@@ -18,9 +18,9 @@ namespace Voron.Data.BTrees
         public const short InvalidImplicitKey = -1;
 
         public const int MaxSupportedBlocks = 64;
-        public const int BlocksPerPage = (CedarTree.PageSize - Constants.Storage.PageHeaderSize) / (Node.SizeOf + NodeInfo.SizeOf);
-        public const int TailBytesPerPage = CedarTree.PageSize - Constants.Storage.PageHeaderSize;
-        public const int DataNodesPerPage = (CedarTree.PageSize - Constants.Storage.PageHeaderSize - sizeof(int)) / CedarDataNode.SizeOf;
+        public const int BlocksPerPage = (Constants.Storage.PageSize - PageHeader.SizeOf) / (Node.SizeOf + NodeInfo.SizeOf);
+        public const int TailBytesPerPage = Constants.Storage.PageSize - PageHeader.SizeOf;
+        public const int DataNodesPerPage = (Constants.Storage.PageSize - PageHeader.SizeOf - sizeof(int)) / CedarDataNode.SizeOf;
  
         /// <summary>
         /// The offset from the start of the <see cref="CedarPageHeader"/> where the blocks metadata is stored.

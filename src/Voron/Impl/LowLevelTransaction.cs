@@ -482,7 +482,7 @@ namespace Voron.Impl
             if (numberOfPages > 1)
             {
                 newPage.Flags = PageFlags.Overflow;
-                newPage.OverflowSize = numberOfPages * this.PageSize;
+                newPage.OverflowSize = numberOfPages * Constants.Storage.PageSize;
             }
             else
             {
