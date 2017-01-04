@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using BenchmarkDotNet.Attributes;
+//using BenchmarkDotNet.Attributes;
 using Sparrow;
 using System.Linq;
 
@@ -24,7 +24,7 @@ namespace Voron.Benchmark.BTree
         /// Size of tree to create in order to write from (in number of nodes).
         /// This is the TOTAL SIZE after deletions
         /// </summary>
-        [Params(Configuration.RecordsPerTransaction*Configuration.Transactions/2)]
+        //[Params(Configuration.RecordsPerTransaction*Configuration.Transactions/2)]
         public int GenerationTreeSize { get; set; } = Configuration.RecordsPerTransaction*Configuration.Transactions/2;
 
         /// <summary>
@@ -35,13 +35,13 @@ namespace Voron.Benchmark.BTree
         /// in the tree, too low of a number here may take a long time to
         /// converge.
         /// </summary>
-        [Params(50000)]
+        //[Params(50000)]
         public int GenerationBatchSize { get; set; } = 50000;
 
         /// <summary>
         /// Probability that a node will be deleted after insertion.
         /// </summary>
-        [Params(0.1)]
+        //[Params(0.1)]
         public double GenerationDeletionProbability { get; set; } = 0.1;
 
         /// <summary>
@@ -56,7 +56,7 @@ namespace Voron.Benchmark.BTree
             Slice.From(Configuration.Allocator, "TestTreeInsert", ByteStringType.Immutable, out TreeNameSlice);
         }
 
-        [Setup]
+        //[Setup]
         public override void Setup()
         {
             base.Setup();
@@ -87,7 +87,7 @@ namespace Voron.Benchmark.BTree
         }
 
         // TODO: Fix. See: https://github.com/PerfDotNet/BenchmarkDotNet/issues/258
-        [Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions)]
+        //[Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions)]
         public void InsertRandomOneTransaction()
         {
             using (var tx = Env.WriteTransaction())
@@ -107,7 +107,7 @@ namespace Voron.Benchmark.BTree
         }
 
         // TODO: Fix. See: https://github.com/PerfDotNet/BenchmarkDotNet/issues/258
-        [Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions)]
+        //[Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions)]
         public void InsertRandomMultipleTransactions()
         {
             for (var i = 0; i < NumberOfTransactions; i++)

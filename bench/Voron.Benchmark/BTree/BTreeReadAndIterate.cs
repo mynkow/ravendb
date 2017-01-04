@@ -1,33 +1,22 @@
 ﻿using System.Collections.Generic;
 using System.Threading;
-using BenchmarkDotNet.Attributes;
+//using BenchmarkDotNet.Attributes;
 using Sparrow;
 
 namespace Voron.Benchmark.BTree
 {
     public class BTreeReadAndIterate : StorageBenchmark
     {
-        /// <summary>
-        /// Ensure we don't have to re-create the BTree between benchmarks
-        /// </summary>
-        public override bool DeleteBeforeEachBenchmark { get; protected set; } = false;
-
         private static readonly Slice TreeNameSlice;
 
         private readonly Dictionary<int, List<Slice>> _keysPerThread = new Dictionary<int, List<Slice>>();
         private readonly Dictionary<int, List<Slice>> _sortedKeysPerThread = new Dictionary<int, List<Slice>>();
 
         /// <summary>
-        /// Length of the keys to be inserted when filling randomly (bytes).
-        /// </summary>
-        [Params(100)]
-        public int KeyLength { get; set; } = 100;
-
-        /// <summary>
         /// Size of tree to create in order to read from (in number of nodes).
         /// This is the TOTAL SIZE after deletions
         /// </summary>
-        [Params(Configuration.RecordsPerTransaction * Configuration.Transactions / 2)]
+        //[Params(Configuration.RecordsPerTransaction * Configuration.Transactions / 2)]
         public int GenerationTreeSize { get; set; } = Configuration.RecordsPerTransaction * Configuration.Transactions / 2;
 
         /// <summary>
@@ -38,38 +27,38 @@ namespace Voron.Benchmark.BTree
         /// in the tree, too low of a number here may take a long time to
         /// converge.
         /// </summary>
-        [Params(50000)]
+        //[Params(50000)]
         public int GenerationBatchSize { get; set; } = 50000;
 
         /// <summary>
         /// Probability that a node will be deleted after insertion.
         /// </summary>
-        [Params(0.1)]
+        //[Params(0.1)]
         public double GenerationDeletionProbability { get; set; } = 0.1;
 
-        /// <summary>
-        /// Random seed used to generate values. If -1, uses time for seeding.
-        /// TODO: make this nullable. See https://github.com/PerfDotNet/BenchmarkDotNet/issues/271
-        /// </summary>
-        [Params(-1)]
-        public int RandomSeed { get; set; } = -1;
-
-        [Params(1, 2)]
+        //[Params(1, 2)]
         public int ReadParallelism { get; set; } = 1;
 
-        [Params(100)]
+        //[Params(100)]
         public int ReadBufferSize { get; set; } = 100;
 
         static BTreeReadAndIterate()
         {
-            Slice.From(Configuration.Allocator, "TestTreeRead", ByteStringType.Immutable, out TreeNameSlice);
+            Slice.From(Configuration.Allocator, "BTreeReadAndIterate", ByteStringType.Immutable, out TreeNameSlice);
         }
 
-        [Setup]
+        /// <summary>
+        /// Ensure we don't have to re-create the BTree between benchmarks
+        /// </summary>
+        public BTreeReadAndIterate() : base(true, true, false)
+        {
+
+        }
+
+        //[Setup]
         public override void Setup()
         {
             base.Setup();
-            var randomSeed = RandomSeed == -1 ? null : RandomSeed as int?;
 
             var treeKeys = Utils.GenerateWornoutTree(
                 Env,
@@ -78,7 +67,7 @@ namespace Voron.Benchmark.BTree
                 GenerationBatchSize,
                 KeyLength,
                 GenerationDeletionProbability,
-                randomSeed);
+                RandomSeed);
 
             // Distribute work amount, each one of the buckets is sorted
             for (var i = 0; i < ReadParallelism; i++)
@@ -104,7 +93,7 @@ namespace Voron.Benchmark.BTree
         }
 
         // TODO: Fix. See: https://github.com/PerfDotNet/BenchmarkDotNet/issues/258
-        [Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions / 2)]
+        //[Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions / 2)]
         public void ReadRandomOneTransaction()
         {
             var countdownEvent = new CountdownEvent(ReadParallelism);
@@ -138,7 +127,7 @@ namespace Voron.Benchmark.BTree
         }
 
         // TODO: Fix. See: https://github.com/PerfDotNet/BenchmarkDotNet/issues/258
-        [Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions / 2)]
+        //[Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions / 2)]
         public void ReadSeqOneTransaction()
         {
             var countdownEvent = new CountdownEvent(ReadParallelism);
@@ -173,7 +162,7 @@ namespace Voron.Benchmark.BTree
 
         // TODO: Fix. See: https://github.com/PerfDotNet/BenchmarkDotNet/issues/258
         // TODO: this is specially bad in this case, since the operations are actually *Parallelism
-        [Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction*Configuration.Transactions / 2)]
+        //[Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction*Configuration.Transactions / 2)]
         public void IterateAllKeysOneTransaction()
         {
             var countdownEvent = new CountdownEvent(ReadParallelism);
@@ -210,7 +199,7 @@ namespace Voron.Benchmark.BTree
         }
 
         // TODO: Fix. See: https://github.com/PerfDotNet/BenchmarkDotNet/issues/258
-        [Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions / 2)]
+        //[Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions / 2)]
         public void IterateThreadKeysOneTransaction()
         {
             var countdownEvent = new CountdownEvent(ReadParallelism);

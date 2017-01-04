@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using BenchmarkDotNet.Attributes;
+//using BenchmarkDotNet.Attributes;
 using Sparrow;
 using Voron.Data.Tables;
 
@@ -52,7 +52,7 @@ namespace Voron.Benchmark.Table
                 });
         }
 
-        [Setup]
+        //[Setup]
         public override void Setup()
         {
             base.Setup();
@@ -88,7 +88,7 @@ namespace Voron.Benchmark.Table
         }
 
         // TODO: Fix. See: https://github.com/PerfDotNet/BenchmarkDotNet/issues/258
-        [Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions)]
+        //[Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions)]
         public void FillRandomOneTransaction()
         {
             using (var tx = Env.WriteTransaction())
@@ -108,7 +108,7 @@ namespace Voron.Benchmark.Table
         }
 
         // TODO: Fix. See: https://github.com/PerfDotNet/BenchmarkDotNet/issues/258
-        [Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions)]
+        //[Benchmark(OperationsPerInvoke = Configuration.RecordsPerTransaction * Configuration.Transactions)]
         public void FillRandomMultipleTransactions()
         {
             for (var i = 0; i < NumberOfTransactions; i++)
