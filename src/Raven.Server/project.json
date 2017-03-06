@@ -58,7 +58,8 @@
     "System.Threading.Tasks.Parallel": "4.3.0",
     "Voron": "4.0.0-*",
     "Portable.BouncyCastle": "1.8.1.2",
-    "Npgsql": "3.2.1"
+    "Npgsql": "3.2.1",
+    "Microsoft.NETCore.Runtime.CoreCLR": "1.1.1"
   },
 
   "commands": {
