@@ -221,7 +221,7 @@ namespace Sparrow.Json.Parsing
                     _pos--;
                     _charPos--;
 
-                    if (ParseNumber() == false)
+                    if (ParseNumber(ref state.Long) == false)
                     {
                         _state.Continuation = JsonParserTokenContinuation.PartialNumber;
                         return false;
@@ -403,7 +403,7 @@ namespace Sparrow.Json.Parsing
                 }
                 case JsonParserTokenContinuation.PartialNumber:
                 {
-                    if (ParseNumber() == false)
+                    if (ParseNumber(ref _state.Long) == false)
                         return true;
 
                     if (_state.CurrentTokenType == JsonParserToken.Float)
@@ -480,12 +480,11 @@ namespace Sparrow.Json.Parsing
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool ParseNumber()
+        private bool ParseNumber(ref long value)
         {
             JsonParserState state = _state;
             byte* currentBuffer = _inputBuffer;
 
-            long value = 0;
             while (true)
             {
                 if (_pos >= _bufSize)
@@ -534,7 +533,6 @@ namespace Sparrow.Json.Parsing
             }
 
             IsANumber:
-            state.Long = value;
             return true;
 
             NotANumber:
