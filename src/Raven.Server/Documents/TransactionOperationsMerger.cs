@@ -449,7 +449,10 @@ namespace Raven.Server.Documents
             {
                 _log.Info($"Merged {pendingOps.Count} operations in {sp.Elapsed} and there is no more work");
             }
-            return PendingOperations.CompletedAll;
+            if(context.Transaction.ModifiedSystemDocuments)
+                return PendingOperations.ModifiedsSystemDocuments;
+            ;
+            return pendingOps.Count > 0  ? PendingOperations.HasMore : PendingOperations.CompletedAll;
         }
 
         private bool TryGetNextOperation(Task previousOperation, out MergedTransactionCommand op)
@@ -498,9 +501,7 @@ namespace Raven.Server.Documents
                 // kind of work
                 return PendingOperations.ModifiedsSystemDocuments;
 
-            return _operations.Count == 0
-                ? PendingOperations.CompletedAll
-                : PendingOperations.HasMore;
+            return PendingOperations.HasMore;
         }
 
         private void NotifyOnThreadPool(MergedTransactionCommand cmd)
