@@ -78,6 +78,7 @@ namespace Voron
         private EndOfDiskSpaceEvent _endOfDiskSpace;
         internal int SizeOfUnflushedTransactionsInJournalFile;
 
+        public long LastSyncCounter;
         public long LastSyncTimeInTicks = DateTime.MinValue.Ticks;
 
         internal DateTime LastFlushTime;

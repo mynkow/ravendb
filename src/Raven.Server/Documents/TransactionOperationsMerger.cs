@@ -440,7 +440,7 @@ namespace Raven.Server.Documents
                     var modifiedSize = llt.NumberOfModifiedPages * Constants.Storage.PageSize;
                     if (modifiedSize > 4 * Constants.Size.Megabyte)
                     {
-                        break;
+                        return PendingOperations.CompletedAll;
                     }
                 }
 
@@ -451,8 +451,8 @@ namespace Raven.Server.Documents
             }
             if(context.Transaction.ModifiedSystemDocuments)
                 return PendingOperations.ModifiedsSystemDocuments;
-            ;
-            return pendingOps.Count > 0  ? PendingOperations.HasMore : PendingOperations.CompletedAll;
+
+            return GetPendingOperationsStatus(context, pendingOps.Count == 0);
         }
 
         private bool TryGetNextOperation(Task previousOperation, out MergedTransactionCommand op)
@@ -488,7 +488,7 @@ namespace Raven.Server.Documents
             }
         }
 
-        private PendingOperations GetPendingOperationsStatus(DocumentsOperationContext context)
+        private PendingOperations GetPendingOperationsStatus(DocumentsOperationContext context, bool forceCompletion = false)
         {
             if (sizeof(int) == IntPtr.Size || _parent.Configuration.Storage.ForceUsing32BitsPager) // this optimization is disabled for 32 bits
                 return PendingOperations.CompletedAll;
@@ -501,6 +501,18 @@ namespace Raven.Server.Documents
                 // kind of work
                 return PendingOperations.ModifiedsSystemDocuments;
 
+            if (forceCompletion)
+                return PendingOperations.CompletedAll;
+
+            var flushInProgressLock = context.Transaction.InnerTransaction.LowLevelTransaction.Environment.FlushInProgressLock;
+            var tryEnterReadLock = flushInProgressLock.TryEnterReadLock(0);
+            if (tryEnterReadLock == false)
+            {
+                // if we couldn't get the flush lock, that means that there is a flush in progress, so we want to 
+                // commit the current transaction and let the flush run
+                return PendingOperations.CompletedAll;
+            }
+            flushInProgressLock.ExitReadLock();
             return PendingOperations.HasMore;
         }
 

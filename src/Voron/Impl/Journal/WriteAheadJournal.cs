@@ -576,32 +576,32 @@ namespace Voron.Impl.Journal
                         else
                             timeout = Infinity;
 
-                        using (var txw = _waj._env.NewLowLevelTransaction(transactionPersistentContext, TransactionFlags.ReadWrite, timeout: timeout))
-                        {
-                            _lastFlushedJournalId = lastProcessedJournal;
-                            _lastFlushedTransactionId = lastFlushedTransactionId;
-                            _lastFlushedJournal = _waj._files.First(x => x.Number == lastProcessedJournal);
-
-                            foreach (var unused in unusedJournals)
+                            using (var txw = _waj._env.NewLowLevelTransaction(transactionPersistentContext, TransactionFlags.ReadWrite, timeout: timeout))
                             {
-                                _journalsToDelete[unused.Number] = unused;
-                            }
+                                _lastFlushedJournalId = lastProcessedJournal;
+                                _lastFlushedTransactionId = lastFlushedTransactionId;
+                                _lastFlushedJournal = _waj._files.First(x => x.Number == lastProcessedJournal);
 
-                            if (unusedJournals.Count > 0)
-                            {
-                                var lastUnusedJournalNumber = unusedJournals[unusedJournals.Count - 1].Number;
-                                _waj._files = _waj._files.RemoveWhile(x => x.Number <= lastUnusedJournalNumber);
-                            }
+                                foreach (var unused in unusedJournals)
+                                {
+                                    _journalsToDelete[unused.Number] = unused;
+                                }
 
-                            if (_waj._files.Count == 0)
-                                _waj.CurrentFile = null;
+                                if (unusedJournals.Count > 0)
+                                {
+                                    var lastUnusedJournalNumber = unusedJournals[unusedJournals.Count - 1].Number;
+                                    _waj._files = _waj._files.RemoveWhile(x => x.Number <= lastUnusedJournalNumber);
+                                }
 
-                            FreeScratchPages(unusedJournals, txw);
+                                if (_waj._files.Count == 0)
+                                    _waj.CurrentFile = null;
 
-                            // by forcing a commit, we free the read transaction that held the lazy tx buffer (if existed)
-                            // and make those pages available in the scratch files
-                            txw.IsLazyTransaction = false;
-                            _waj.HasLazyTransactions = false;
+                                FreeScratchPages(unusedJournals, txw);
+
+                                // by forcing a commit, we free the read transaction that held the lazy tx buffer (if existed)
+                                // and make those pages available in the scratch files
+                                txw.IsLazyTransaction = false;
+                                _waj.HasLazyTransactions = false;
 
                             txw.Commit();
                         }
@@ -726,7 +726,7 @@ namespace Voron.Impl.Journal
                     TransactionHeader* lastReadTxHeader = stackalloc TransactionHeader[1];
                     try
                     {
-                        Monitor.TryEnter(_flushingLock, TimeSpan.FromMilliseconds(250), ref flushLockTaken);
+                        Monitor.TryEnter(_flushingLock, 0, ref flushLockTaken);
 
                         if (flushLockTaken == false)
                         {
@@ -738,6 +738,8 @@ namespace Voron.Impl.Journal
                             _waj._env.ForceSyncDataFile();
                             return;
                         }
+
+                        Interlocked.Increment(ref _waj._env.LastSyncCounter);
 
                         if (_waj._env.Disposed)
                             return; // we have already disposed, nothing to do here
