@@ -892,8 +892,7 @@ namespace Raven.Server.Documents
 
                 // we update the tombstone
                 var etag = CreateTombstone(context,
-                    loweredKey.Content.Ptr,
-                    loweredKey.Size,
+                    loweredKey,
                     local.Tombstone.Etag,
                     collectionName,
                     local.Tombstone.ChangeVector,
@@ -933,9 +932,11 @@ namespace Raven.Server.Documents
                 var tvr = new TableValueReader(ptr, size);
                 var flags = *(DocumentFlags*)tvr.Read((int)DocumentsTable.Flags, out size);
 
+                byte* lowerKeyPtr = tvr.Read((int)DocumentsTable.LoweredKey, out size);
+                Slice tombstone;
+                Slice.External(context.Allocator, lowerKeyPtr, size, out tombstone);
                 var etag = CreateTombstone(context,
-                    tvr.Read((int)DocumentsTable.LoweredKey, out size),
-                    size,
+                    tombstone,
                     doc.Etag,
                     collectionName,
                     doc.ChangeVector,
@@ -986,8 +987,7 @@ namespace Raven.Server.Documents
                 collectionName = ExtractCollectionName(context, collectionName.Name);
 
                 var etag = CreateTombstone(context,
-                    loweredKey.Content.Ptr,
-                    loweredKey.Size,
+                    loweredKey,
                     -1, // delete etag is not relevant
                     collectionName,
                     changeVector,
@@ -1085,8 +1085,7 @@ namespace Raven.Server.Documents
             {
                 //note that CreateTombstone is also deleting conflicts
                 etag = CreateTombstone(context,
-                    lowerKey.Content.Ptr,
-                    lowerKey.Size,
+                    lowerKey,
                     latestConflict.Etag,
                     collectionName,
                     mergedChangeVector,
@@ -1144,7 +1143,7 @@ namespace Raven.Server.Documents
 
         private long CreateTombstone(
             DocumentsOperationContext context,
-            byte* lowerKey, int lowerSize,
+            Slice lowerKey,
             long documentEtag,
             CollectionName collectionName,
             ChangeVectorEntry[] docChangeVector,
@@ -1159,13 +1158,12 @@ namespace Raven.Server.Documents
                 changeVector = ConflictsStorage.GetMergedConflictChangeVectorsAndDeleteConflicts(
                     context,
                     lowerKey,
-                    lowerSize,
                     newEtag,
                     docChangeVector);
             }
             else
             {
-                ConflictsStorage.DeleteConflictsFor(context, lowerKey, lowerSize);
+                ConflictsStorage.DeleteConflictsFor(context, lowerKey);
             }
 
             fixed (ChangeVectorEntry* pChangeVector = changeVector)
@@ -1180,7 +1178,7 @@ namespace Raven.Server.Documents
                     TableValueBuilder tbv;
                     using (table.Allocate(out tbv))
                     {
-                        tbv.Add(lowerKey, lowerSize);
+                        tbv.Add(lowerKey);
                         tbv.Add(Bits.SwapBytes(newEtag));
                         tbv.Add(Bits.SwapBytes(documentEtag));
                         tbv.Add(context.GetTransactionMarker());
@@ -1212,11 +1210,9 @@ namespace Raven.Server.Documents
 
             CollectionName collectionName;
 
-            byte* lowerKey;
-            int lowerSize;
-            byte* keyPtr;
-            int keySize;
-            DocumentKeyWorker.GetLowerKeySliceAndStorageKey(context, key, out lowerKey, out lowerSize, out keyPtr, out keySize);
+            Slice lowerKey;
+            Slice keyPtr;
+            DocumentKeyWorker.GetLowerKeySliceAndStorageKey(context, key, out lowerKey, out keyPtr);
             // ReSharper disable once ArgumentsStyleLiteral
             var existing = GetDocumentOrTombstone(context, key, throwOnConflict: false);
             if (existing.Document != null)
@@ -1230,10 +1226,10 @@ namespace Raven.Server.Documents
                     TableValueBuilder tbv;
                     using (conflictsTable.Allocate(out tbv))
                     {
-                        tbv.Add(lowerKey, lowerSize);
+                        tbv.Add(lowerKey);
                         tbv.Add(SpecialChars.RecordSeperator);
                         tbv.Add((byte*)pChangeVector, existingDoc.ChangeVector.Length * sizeof(ChangeVectorEntry));
-                        tbv.Add(keyPtr, keySize);
+                        tbv.Add(keyPtr);
                         tbv.Add(existingDoc.Data.BasePointer, existingDoc.Data.Size);
                         tbv.Add(Bits.SwapBytes(GenerateNextEtag()));
                         tbv.Add(lazyCollectionName.Buffer, lazyCollectionName.Size);
@@ -1262,10 +1258,10 @@ namespace Raven.Server.Documents
                     TableValueBuilder tableValueBuilder;
                     using (conflictsTable.Allocate(out tableValueBuilder))
                     {
-                        tableValueBuilder.Add(lowerKey, lowerSize);
+                        tableValueBuilder.Add(lowerKey);
                         tableValueBuilder.Add(SpecialChars.RecordSeperator);
                         tableValueBuilder.Add((byte*)pChangeVector, existingTombstone.ChangeVector.Length * sizeof(ChangeVectorEntry));
-                        tableValueBuilder.Add(keyPtr, keySize);
+                        tableValueBuilder.Add(keyPtr);
                         tableValueBuilder.Add(null, 0);
                         tableValueBuilder.Add(Bits.SwapBytes(GenerateNextEtag()));
                         tableValueBuilder.Add(existingTombstone.Collection.Buffer, existingTombstone.Collection.Size);
@@ -1289,7 +1285,7 @@ namespace Raven.Server.Documents
                 collectionName = ExtractCollectionName(context, key, incomingDoc);
 
                 Slice prefixSlice;
-                using (ConflictsStorage.GetConflictsKeyPrefix(context, lowerKey, lowerSize, out prefixSlice))
+                using (ConflictsStorage.GetConflictsKeyPrefix(context, lowerKey, out prefixSlice))
                 {
                     var conflicts = ConflictsStorage.GetConflictsFor(context, prefixSlice);
                     foreach (var conflict in conflicts)
@@ -1332,10 +1328,10 @@ namespace Raven.Server.Documents
                     TableValueBuilder tvb;
                     using (conflictsTable.Allocate(out tvb))
                     {
-                        tvb.Add(lowerKey, lowerSize);
+                        tvb.Add(lowerKey);
                         tvb.Add(SpecialChars.RecordSeperator);
                         tvb.Add((byte*)pChangeVector, sizeof(ChangeVectorEntry) * incomingChangeVector.Length);
-                        tvb.Add(keyPtr, keySize);
+                        tvb.Add(keyPtr);
                         tvb.Add(doc, docSize);
                         tvb.Add(Bits.SwapBytes(GenerateNextEtag()));
                         tvb.Add(lazyCollectionName.Buffer, lazyCollectionName.Size);
@@ -1406,6 +1402,7 @@ namespace Raven.Server.Documents
             var collectionName = ExtractCollectionName(context, key, document);
             var newEtag = GenerateNextEtag();
 
+            // PERF: This can be cached in a context, no need to get it multiple times.
             var table = context.Transaction.InnerTransaction.OpenTable(DocsSchema, collectionName.GetTableName(CollectionTableType.Documents));
 
             bool knownNewKey = false;
@@ -1418,8 +1415,7 @@ namespace Raven.Server.Documents
             switch (key[key.Length - 1])
             {
                 case '/':
-                    int tries;
-                    key = GetNextIdentityValueWithoutOverwritingOnExistingDocuments(key, table, context, out tries);
+                    key = GetNextIdentityValueWithoutOverwritingOnExistingDocuments(key, table, context, out var _);
                     knownNewKey = true;
                     break;
                 case '|':
@@ -1429,11 +1425,9 @@ namespace Raven.Server.Documents
             }
 
 
-            byte* lowerKey;
-            int lowerSize;
-            byte* keyPtr;
-            int keySize;
-            DocumentKeyWorker.GetLowerKeySliceAndStorageKey(context, key, out lowerKey, out lowerSize, out keyPtr, out keySize);
+            Slice lowerKey;
+            Slice keyPtr;
+            DocumentKeyWorker.GetLowerKeySliceAndStorageKey(context, key, out lowerKey, out keyPtr);
 
             if (ConflictsStorage.ConflictsCount != 0)
             {
@@ -1441,7 +1435,7 @@ namespace Raven.Server.Documents
                 // This way we avoid another replication back to the source
                 if (expectedEtag.HasValue)
                 {
-                    ConflictsStorage.ThrowConcurrencyExceptionOnConflict(context, lowerKey, lowerSize, expectedEtag);
+                    ConflictsStorage.ThrowConcurrencyExceptionOnConflict(context, lowerKey.Content.Ptr, lowerKey.Content.Length, expectedEtag);
                 }
 
                 bool fromReplication = (flags & DocumentFlags.FromReplication) == DocumentFlags.FromReplication;
@@ -1458,18 +1452,17 @@ namespace Raven.Server.Documents
             // delete a tombstone if it exists, if it known that it is a new key, no need, so we can skip it
             if (knownNewKey == false)
             {
-                DeleteTombstoneIfNeeded(context, collectionName, lowerKey, lowerSize);
+                // TODO: Handle this as slices
+                DeleteTombstoneIfNeeded(context, collectionName, lowerKey.Content.Ptr, lowerKey.Content.Length);
             }
 
             var modifiedTicks = lastModifiedTicks ?? _documentDatabase.Time.GetUtcNow().Ticks;
 
-            Slice loweredKey;
-            using (Slice.External(context.Allocator, lowerKey, (ushort)lowerSize, out loweredKey))
-            {
+
                 var oldValue = default(TableValueReader);
                 if (knownNewKey == false)
                 {
-                    table.ReadByKey(loweredKey, out oldValue);
+                table.ReadByKey(lowerKey, out oldValue);
                 }
 
                 BlittableJsonReaderObject oldDoc = null;
@@ -1484,9 +1477,9 @@ namespace Raven.Server.Documents
                 {
                     if (expectedEtag != null)
                     {
-                        var oldEtag = TableValueToEtag(1, ref oldValue);
+                    var oldEtag = TableValueToEtag(1, ref oldValue);
                         if (oldEtag != expectedEtag)
-                            ThrowConcurrentException(key, expectedEtag, oldEtag);
+                        ThrowConcurrentException(key, expectedEtag, oldEtag);
                     }
 
                     int oldSize;
@@ -1507,7 +1500,7 @@ namespace Raven.Server.Documents
                 {
                     var oldChangeVector = oldValue.Pointer != null ? GetChangeVectorEntriesFromTableValueReader(ref oldValue, (int)DocumentsTable.ChangeVector) : null;
                     changeVector = SetDocumentChangeVectorForLocalChange(context,
-                        loweredKey,
+                    lowerKey,
                         oldChangeVector, newEtag);
                 }
 
@@ -1556,15 +1549,15 @@ namespace Raven.Server.Documents
                                 if (document.DebugHash != documentDebugHash)
                                 {
                                     throw new InvalidDataException("The incoming document " + key + " has changed _during_ the put process, this is likely because you are trying to save a document that is already stored and was moved");
-                                }
+                            }
 #endif
                                 document = context.ReadObject(document, key, BlittableJsonDocumentBuilder.UsageMode.ToDisk);
 #if DEBUG
                                 documentDebugHash = document.DebugHash;
                                 document.BlittableValidation();
 #endif
-                            }
                         }
+                    }
                     }
 
                     if (_documentDatabase.BundleLoader.VersioningStorage != null)
@@ -1584,9 +1577,9 @@ namespace Raven.Server.Documents
                     TableValueBuilder tbv;
                     using (table.Allocate(out tbv))
                     {
-                        tbv.Add(lowerKey, lowerSize);
+                    tbv.Add(lowerKey);
                         tbv.Add(Bits.SwapBytes(newEtag));
-                        tbv.Add(keyPtr, keySize);
+                    tbv.Add(keyPtr);
                         tbv.Add(document.BasePointer, document.Size);
                         tbv.Add((byte*)pChangeVector, sizeof(ChangeVectorEntry) * changeVector.Length);
                         tbv.Add(modifiedTicks);
@@ -1606,13 +1599,11 @@ namespace Raven.Server.Documents
 
                 if (collectionName.IsSystem == false)
                 {
-                    _documentDatabase.BundleLoader.ExpiredDocumentsCleaner?.Put(context,
-                        loweredKey, document);
+                _documentDatabase.BundleLoader.ExpiredDocumentsCleaner?.Put(context, lowerKey, document);
                 }
 
                 _documentDatabase.Metrics.DocPutsPerSecond.MarkSingleThreaded(1);
                 _documentDatabase.Metrics.BytesPutsPerSecond.MarkSingleThreaded(document.Size);
-            }
 
             context.Transaction.AddAfterCommitNotification(new DocumentChange
             {
@@ -1689,7 +1680,7 @@ namespace Raven.Server.Documents
             if (oldChangeVector != null)
                 return ReplicationUtils.UpdateChangeVectorWithNewEtag(Environment.DbId, newEtag, oldChangeVector);
 
-            return ConflictsStorage.GetMergedConflictChangeVectorsAndDeleteConflicts(context, loweredKey.Content.Ptr, loweredKey.Size, newEtag);
+            return ConflictsStorage.GetMergedConflictChangeVectorsAndDeleteConflicts(context, loweredKey, newEtag);
         }
 
 
@@ -2022,7 +2013,7 @@ namespace Raven.Server.Documents
 
                 // Add to cache ONLY if the transaction was committed. 
                 // this would prevent NREs next time a PUT is run,since if a transaction
-                // is not commited, DocsSchema and TombstonesSchema will not be actually created..
+                // is not committed, DocsSchema and TombstonesSchema will not be actually created..
                 // has to happen after the commit, but while we are holding the write tx lock
                 context.Transaction.InnerTransaction.LowLevelTransaction.OnCommit += _ =>
                 {
