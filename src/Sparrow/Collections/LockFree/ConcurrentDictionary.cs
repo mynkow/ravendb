@@ -224,75 +224,57 @@ namespace Sparrow.Collections.LockFree
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryAdd(TKey key, TValue value)
         {
-            object oldValObj = null;
-            object newValObj = ToObjectValue(value);
-            return _table.PutIfMatch(key, newValObj, ref oldValObj, ValueMatch.NullOrDead);
+            lock (this)
+            {
+                object oldValObj = null;
+                object newValObj = ToObjectValue(value);
+                return _table.PutIfMatch(key, newValObj, ref oldValObj, ValueMatch.NullOrDead);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Remove(TKey key)
         {
-            object oldValObj = null;
-            var found = _table.PutIfMatch(key, TOMBSTONE, ref oldValObj, ValueMatch.NotNullOrDead);
-            Debug.Assert(!(oldValObj is Prime));
+            lock (this)
+            {
+                object oldValObj = null;
+                var found = _table.PutIfMatch(key, TOMBSTONE, ref oldValObj, ValueMatch.NotNullOrDead);
+                Debug.Assert(!(oldValObj is Prime));
 
-            return found;
+                return found;
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryRemove(TKey key, out TValue value)
         {
-            object oldValObj = null;
-            var found = _table.PutIfMatch(key, TOMBSTONE, ref oldValObj, ValueMatch.NotNullOrDead);
-
-            Debug.Assert(!(oldValObj is Prime));
-            Debug.Assert(found ^ oldValObj == null);
-
-            // PERF: this would be nice to have as a helper, 
-            // but it does not get inlined
-            if (default(TValue) == null && oldValObj == NULLVALUE)
+            lock (this)
             {
-                oldValObj = null;
+                object oldValObj = null;
+                var found = _table.PutIfMatch(key, TOMBSTONE, ref oldValObj, ValueMatch.NotNullOrDead);
+
+                Debug.Assert(!(oldValObj is Prime));
+                Debug.Assert(found ^ oldValObj == null);
+
+                // PERF: this would be nice to have as a helper, 
+                // but it does not get inlined
+                if (default(TValue) == null && oldValObj == NULLVALUE)
+                {
+                    oldValObj = null;
+                }
+
+                value = found ?
+                    (TValue)oldValObj :
+                    default(TValue);
+
+                return found;
             }
-
-            value = found ?
-                (TValue)oldValObj :
-                default(TValue);
-
-            return found;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(TKey key, out TValue value)
         {
-            object oldValObj = _table.TryGetValue(key);
-
-            Debug.Assert(!(oldValObj is Prime));
-
-            if (oldValObj != null)
-            {
-                // PERF: this would be nice to have as a helper, 
-                // but it does not get inlined
-                if (default(TValue) == null && oldValObj == NULLVALUE)
-                {
-                    value = default(TValue);
-                }
-                else
-                {
-                    value = (TValue)oldValObj;
-                }
-                return true;
-            }
-
-            value = default(TValue);
-            return false;
-        }
-
-
-        public TValue this[TKey key]
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
+            lock (this)
             {
                 object oldValObj = _table.TryGetValue(key);
 
@@ -302,7 +284,6 @@ namespace Sparrow.Collections.LockFree
                 {
                     // PERF: this would be nice to have as a helper, 
                     // but it does not get inlined
-                    TValue value;
                     if (default(TValue) == null && oldValObj == NULLVALUE)
                     {
                         value = default(TValue);
@@ -311,8 +292,42 @@ namespace Sparrow.Collections.LockFree
                     {
                         value = (TValue)oldValObj;
                     }
+                    return true;
+                }
 
-                    return value;
+                value = default(TValue);
+                return false;
+            }
+        }
+
+
+        public TValue this[TKey key]
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                lock (this)
+                {
+                    object oldValObj = _table.TryGetValue(key);
+
+                    Debug.Assert(!(oldValObj is Prime));
+
+                    if (oldValObj != null)
+                    {
+                        // PERF: this would be nice to have as a helper, 
+                        // but it does not get inlined
+                        TValue value;
+                        if (default(TValue) == null && oldValObj == NULLVALUE)
+                        {
+                            value = default(TValue);
+                        }
+                        else
+                        {
+                            value = (TValue)oldValObj;
+                        }
+
+                        return value;
+                    }
                 }
 
                 return ThrowKeyNotFound();
@@ -320,9 +335,12 @@ namespace Sparrow.Collections.LockFree
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
             {
-                object oldValObj = null;
-                object newValObj = ToObjectValue(value);
-                _table.PutIfMatch(key, newValObj, ref oldValObj, ValueMatch.Any);
+                lock (this)
+                {
+                    object oldValObj = null;
+                    object newValObj = ToObjectValue(value);
+                    _table.PutIfMatch(key, newValObj, ref oldValObj, ValueMatch.Any);
+                }
             }
         }
 
@@ -352,42 +370,54 @@ namespace Sparrow.Collections.LockFree
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryUpdate(TKey key, TValue value, TValue comparisonValue)
         {
-            object oldValObj = ToObjectValue(comparisonValue);
-            object newValObj = ToObjectValue(value);
-            return _table.PutIfMatch(key, newValObj, ref oldValObj, ValueMatch.OldValue);
+            lock (this)
+            {
+                object oldValObj = ToObjectValue(comparisonValue);
+                object newValObj = ToObjectValue(value);
+                return _table.PutIfMatch(key, newValObj, ref oldValObj, ValueMatch.OldValue);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public TValue GetOrAdd(TKey key, TValue value)
         {
-            object oldValObj = null;
-            object newValObj = ToObjectValue(value);
-            if (_table.PutIfMatch(key, newValObj, ref oldValObj, ValueMatch.NullOrDead))
+            lock (this)
             {
-                return value;
-            }
+                object oldValObj = null;
+                object newValObj = ToObjectValue(value);
+                if (_table.PutIfMatch(key, newValObj, ref oldValObj, ValueMatch.NullOrDead))
+                {
+                    return value;
+                }
 
-            // PERF: this would be nice to have as a helper, 
-            // but it does not get inlined
-            if (default(TValue) == null && oldValObj == NULLVALUE)
-            {
-                oldValObj = null;
-            }
+                // PERF: this would be nice to have as a helper, 
+                // but it does not get inlined
+                if (default(TValue) == null && oldValObj == NULLVALUE)
+                {
+                    oldValObj = null;
+                }
 
-            return (TValue)oldValObj;
+                return (TValue)oldValObj;
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public TValue GetOrAdd(TKey key, Func<TKey, TValue> valueFactory)
         {
-            return _table.GetOrAdd(key, valueFactory);
+            lock (this)
+            {
+                return _table.GetOrAdd(key, valueFactory);
+            }            
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Remove(KeyValuePair<TKey, TValue> item)
         {
-            object oldValObj = ToObjectValue(item.Value);
-            return _table.PutIfMatch(item.Key, TOMBSTONE, ref oldValObj, ValueMatch.OldValue);
+            lock (this)
+            {
+                object oldValObj = ToObjectValue(item.Value);
+                return _table.PutIfMatch(item.Key, TOMBSTONE, ref oldValObj, ValueMatch.OldValue);
+            }
         }
 
         bool IDictionary.IsReadOnly => false;
@@ -580,9 +610,12 @@ namespace Sparrow.Collections.LockFree
                 throw new ArgumentOutOfRangeException("index");
             }
 
-            foreach (var entry in this)
+            lock (this)
             {
-                array[arrayIndex++] = entry;
+                foreach (var entry in this)
+                {
+                    array[arrayIndex++] = entry;
+                }
             }
         }
 
@@ -597,9 +630,12 @@ namespace Sparrow.Collections.LockFree
                 throw new ArgumentOutOfRangeException("array");
             }
 
-            foreach (var entry in this)
+            lock (this)
             {
-                array[arrayIndex++] = new DictionaryEntry(entry.Key, entry.Value);
+                foreach (var entry in this)
+                {
+                    array[arrayIndex++] = new DictionaryEntry(entry.Key, entry.Value);
+                }
             }
         }
 
@@ -614,16 +650,19 @@ namespace Sparrow.Collections.LockFree
                 throw new ArgumentOutOfRangeException("index");
             }
 
-            var length = array.Length;
-            foreach (var entry in this)
+            lock (this)
             {
-                if ((uint)arrayIndex < (uint)length)
+                var length = array.Length;
+                foreach (var entry in this)
                 {
-                    array[arrayIndex++] = entry;
-                }
-                else
-                {
-                    throw new ArgumentException();
+                    if ((uint)arrayIndex < (uint)length)
+                    {
+                        array[arrayIndex++] = entry;
+                    }
+                    else
+                    {
+                        throw new ArgumentException();
+                    }
                 }
             }
         }
@@ -647,13 +686,16 @@ namespace Sparrow.Collections.LockFree
         {
             get
             {
-                var keys = new List<TKey>(Count);
-                foreach (var kv in this)
+                lock (this)
                 {
-                    keys.Add(kv.Key);
-                }
+                    var keys = new List<TKey>(Count);
+                    foreach (var kv in this)
+                    {
+                        keys.Add(kv.Key);
+                    }
 
-                return new ReadOnlyCollection<TKey>(keys);
+                    return new ReadOnlyCollection<TKey>(keys);
+                }
             }
         }
 
@@ -661,13 +703,16 @@ namespace Sparrow.Collections.LockFree
         {
             get
             {
-                var values = new List<TValue>(Count);
-                foreach (var kv in this)
+                lock (this)
                 {
-                    values.Add(kv.Value);
-                }
+                    var values = new List<TValue>(Count);
+                    foreach (var kv in this)
+                    {
+                        values.Add(kv.Value);
+                    }
 
-                return new ReadOnlyCollection<TValue>(values);
+                    return new ReadOnlyCollection<TValue>(values);
+                }
             }
         }
     }

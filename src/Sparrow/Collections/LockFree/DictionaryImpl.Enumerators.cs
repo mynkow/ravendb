@@ -34,22 +34,27 @@ namespace Sparrow.Collections.LockFree
             protected object _curValue, _nextV;
 
             public Snapshot(DictionaryImpl<TKey, TKeyStore, TValue> dict)
-            {
+            {                
                 this._table = dict;
 
-                // linearization point.
-                // if table is quiescent and has no copy in progress,
-                // we can simply iterate over its table.
-                while (true)
+                lock (dict)
                 {
-                    if (_table._newTable == null)
+
+                    // linearization point.
+                    // if table is quiescent and has no copy in progress,
+                    // we can simply iterate over its table.
+                    while (true)
                     {
-                        break;
+                        if (_table._newTable == null)
+                        {
+                            break;
+                        }
+
+                        // there is a copy in progress, finish it and try again
+                        _table.HelpCopyImpl(copy_all: true);
+                        this._table = (DictionaryImpl<TKey, TKeyStore, TValue>)(this._table._topDict._table);
                     }
 
-                    // there is a copy in progress, finish it and try again
-                    _table.HelpCopyImpl(copy_all: true);
-                    this._table = (DictionaryImpl<TKey, TKeyStore, TValue>)(this._table._topDict._table);
                 }
 
                 // Warm-up the iterator
@@ -63,42 +68,45 @@ namespace Sparrow.Collections.LockFree
                     return false;
                 }
 
-                _curKey = _nextK;
-                _curValue = _nextV;
-                _nextV = NULLVALUE;
+                lock (this._table)
+                {
+                    _curKey = _nextK;
+                    _curValue = _nextV;
+                    _nextV = NULLVALUE;
 
-                var entries = this._table._entries;
-                while (_idx < entries.Length)
-                {  // Scan array
-                    var nextEntry = entries[_idx++];
+                    var entries = this._table._entries;
+                    while (_idx < entries.Length)
+                    {  // Scan array
+                        var nextEntry = entries[_idx++];
 
-                    if (nextEntry.value != null)
-                    {
-                        var nextK = _table.keyFromEntry(nextEntry.key);
-
-                        object nextV = _table.TryGetValue(nextK);
-                        if (nextV != null)
+                        if (nextEntry.value != null)
                         {
-                            _nextK = nextK;
+                            var nextK = _table.keyFromEntry(nextEntry.key);
 
-                            // PERF: this would be nice to have as a helper, 
-                            // but it does not get inlined
-                            if (default(TValue) == null && nextV == NULLVALUE)
+                            object nextV = _table.TryGetValue(nextK);
+                            if (nextV != null)
                             {
-                                _nextV = default(TValue);
-                            }
-                            else
-                            {
-                                _nextV = (TValue)nextV;
-                            }
+                                _nextK = nextK;
+
+                                // PERF: this would be nice to have as a helper, 
+                                // but it does not get inlined
+                                if (default(TValue) == null && nextV == NULLVALUE)
+                                {
+                                    _nextV = default(TValue);
+                                }
+                                else
+                                {
+                                    _nextV = (TValue)nextV;
+                                }
 
 
-                            break;
+                                break;
+                            }
                         }
                     }
-                }
 
-                return _curValue != NULLVALUE;
+                    return _curValue != NULLVALUE;
+                }
             }
 
             public void Reset()

@@ -413,6 +413,7 @@ namespace Sparrow.Collections.LockFree
                     // try claiming the slot for the key
                     if (curTable.TryClaimSlotForPut(ref curEntries[idx].key, key))
                     {
+                        Debug.Assert(curEntries[idx].key != null);
                         break;
                     }
                 }
@@ -610,6 +611,7 @@ namespace Sparrow.Collections.LockFree
                     // try claiming the slot for the key
                     if (curTable.TryClaimSlotForPut(ref curEntries[idx].key, key))
                     {
+                        Debug.Assert(curEntries[idx].key != null);
                         break;
                     }
                 }
@@ -760,6 +762,7 @@ namespace Sparrow.Collections.LockFree
                     // hash is good, one way or another, claim the key
                     if (curTable.TryClaimSlotForCopy(ref curEntries[idx].key, key))
                     {
+                        Debug.Assert(curEntries[idx].key != null);
                         break;
                     }
                 }
