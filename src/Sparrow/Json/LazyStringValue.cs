@@ -63,7 +63,7 @@ namespace Sparrow.Json
         private string _string;
 
         private byte* _buffer;
-        public byte this[int index] => Buffer[index];
+        public byte this[int index] => _buffer[index];
         public byte* Buffer => _buffer;
 
         private int _size;
@@ -77,7 +77,7 @@ namespace Sparrow.Json
             {
                 // Lazily load the length from the buffer. This is an O(n)
                 if (_length == -1 && Buffer != null)
-                    _length = Encodings.Utf8.GetCharCount(Buffer, Size);
+                    _length = Encodings.Utf8.GetCharCount(Buffer, _size);
                 return _length;
             }
         }
@@ -123,7 +123,7 @@ namespace Sparrow.Json
             fixed (byte* pBuffer = _lazyStringTempComparisonBuffer)
             {
                 var tmpSize = Encodings.Utf8.GetBytes(pOther, other.Length, pBuffer, sizeInBytes);
-                if (this.Size != tmpSize)
+                if (_size != tmpSize)
                     return false;
 
                 return Memory.CompareInline(Buffer, pBuffer, tmpSize) == 0;                
@@ -138,11 +138,11 @@ namespace Sparrow.Json
                 this.ThrowAlreadyDisposed();
 #endif
 
-            int size = this.Size;
-            if (other.Size != size)
+            int size = _size;
+            if (other._size != size)
                 return false;
 
-            return Memory.CompareInline(Buffer, other.Buffer, size) == 0;
+            return Memory.CompareInline(_buffer, other._buffer, size) == 0;
         }
 
         public int CompareTo(string other)
@@ -166,9 +166,12 @@ namespace Sparrow.Json
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int CompareTo(LazyStringValue other)
         {
-            if (other.Buffer == Buffer && other.Size == Size)
+            int otherSize = other._size;
+            var otherBuffer = other._buffer;
+            if (otherBuffer == _buffer && otherSize == _size)
                 return 0;
-            return Compare(other.Buffer, other.Size);
+            
+            return Compare(otherBuffer, otherSize);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -178,8 +181,8 @@ namespace Sparrow.Json
             if (this.IsDisposed)
                 this.ThrowAlreadyDisposed();
 #endif
-            int size = Size;
-            var result = Memory.CompareInline(Buffer, other, Math.Min(size, otherSize));
+            int size = _size;
+            var result = Memory.CompareInline(_buffer, other, Math.Min(size, otherSize));
             return result == 0 ? size - otherSize : result;
         }
 

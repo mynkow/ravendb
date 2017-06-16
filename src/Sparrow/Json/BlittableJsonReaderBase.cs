@@ -10,7 +10,7 @@ namespace Sparrow.Json
         protected byte* _mem;
         protected byte* _propNames;
         protected int _propNamesDataOffsetSize;
-        protected internal JsonOperationContext _context;
+        protected internal JsonOperationContext _context;        
 
         protected BlittableJsonReaderBase(JsonOperationContext context)
         {
@@ -125,12 +125,34 @@ namespace Sparrow.Json
                 goto Successful;
 
             goto Error;
-            
+
             Successful:
             return returnValue;
 
             Error:
             return ThrowInvalidSizeForNumber(sizeOfValue);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadNumber(byte* value, long sizeOfValue, out int returnValue)
+        {
+            bool result = true;
+            returnValue = *value;
+            if (sizeOfValue == sizeof(byte))
+                goto Successful;
+
+            returnValue |= *(value + 1) << 8;
+            if (sizeOfValue == sizeof(short))
+                goto Successful;
+
+            returnValue |= *(short*)(value + 2) << 16;
+            if (sizeOfValue == sizeof(int))
+                goto Successful;
+
+            result = false;
+
+            Successful:
+            return result;
         }
 
         private static int ThrowInvalidSizeForNumber(long sizeOfValue)
@@ -224,14 +246,32 @@ namespace Sparrow.Json
             return -1;
         }
 
+        protected enum ErrorCode
+        {
+            Successful = 0,
+            InvalidShift = 1,
+            InvalidPosition = 2,            
+        }
+        
+        protected void ThrowExceptionForErrorCode(ErrorCode code)
+        {
+            switch (code)
+            {
+                case ErrorCode.InvalidShift: ThrowInvalidShift();
+                    break;
+                case ErrorCode.InvalidPosition: ThrowInvalidPosition();
+                    break;
+            }
+        }
+
         private static void ThrowInvalidShift()
         {
             throw new FormatException("Bad variable size int");
         }
 
-        private static void ThrowInvalidPosition(int pos)
+        private static void ThrowInvalidPosition()
         {
-            throw new ArgumentOutOfRangeException(nameof(pos), "Position cannot be negative, but was " + pos);
+            throw new ArgumentOutOfRangeException("pos", "Position cannot be negative");
         }
 
         public static int ReadVariableSizeIntInReverse(byte* buffer, int pos, out byte offset)
