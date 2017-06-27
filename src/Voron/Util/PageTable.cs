@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using Sparrow.Collections;
 using Voron.Impl;
 
 namespace Voron.Util
@@ -16,7 +17,7 @@ namespace Voron.Util
     public class PageTable
     {
         private readonly ConcurrentDictionary<long, PagesBuffer> _values = new ConcurrentDictionary<long, PagesBuffer>(NumericEqualityComparer.Instance);
-        private readonly SortedList<long, Dictionary<long, PagePosition>> _transactionPages = new SortedList<long, Dictionary<long, PagePosition>>();
+        private readonly SortedList<long, FastDictionary<long, PagePosition, NumericEqualityComparer>> _transactionPages = new SortedList<long, FastDictionary<long, PagePosition, NumericEqualityComparer>>();
         private long _maxSeenTransaction;
 
         private class PagesBuffer
@@ -71,7 +72,7 @@ namespace Voron.Util
 
         public bool IsEmpty => _values.Count == 0;
 
-        public void SetItems(LowLevelTransaction tx, Dictionary<long, PagePosition> items)
+        public void SetItems(LowLevelTransaction tx, FastDictionary<long, PagePosition, NumericEqualityComparer> items)
         {
             lock (_transactionPages)
             {
@@ -178,9 +179,9 @@ namespace Voron.Util
             return Volatile.Read(ref _maxSeenTransaction);
         }
 
-        public List<Dictionary<long, PagePosition>> GetModifiedPagesForTransactionRange(long minTxInclusive, long maxTxInclusive)
+        public List<FastDictionary<long, PagePosition, NumericEqualityComparer>> GetModifiedPagesForTransactionRange(long minTxInclusive, long maxTxInclusive)
         {
-            var list = new List<Dictionary<long, PagePosition>>();
+            var list = new List<FastDictionary<long, PagePosition, NumericEqualityComparer>>();
             lock (_transactionPages)
             {
                 var start = _transactionPages.IndexOfKey(minTxInclusive);

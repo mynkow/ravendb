@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
+using Sparrow.Collections;
 using Voron.Global;
 using Voron.Util;
 
@@ -101,7 +102,7 @@ namespace Voron.Impl.Journal
         /// </summary>
         public void Write(LowLevelTransaction tx, CompressedPagesResult pages, LazyTransactionBuffer lazyTransactionScratch)
         {
-            var ptt = new Dictionary<long, PagePosition>(NumericEqualityComparer.Instance);
+            var ptt = new FastDictionary<long, PagePosition, NumericEqualityComparer>(NumericEqualityComparer.Instance);
             var cur4KbPos = _writePosIn4Kb;
 
             Debug.Assert(pages.NumberOf4Kbs > 0);
@@ -163,7 +164,7 @@ namespace Voron.Impl.Journal
 
         }
 
-        private void UpdatePageTranslationTable(LowLevelTransaction tx, HashSet<PagePosition> unused, Dictionary<long, PagePosition> ptt)
+        private void UpdatePageTranslationTable(LowLevelTransaction tx, HashSet<PagePosition> unused, FastDictionary<long, PagePosition, NumericEqualityComparer> ptt)
         {
             long journalNumber = Number;
 
