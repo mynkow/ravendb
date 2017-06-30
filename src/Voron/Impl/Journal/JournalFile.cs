@@ -112,7 +112,7 @@ namespace Voron.Impl.Journal
             {
                 _writePosIn4Kb += pages.NumberOf4Kbs;
 
-                Debug.Assert(!_unusedPages.Any(_unusedPagesHashSetPool.Contains));
+                Debug.Assert(!_unusedPages.Any(_unusedPagesHashSetPool.Contains)); // We ensure there cannot be duplicates here (disjoint sets). 
                 _unusedPages.AddRange(_unusedPagesHashSetPool);
             }
             _unusedPagesHashSetPool.Clear();

@@ -34,10 +34,10 @@ namespace Voron.Impl
 
     public class PagePosition
     {
-        public readonly long ScratchPos;
         public readonly long TransactionId;
+        public readonly long ScratchPos; // This is the Offset in the Scratch file
         public readonly long JournalNumber;
-        public readonly int ScratchNumber;
+        public readonly int ScratchNumber; // This is the scratch file number
         public readonly bool IsFreedPageMarker;
         public bool UnusedInPTT;
 

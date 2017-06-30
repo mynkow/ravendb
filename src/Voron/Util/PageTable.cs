@@ -15,12 +15,15 @@ namespace Voron.Util
     /// </summary>
     public class PageTable
     {
+        // We are indexing based on page number
         private readonly ConcurrentDictionary<long, PagesBuffer> _values = new ConcurrentDictionary<long, PagesBuffer>(NumericEqualityComparer.Instance);
         private readonly SortedList<long, Dictionary<long, PagePosition>> _transactionPages = new SortedList<long, Dictionary<long, PagePosition>>();
+                        
         private long _maxSeenTransaction;
 
         private class PagesBuffer
         {
+            // There is an implicit transaction id here. 
             public readonly PagePosition[] PagePositions;
             public int Start, End;
 
@@ -72,24 +75,31 @@ namespace Voron.Util
         public bool IsEmpty => _values.Count == 0;
 
         public void SetItems(LowLevelTransaction tx, Dictionary<long, PagePosition> items)
-        {
+        {                        
+            // Under lock we need to update the MaxSeenTransactionId. 
+            // We are fine with it being not so current (relaxed semantics) but we should ensure that only higher would succeed.
             lock (_transactionPages)
             {
                 UpdateMaxSeenTxId(tx);
                 _transactionPages.Add(tx.Id, items);
             }
-
-            // here we rely on the fact that only one thread can update the concurrent dictionary
+            
             foreach (var item in items)
             {
+                // REVIEW: All this can be simplified handling the growing logic of the PagePosition inside the PageBuffer class itself.                
+                
+                // We must find the proper PageBuffer to which do the changes. 
+                // But we heavily rely on the fact that only one thread can update the concurrent dictionary
                 PagesBuffer value;
                 if (_values.TryGetValue(item.Key, out value) == false)
                 {
+                    // We preallocate a page buffer with 2 positions. 
                     value = new PagesBuffer(new PagePosition[2], null);
                     _values.TryAdd(item.Key, value);
                 }
                 if (value.CanAdd == false)
                 {
+                    // We grow (doubling the size) the allocated page buffer.
                     var newVal = new PagesBuffer(new PagePosition[value.Capacity*2], value);
                     _values.TryUpdate(item.Key, newVal, value);
                     value = newVal;
@@ -98,14 +108,22 @@ namespace Voron.Util
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void UpdateMaxSeenTxId(LowLevelTransaction tx)
         {
-            if (_maxSeenTransaction > tx.Id)
+            if (_maxSeenTransaction <= tx.Id)
             {
-                throw new InvalidOperationException("Transaction ids has to always increment, but got " + tx.Id +
-                                                    " when already seen tx " + _maxSeenTransaction);
+                _maxSeenTransaction = tx.Id;
+                return;                
             }
-            _maxSeenTransaction = tx.Id;
+                
+            ThrowTransactionsIdsMustAlwaysIncreate(tx);            
+        }
+
+        private void ThrowTransactionsIdsMustAlwaysIncreate(LowLevelTransaction tx)
+        {
+            throw new InvalidOperationException("Transaction ids has to always increment, but got " + tx.Id +
+                                                " when already seen tx " + _maxSeenTransaction);
         }
 
         public void RemoveKeysWhereAllPagesOlderThan(long lastSyncedTransactionId, List<PagePosition> unusedPages)

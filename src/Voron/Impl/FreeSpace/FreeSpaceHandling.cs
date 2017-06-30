@@ -357,6 +357,8 @@ namespace Voron.Impl.FreeSpace
                 var freeSpaceTree = GetFreeSpaceTree(tx);
                 StreamBitArray sba;
                 var section = pageNumber / NumberOfPagesInSection;
+                
+                // REVIEW: Why do we read and then write, if essentially we can perform a Direct[Read/Write]
                 Slice result;
                 using (freeSpaceTree.Read(section, out result))
                 {
