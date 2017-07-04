@@ -6,6 +6,7 @@
 using Sparrow;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Voron.Util;
 
 namespace Voron.Impl
 {
@@ -27,17 +28,19 @@ namespace Voron.Impl
         public int GetHashCode(PagePosition obj)
         {
             long v = Hashing.Combine(obj.ScratchPos, obj.TransactionId);
-            long w = Hashing.Combine(obj.JournalNumber, (long) obj.ScratchNumber);
-            return (int) (v ^ w);
+            long w = Hashing.Combine(obj.JournalNumber, (long)obj.ScratchNumber);
+            return (int)(v ^ w);
         }
     }
 
     public class PagePosition
     {
-        public readonly long TransactionId;
+        public readonly long JournalNumber; // This can be an integer too. 
+        public readonly long TransactionId; // We can take a few bits from here to forego the unused and the marker and avoid the memory size. 
+
         public readonly long ScratchPos; // This is the Offset in the Scratch file
-        public readonly long JournalNumber;
         public readonly int ScratchNumber; // This is the scratch file number
+
         public readonly bool IsFreedPageMarker;
         public bool UnusedInPTT;
 

@@ -14,6 +14,7 @@ using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Sparrow.Collections;
 using Sparrow.Compression;
 using Sparrow.Logging;
 using Sparrow.Utils;
@@ -275,7 +276,9 @@ namespace Voron.Impl.Journal
                 // read log snapshots from the back to get the most recent version of a page
                 for (var i = tx.JournalSnapshots.Count - 1; i >= 0; i--)
                 {
-                    PagePosition value;
+
+                    // TODO: We can optimize out the call to the dictionary checking if 
+                    PageTranslationPosition value;
                     if (tx.JournalSnapshots[i].PageTranslationTable.TryGetValue(tx, pageNumber, out value))
                     {
                         var page = _env.ScratchBufferPool.ReadPage(tx, value.ScratchNumber, value.ScratchPos, scratchPagerStates[value.ScratchNumber]);
@@ -293,7 +296,7 @@ namespace Voron.Impl.Journal
             var files = tx.JournalFiles;
             for (var i = files.Count - 1; i >= 0; i--)
             {
-                PagePosition value;
+                PageTranslationPosition value;
                 if (files[i].PageTranslationTable.TryGetValue(tx, pageNumber, out value))
                 {
                     // ReSharper disable once RedundantArgumentDefaultValue
@@ -487,7 +490,7 @@ namespace Voron.Impl.Journal
 
                     Debug.Assert(jrnls.First().Number >= _lastFlushedJournalId);
 
-                    var pagesToWrite = new Dictionary<long, PagePosition>();
+                    var pagesToWrite = new Dictionary<long, PageTranslationPosition>();
 
                     long lastProcessedJournal = -1;
                     long previousJournalMaxTransactionId = -1;
@@ -496,37 +499,54 @@ namespace Voron.Impl.Journal
 
                     long oldestActiveTransaction = _waj._env.ActiveTransactions.OldestTransaction;
 
+                    // We need to figure out what pages we need to write to the journal.
                     foreach (var journalFile in jrnls)
                     {
+                        // Check if this journal has been fully flushed already. 
                         if (journalFile.Number < _lastFlushedJournalId)
-                            continue;
+                            continue; // nothing else to do.
+                        
                         var currentJournalMaxTransactionId = -1L;
 
+                        // We don't want to gather and flush more transactions that we need to (avoid consuming too much resources).
+                        // Therefore we will collect modifications from transactions as long as they are inactive and they are involved
+                        // on this journal file. We cannot flush transactions that are not involved on this journal.
                         var maxTransactionId = journalFile.LastTransaction;
                         if (oldestActiveTransaction != 0)
                             maxTransactionId = Math.Min(oldestActiveTransaction - 1, maxTransactionId);
 
-                        foreach (var modifedPagesInTx in journalFile.PageTranslationTable.GetModifiedPagesForTransactionRange(
-                            _lastFlushedTransactionId, maxTransactionId))
+                        // We get all modified pages per transaction in descending order. (??)
+                        // REVIEW: Can we do this better???
+                        var modifiedPagesOnTxRange = journalFile.PageTranslationTable.GetModifiedPagesForTransactionRange(_lastFlushedTransactionId, maxTransactionId);
+
+                        foreach (var modifiedPagesOnTx in modifiedPagesOnTxRange)
                         {
-                            foreach (var pagePosition in modifedPagesInTx)
+                            foreach (var pagePosition in modifiedPagesOnTx)
                             {
-                                if (pagePosition.Value.IsFreedPageMarker)
+                                // Check if older journals had written this page and it was freed by a different journal. (??)
+                                // REVIEW: What does this mean? 
+                                //         Can this logic being incorporated into the TranslationTable? 
+                                //         Can we ensure that this condition is known to the TranslationTable? 
+                                if (pagePosition.Value.IsFreePage)
                                 {
                                     // Avoid the case where an older journal file had written a page that was freed in a different journal
+                                    // REVIEW: Newer journal or older? What's the order here? 
+                                    //         My guess from context is that if the page is free, then we will remove it because it was removed by a newer transaction.
                                     pagesToWrite.Remove(pagePosition.Key);
                                     continue;
                                 }
 
+                                // REVIEW: When this check is true, isn't fair to say that it will be true for the whole batch of pages in the same transaction
+                                //         which are grouped at the dictionary level?
+                                
+                                // If the journal has been already been flushed, check if it was a partial or a whole flush
                                 if (journalFile.Number == _lastFlushedJournalId &&
                                     pagePosition.Value.TransactionId <= _lastFlushedTransactionId)
-                                    continue;
+                                    continue; // just skip if the transaction has already being flushed.
 
-                                currentJournalMaxTransactionId = Math.Max(currentJournalMaxTransactionId,
-                                    pagePosition.Value.TransactionId);
-
+                                currentJournalMaxTransactionId = Math.Max(currentJournalMaxTransactionId, pagePosition.Value.TransactionId);
                                 if (currentJournalMaxTransactionId < previousJournalMaxTransactionId)
-                                    ThrowReadByeondOldestActiveTransaction(currentJournalMaxTransactionId, previousJournalMaxTransactionId, oldestActiveTransaction);
+                                    ThrowReadBeyondOldestActiveTransaction(currentJournalMaxTransactionId, previousJournalMaxTransactionId, oldestActiveTransaction);
 
 
                                 lastProcessedJournal = journalFile.Number;
@@ -542,10 +562,9 @@ namespace Voron.Impl.Journal
                         previousJournalMaxTransactionId = currentJournalMaxTransactionId;
                     }
 
+                    // If no pages to write, we are already done.
                     if (pagesToWrite.Count == 0)
-                    {
-                        return;
-                    }
+                        return;                    
 
                     try
                     {
@@ -742,7 +761,7 @@ namespace Voron.Impl.Journal
                 _waj.HasLazyTransactions = false;
             }
 
-            private static void ThrowReadByeondOldestActiveTransaction(long currentJournalMaxTransactionId,
+            private static void ThrowReadBeyondOldestActiveTransaction(long currentJournalMaxTransactionId,
                 long previousJournalMaxTransactionId, long oldestActiveTransaction)
             {
                 throw new InvalidOperationException(
@@ -994,7 +1013,7 @@ namespace Voron.Impl.Journal
                 }
             }
 
-            private void ApplyPagesToDataFileFromScratch(Dictionary<long, PagePosition> pagesToWrite)
+            private void ApplyPagesToDataFileFromScratch(FastList<PageTranslationPosition> pagesToWrite)
             {
                 var scratchBufferPool = _waj._env.ScratchBufferPool;
                 var scratchPagerStates = new Dictionary<int, PagerState>();
@@ -1007,8 +1026,11 @@ namespace Voron.Impl.Journal
                     {
                         using (var batchWrites = _waj._dataPager.BatchWriter())
                         {
-                            foreach (var pagePosition in pagesToWrite.Values)
+                            int count = pagesToWrite.Count;
+                            for (int i = 0; i < count; i++)
                             {
+                                ref var pagePosition = ref pagesToWrite.GetAsRef(i);
+
                                 var scratchNumber = pagePosition.ScratchNumber;
                                 PagerState pagerState;
                                 if (scratchPagerStates.TryGetValue(scratchNumber, out pagerState) == false)
@@ -1026,6 +1048,7 @@ namespace Voron.Impl.Journal
                                     pagerState);
 
                                 written += numberOfPages * Constants.Storage.PageSize;
+
                             }
                         }
 
