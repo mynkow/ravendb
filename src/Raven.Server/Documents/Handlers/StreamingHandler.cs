@@ -119,7 +119,7 @@ namespace Raven.Server.Documents.Handlers
                 {
                     try
                     {
-                        await runner.ExecuteStreamQuery(indexName, query, HttpContext.Response, writer, token).ConfigureAwait(false);
+                        await runner.ExecuteStreamQuery(query, HttpContext.Response, writer, token).ConfigureAwait(false);
                     }
                     catch (IndexDoesNotExistException)
                     {
