@@ -219,8 +219,6 @@ namespace Raven.Client
                 }
 
                 public const string IntersectSeparator = " INTERSECT ";
-
-                public const string DynamicQueryPrefix = "dynamic/";
             }
 
             public class Encryption
