@@ -30,6 +30,26 @@ namespace Raven.Server.Documents.Handlers
         [RavenAction("/databases/*/bulk_docs", "POST", AuthorizationStatus.ValidUser)]
         public async Task BulkDocs()
         {
+            var ms = new MemoryStream();
+            RequestBodyStream().CopyTo(ms);
+
+            ms.TryGetBuffer(out var buffer);
+            
+            for (int i = 0; i < 500; i++)
+            {
+                var a = Task.Run(async () =>
+                {
+                    using (ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
+                    using (var command = new MergedBatchCommand {Database = Database})
+                    {
+                        command.ParsedCommands =
+                            await BatchRequestParser.BuildCommandsAsync(context, new MemoryStream(buffer.Array, buffer.Offset, buffer.Count), Database, ServerStore);
+
+                        await Database.TxMerger.Enqueue(command);
+                    }
+                });
+            }
+
             using (ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
             using (var command = new MergedBatchCommand { Database = Database })
             {
@@ -37,7 +57,7 @@ namespace Raven.Server.Documents.Handlers
                 if (contentType == null ||
                     contentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase))
                 {
-                    command.ParsedCommands = await BatchRequestParser.BuildCommandsAsync(context, RequestBodyStream(), Database, ServerStore);
+                    command.ParsedCommands = await BatchRequestParser.BuildCommandsAsync(context, new MemoryStream(buffer.Array, buffer.Offset, buffer.Count), Database, ServerStore);
                 }
                 else if (contentType.StartsWith("multipart/mixed", StringComparison.OrdinalIgnoreCase))
                 {
