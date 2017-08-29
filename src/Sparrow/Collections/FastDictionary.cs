@@ -235,22 +235,26 @@ namespace Sparrow.Collections
             int bucket = hash & _capacityMask;
 
             Loop:
+            int candidate = -1;
             do
             {
                 uint nHash = entries[bucket].Hash;
                 if (nHash == KUnusedHash)
                 {
                     _numberOfUsed++;
-                    _size++;
-                    goto UnusedSet;
+
+                    if (candidate == -1)
+                        candidate = bucket;
+                    goto Set;
                 }
                 if (nHash == KDeletedHash)
                 {
                     _numberOfDeleted--;
-                    _size++;
-                    goto Set;
+
+                    if (candidate == -1)
+                        candidate = bucket;
                 }
-                    
+
                 if (nHash == uhash)
                     goto PartialHit;
 
@@ -267,8 +271,8 @@ namespace Sparrow.Collections
             }
             while (true);
 
-            // PERF: If it happens, it should be rare therefore outside of the critical path. 
-            PartialHit:
+// PERF: If it happens, it should be rare therefore outside of the critical path. 
+PartialHit:
             if (!_comparer.Equals(entries[bucket].Key, key))
             {
                 // PERF: This can happen with a very^3 low probability (assuming your hash function is good enough)
@@ -278,15 +282,15 @@ namespace Sparrow.Collections
             }
             ThrowWhenDuplicatedKey(key); // We throw here. 
 
-            UnusedSet: // The bucket was formerly unused, so we must track it.
+            Set: // The bucket was formerly unused, so we must track it.
 
-            _usedEntries.Set(bucket);
+            _usedEntries.Set(candidate);
 
-            Set: 
+            _entries[candidate].Hash = uhash;
+            _entries[candidate].Key = key;
+            _entries[candidate].Value = value;
 
-            _entries[bucket].Hash = uhash;
-            _entries[bucket].Key = key;
-            _entries[bucket].Value = value;
+            _size++;
         }
 
         private void ThrowWhenDuplicatedKey(TKey key)
@@ -505,6 +509,7 @@ PartialHit:
                 int bucket = hash & _capacityMask;
 
                 Loop:
+                int candidate = -1;
                 do
                 {
                     uint nHash = entries[bucket].Hash;
@@ -512,13 +517,18 @@ PartialHit:
                     {
                         _numberOfUsed++;
                         _size++;
-                        goto UnusedSet;
+
+                        if (candidate == -1)
+                            candidate = bucket;
+
+                        goto Set;
                     }
                     if (nHash == KDeletedHash)
                     {
                         _numberOfDeleted--;
-                        _size++;
-                        goto Set;
+
+                        if (candidate == -1)
+                            candidate = bucket;
                     }
 
                     if (nHash == uhash)
@@ -547,15 +557,15 @@ PartialHit:
                     goto Loop;
                 }
 
-                UnusedSet: // The bucket was formerly unused, so we must track it for cleanup. 
+                candidate = bucket;
 
-                _usedEntries.Set(bucket);
+                Set: // The bucket was formerly unused, so we must track it for cleanup. 
 
-                Set: 
-
-                _entries[bucket].Hash = uhash;
-                _entries[bucket].Key = key;
-                _entries[bucket].Value = value;
+                _usedEntries.Set(candidate);
+                
+                _entries[candidate].Hash = uhash;
+                _entries[candidate].Key = key;
+                _entries[candidate].Value = value;
             }
         }
 
