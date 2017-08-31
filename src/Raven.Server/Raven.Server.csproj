@@ -3,7 +3,8 @@
     <Description>Raven.Server is the database server for RavenDB</Description>
     <Version>4.0.0-custom-40</Version>
     <Authors>Hibernating Rhinos</Authors>
-    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <TargetFramework>netcoreapp2.1</TargetFramework>
+    <RuntimeFrameworkVersion>2.1.0-preview2-25616-02</RuntimeFrameworkVersion>
     <WarningsAsErrors>true</WarningsAsErrors>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>Raven.Server</AssemblyName>

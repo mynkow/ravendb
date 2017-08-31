@@ -3,7 +3,7 @@
     <Description>Voron - Low level storage engine</Description>
     <Version>4.0.0-custom-40</Version>
     <Authors>Hibernating Rhinos</Authors>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netcoreapp2.1</TargetFramework>
     <WarningsAsErrors>true</WarningsAsErrors>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>Voron</AssemblyName>
