@@ -1,4 +1,7 @@
+using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Sparrow.Binary;
 
 namespace Sparrow
 {
@@ -16,14 +19,13 @@ namespace Sparrow
             return CompareInline(p1, p2, size, out position);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int CompareInline(void* p1, void* p2, int size)
+        private const int UNSIGNED_MASK = 0xFF;
+
+        private static int CompareOriginal(void* p1, void* p2, int size)
         {
             // If we use an unmanaged bulk version with an inline compare the caller site does not get optimized properly.
             // If you know you will be comparing big memory chunks do not use the inline version. 
             int l = size;
-            if (l > CompareInlineVsCallThreshold)
-                goto UnmanagedCompare;
 
             byte* bpx = (byte*)p1, bpy = (byte*)p2;
             int last;
@@ -78,9 +80,67 @@ namespace Sparrow
             }
 
             return 0;
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int CompareInline(void* p1, void* p2, int size)
+        {
+            // If we use an unmanaged bulk version with an inline compare the caller site does not get optimized properly.
+            // If you know you will be comparing big memory chunks do not use the inline version. 
+            if (size > CompareInlineVsCallThreshold)
+                goto UnmanagedCompare;
 
-            UnmanagedCompare:
-            return UnmanagedMemory.Compare((byte*)p1, (byte*)p2, l);
+            byte* bpx = (byte*)p1;
+            byte* bpy = (byte*)p2;
+
+            long offset = bpy - bpx;
+            if (size < 8)
+                goto ProcessSmall;
+
+            int l = size >> 3; // (Equivalent to size / 8)
+
+            ulong xor;
+            for (int i = 0; i < l; i++, bpx += 8)
+            {
+                xor = *((ulong*)bpx) ^ *(ulong*)(bpx + offset);
+                if (xor != 0)
+                    goto Tail;
+            }
+
+            ProcessSmall:
+
+            if ((size & 4) != 0)
+            {
+                xor = *((uint*)bpx) ^ *((uint*)(bpx + offset));
+                if (xor != 0)
+                    goto Tail;
+
+                bpx += 4;
+            }
+
+            if ((size & 2) != 0)
+            {
+                xor = (ulong)(*((ushort*)bpx) ^ *((ushort*)(bpx + offset)));
+                if (xor != 0)
+                    goto Tail;
+
+                bpx += 2;
+            }
+            
+            if ((size & 1) != 0)
+            {
+                return *bpx - *(bpx + offset);
+            }
+
+            return 0;
+
+Tail:
+
+            int p = Bits.TrailingZeroesInBytes(xor);
+            return *(bpx + p) - *(bpx + p + offset);
+
+UnmanagedCompare:
+            return UnmanagedMemory.Compare((byte*)p1, (byte*)p2, size);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

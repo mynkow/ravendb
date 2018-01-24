@@ -21,6 +21,7 @@ using Sparrow.Binary;
 using Voron.Data.Fixed;
 using SlowTests.Authentication;
 using FastTests.Sparrow;
+using FastTests.Voron.Tables;
 
 /*
     Code reference - please DO NOT REMOVE:
@@ -44,9 +45,9 @@ namespace Tryouts
             public string Name { get; set; }
         }
 
-        public static async Task Main(string[] args)
+        public static void Main(string[] args)
         {
-            await new AuthenticationBasicTests().CanUseEncryption();
+            new BasicUsage().CanInsertThenUpdateThenRead();
         }
 
         private static void SerialStores()
