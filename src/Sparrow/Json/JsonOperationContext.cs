@@ -655,6 +655,30 @@ namespace Sparrow.Json
             }
         }
 
+        public unsafe BlittableJsonReaderObject ParseBufferExperimental(byte* buffer, int length, string debugTag, 
+            BlittableJsonDocumentBuilder.UsageMode mode,
+            ManagedPinnedBuffer bytes, IBlittableDocumentModifier modifier = null)        
+        {
+            if (Disposed)
+                ThrowObjectDisposed();
+
+            using (var parser = new ExperimentalJsonParser(this, buffer, length, debugTag))
+            using (var builder = new ExperimentalBlittableJsonDocumentBuilder(this, mode, debugTag, parser, modifier: modifier))
+            {
+                CachedProperties.NewDocument();
+                builder.ReadObjectDocument();
+
+                if (builder.Read() == false)
+                    throw new EndOfStreamException("Buffer ended without reaching end of json content");
+
+                builder.FinalizeDocument();
+
+                var reader = builder.CreateReader();
+                return reader;
+            }
+       
+        }
+
         public BlittableJsonReaderObject ParseToMemory(Stream stream, string debugTag,
             BlittableJsonDocumentBuilder.UsageMode mode,
             ManagedPinnedBuffer bytes, IBlittableDocumentModifier modifier = null)
