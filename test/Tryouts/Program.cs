@@ -1,6 +1,8 @@
 using System;
 using System.Threading.Tasks;
 using FastTests;
+using FastTests.Sparrow;
+using Lucene.Net.Index;
 using Raven.Client.Documents.Commands;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Session;
@@ -25,6 +27,10 @@ namespace Tryouts
 
         public static void Main(string[] args)
         {
+
+            var p = new AllocatorsTests();
+            p.Alloc_NativeDefault();
+
             //Span<byte> by = new Span<byte>();
 
             //var allocator = Allocator.Create(
